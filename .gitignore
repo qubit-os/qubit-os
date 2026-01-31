@@ -1,5 +1,17 @@
-# Generated code (keep this since we commit generated code)
-# generated/
+# Generated code - built at compile/install time, not committed
+python/
+target/
+
+# Python build artifacts
+*.egg-info/
+dist/
+build/
+__pycache__/
+*.pyc
+*.pyo
+
+# Rust build artifacts
+Cargo.lock
 
 # IDE
 .idea/

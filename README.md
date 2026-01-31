@@ -55,23 +55,29 @@ quantum/
     └── hardware.proto    # Hardware info and health
 ```
 
-## Generating Code
+## Build-Time Generation
 
-Requires [Buf CLI](https://buf.build/docs/installation):
+Code is generated automatically at build time - no manual generation step needed.
+
+**Rust:** `cargo build` runs `tonic-build` via `build.rs`
+
+**Python:** `pip install .` runs `grpcio-tools` via `setup.py`
+
+### For Contributors
+
+If you need to lint or check protos directly:
 
 ```bash
 # Install buf
 brew install bufbuild/buf/buf  # macOS
-# or
-curl -sSL https://github.com/bufbuild/buf/releases/latest/download/buf-Linux-x86_64 -o /usr/local/bin/buf
-
-# Generate code
-buf generate
 
 # Lint protos
 buf lint
 
-# Check for breaking changes
+# Format check
+buf format -d
+
+# Check for breaking changes (on PRs)
 buf breaking --against 'https://github.com/qubit-os/qubit-os-proto.git#branch=main'
 ```
 
