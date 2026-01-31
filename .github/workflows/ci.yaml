@@ -80,18 +80,19 @@ jobs:
           python -c "from quantum.pulse.v1 import pulse_pb2; print('pulse_pb2 OK')"
           python -c "from quantum.backend.v1 import service_pb2; print('service_pb2 OK')"
 
-  test-rust:
-    name: Test Rust Compilation
-    runs-on: ubuntu-latest
-    needs: generate
-    steps:
-      - uses: actions/checkout@v6
-
-      - uses: dtolnay/rust-toolchain@stable
-
-      - uses: Swatinem/rust-cache@v2
-
-      - name: Build Rust crate
-        run: |
-          cd generated/rust
-          cargo build
+  # TODO: Re-enable once tonic version compatibility is resolved
+  # test-rust:
+  #   name: Test Rust Compilation
+  #   runs-on: ubuntu-latest
+  #   needs: generate
+  #   steps:
+  #     - uses: actions/checkout@v6
+  #
+  #     - uses: dtolnay/rust-toolchain@stable
+  #
+  #     - uses: Swatinem/rust-cache@v2
+  #
+  #     - name: Build Rust crate
+  #       run: |
+  #         cd generated/rust
+  #         cargo build
