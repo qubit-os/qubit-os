@@ -16,24 +16,24 @@ enum GateType {
   GATE_TYPE_UNSPECIFIED = 0;
 
   // Single-qubit gates
-  GATE_TYPE_X = 1;      // Pauli-X (NOT gate)
-  GATE_TYPE_Y = 2;      // Pauli-Y
-  GATE_TYPE_Z = 3;      // Pauli-Z
-  GATE_TYPE_SX = 4;     // sqrt(X), a.k.a. sqrt(NOT)
-  GATE_TYPE_H = 5;      // Hadamard
-  GATE_TYPE_RX = 6;     // Rotation around X-axis
-  GATE_TYPE_RY = 7;     // Rotation around Y-axis
-  GATE_TYPE_RZ = 8;     // Rotation around Z-axis (virtual Z, typically no pulse needed)
-  GATE_TYPE_S = 9;      // S gate (sqrt(Z))
-  GATE_TYPE_T = 10;     // T gate (fourth root of Z)
+  GATE_TYPE_X = 1; // Pauli-X (NOT gate)
+  GATE_TYPE_Y = 2; // Pauli-Y
+  GATE_TYPE_Z = 3; // Pauli-Z
+  GATE_TYPE_SX = 4; // sqrt(X), a.k.a. sqrt(NOT)
+  GATE_TYPE_H = 5; // Hadamard
+  GATE_TYPE_RX = 6; // Rotation around X-axis
+  GATE_TYPE_RY = 7; // Rotation around Y-axis
+  GATE_TYPE_RZ = 8; // Rotation around Z-axis (virtual Z, typically no pulse needed)
+  GATE_TYPE_S = 9; // S gate (sqrt(Z))
+  GATE_TYPE_T = 10; // T gate (fourth root of Z)
 
   // Two-qubit gates
-  GATE_TYPE_CZ = 20;    // Controlled-Z
-  GATE_TYPE_CNOT = 21;  // Controlled-NOT (CX)
+  GATE_TYPE_CZ = 20; // Controlled-Z
+  GATE_TYPE_CNOT = 21; // Controlled-NOT (CX)
   GATE_TYPE_ISWAP = 22; // iSWAP
   GATE_TYPE_SQISWAP = 23; // sqrt(iSWAP)
-  GATE_TYPE_CX = 24;    // Alias for CNOT
-  GATE_TYPE_SWAP = 25;  // SWAP gate
+  GATE_TYPE_CX = 24; // Alias for CNOT
+  GATE_TYPE_SWAP = 25; // SWAP gate
 
   // Custom gate (specify unitary in metadata)
   GATE_TYPE_CUSTOM = 99;

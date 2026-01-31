@@ -7,48 +7,12 @@ on:
   pull_request:
     branches: [main]
 
-permissions:
-  contents: write
-
 jobs:
-  format-generate:
-    name: Format and Generate
-    runs-on: ubuntu-latest
-    if: github.event_name == 'push'
-    steps:
-      - uses: actions/checkout@v6
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
-
-      - uses: bufbuild/buf-setup-action@v1
-        with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Format protos
-        run: buf format -w
-
-      - name: Generate code
-        run: buf generate
-
-      - name: Commit changes
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          if [ -n "$(git status --porcelain)" ]; then
-            git add -A
-            git commit -m "chore: auto-format and regenerate code [skip ci]"
-            git push
-          fi
-
   lint:
     name: Lint Protos
     runs-on: ubuntu-latest
-    needs: [format-generate]
-    if: always() && (needs.format-generate.result == 'success' || needs.format-generate.result == 'skipped')
     steps:
       - uses: actions/checkout@v6
-        with:
-          ref: ${{ github.ref }}
 
       - uses: bufbuild/buf-setup-action@v1
         with:
@@ -74,15 +38,11 @@ jobs:
       - name: Check for breaking changes
         run: buf breaking --against 'https://github.com/${{ github.repository }}.git#branch=main'
 
-  generate-check:
-    name: Verify Generated Code
+  generate:
+    name: Generate Code
     runs-on: ubuntu-latest
-    needs: [format-generate]
-    if: always() && (needs.format-generate.result == 'success' || needs.format-generate.result == 'skipped')
     steps:
       - uses: actions/checkout@v6
-        with:
-          ref: ${{ github.ref }}
 
       - uses: bufbuild/buf-setup-action@v1
         with:
@@ -91,10 +51,10 @@ jobs:
       - name: Generate
         run: buf generate
 
-      - name: Check generated code matches
+      - name: Check generated code is committed
         run: |
           if [ -n "$(git status --porcelain generated/)" ]; then
-            echo "Generated code is out of date."
+            echo "Generated code is out of date. Run 'buf generate' and commit the changes."
             git diff generated/
             exit 1
           fi
@@ -102,11 +62,9 @@ jobs:
   test-python:
     name: Test Python Import
     runs-on: ubuntu-latest
-    needs: [generate-check]
+    needs: generate
     steps:
       - uses: actions/checkout@v6
-        with:
-          ref: ${{ github.ref }}
 
       - uses: actions/setup-python@v6
         with:
@@ -125,11 +83,9 @@ jobs:
   test-rust:
     name: Test Rust Compilation
     runs-on: ubuntu-latest
-    needs: [generate-check]
+    needs: generate
     steps:
       - uses: actions/checkout@v6
-        with:
-          ref: ${{ github.ref }}
 
       - uses: dtolnay/rust-toolchain@stable
 
