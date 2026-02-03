@@ -27,6 +27,7 @@ message ExecutePulseRequest {
   // Number of measurement shots.
   // Each shot gives one bitstring outcome.
   // Typical: 1000-10000
+  // Limit: 1,000,000 (enforced by server)
   int32 num_shots = 4;
 
   // Measurement basis.

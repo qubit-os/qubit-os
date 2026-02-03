@@ -74,11 +74,13 @@ message PulseShape {
 
   // Total pulse duration in nanoseconds.
   // Typical range: 10-1000 ns
+  // Limit: 100,000 ns (100 μs, enforced by server)
   int32 duration_ns = 6;
 
   // Number of discrete time steps.
   // Higher values = finer control but longer optimization.
   // Typical range: 20-500
+  // Limit: 10,000 (enforced by server)
   int32 num_time_steps = 7;
 
   // Duration of each time step in nanoseconds.
@@ -91,11 +93,15 @@ message PulseShape {
   // In-phase (I) component of the pulse envelope.
   // Length must equal num_time_steps.
   // Units: MHz (drive amplitude)
+  // Limit: 10,000 elements max (enforced by server)
+  // Values must be finite and within ±1000 MHz
   repeated double i_envelope = 9;
 
   // Quadrature (Q) component of the pulse envelope.
   // Length must equal num_time_steps.
   // Units: MHz (drive amplitude)
+  // Limit: 10,000 elements max (enforced by server)
+  // Values must be finite and within ±1000 MHz
   repeated double q_envelope = 10;
 
   // Maximum amplitude bound in MHz.
