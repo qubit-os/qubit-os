@@ -30,11 +30,24 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import uuid
 from dataclasses import dataclass, field
 from enum import Enum
 from typing import TYPE_CHECKING
 
 import grpc
+
+# Import generated proto stubs
+from qubitos.proto import (
+    ExecutePulseRequest,
+    ExecutePulseResponse,
+    GetHardwareInfoRequest,
+    HealthRequest,
+    ListBackendsRequest,
+    PulseShape,
+    QuantumBackendServiceStub,
+    GateType,
+)
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
@@ -173,7 +186,7 @@ class HALClient:
         self.credentials = credentials
 
         self._channel: grpc.aio.Channel | None = None
-        self._stub = None
+        self._stub: QuantumBackendServiceStub | None = None
         self._connected = False
 
     async def connect(self) -> None:
@@ -191,10 +204,8 @@ class HALClient:
             else:
                 self._channel = grpc.aio.insecure_channel(self.address)
 
-            # Import generated protobuf stubs
-            # Note: These would be generated from qubit-os-proto
-            # For now, we use a dynamic approach
-            self._stub = await self._create_stub()
+            # Create the gRPC stub using generated proto classes
+            self._stub = QuantumBackendServiceStub(self._channel)
             self._connected = True
 
             logger.info("Connected to HAL server")
@@ -202,21 +213,6 @@ class HALClient:
         except Exception as e:
             logger.error(f"Failed to connect to HAL server: {e}")
             raise HALClientError(f"Connection failed: {e}", code="CONNECTION_ERROR") from e
-
-    async def _create_stub(self):
-        """Create the gRPC stub.
-
-        In a real implementation, this would use generated protobuf classes.
-        For now, we use a placeholder that works with the generic gRPC API.
-        """
-        # This would normally be:
-        # from qubitos.proto.quantum.backend.v1 import (
-        #     quantum_backend_pb2_grpc as backend_grpc
-        # )
-        # return backend_grpc.QuantumBackendStub(self._channel)
-
-        # Placeholder for when protos aren't generated yet
-        return _PlaceholderStub(self._channel)
 
     async def close(self) -> None:
         """Close the connection to the HAL server."""
@@ -238,7 +234,7 @@ class HALClient:
 
     def _ensure_connected(self) -> None:
         """Ensure the client is connected."""
-        if not self._connected:
+        if not self._connected or self._stub is None:
             raise HALClientError(
                 "Not connected to HAL server. Call connect() first.", code="NOT_CONNECTED"
             )
@@ -256,20 +252,24 @@ class HALClient:
             HealthCheckResult with status information
         """
         self._ensure_connected()
+        assert self._stub is not None
 
         try:
-            response = await self._stub.health_check(
-                backend_name=backend_name,
+            request = HealthRequest(backend_name=backend_name or "")
+            response = await self._stub.Health(
+                request,
                 timeout=self.timeout,
             )
 
             # Parse response
             status = _parse_health_status(response.status)
-            backends = {name: _parse_health_status(s) for name, s in response.backends.items()}
+            backends = {}
+            for backend_status in response.backend_statuses:
+                backends[backend_status.name] = _parse_health_status(backend_status.status)
 
             return HealthCheckResult(
                 status=status,
-                message=response.message,
+                message=response.message if hasattr(response, 'message') else "",
                 backends=backends,
             )
 
@@ -292,10 +292,12 @@ class HALClient:
             HardwareInfo with backend details
         """
         self._ensure_connected()
+        assert self._stub is not None
 
         try:
-            response = await self._stub.get_hardware_info(
-                backend_name=backend_name,
+            request = GetHardwareInfoRequest(backend_name=backend_name or "")
+            response = await self._stub.GetHardwareInfo(
+                request,
                 timeout=self.timeout,
             )
 
@@ -329,69 +331,89 @@ class HALClient:
         num_shots: int = 1000,
         pulse_id: str | None = None,
         backend_name: str | None = None,
-        measurement_basis: str = "Z",
+        measurement_basis: str = "z",
         return_state_vector: bool = False,
         include_noise: bool = False,
+        gate_type: str = "CUSTOM",
     ) -> MeasurementResult:
         """Execute a pulse sequence on a backend.
 
         Args:
-            i_envelope: I (in-phase) pulse envelope
-            q_envelope: Q (quadrature) pulse envelope
+            i_envelope: I (in-phase) pulse envelope (MHz)
+            q_envelope: Q (quadrature) pulse envelope (MHz)
             duration_ns: Pulse duration in nanoseconds
             target_qubits: Target qubit indices
             num_shots: Number of measurement shots
             pulse_id: Optional pulse identifier
             backend_name: Backend to use (or None for default)
-            measurement_basis: Measurement basis ("X", "Y", or "Z")
+            measurement_basis: Measurement basis ("x", "y", or "z")
             return_state_vector: Whether to return the state vector
             include_noise: Whether to include noise simulation
+            gate_type: Gate type name (e.g., "X", "H", "CZ", "CUSTOM")
 
         Returns:
             MeasurementResult with bitstring counts and metadata
         """
         self._ensure_connected()
+        assert self._stub is not None
+
+        # Generate pulse_id if not provided
+        if pulse_id is None:
+            pulse_id = str(uuid.uuid4())
+
+        # Map gate type string to enum
+        gate_type_enum = _parse_gate_type(gate_type)
 
         try:
-            response = await self._stub.execute_pulse(
-                pulse_id=pulse_id or "",
-                backend_name=backend_name,
-                i_envelope=list(i_envelope),
-                q_envelope=list(q_envelope),
+            # Build PulseShape
+            pulse = PulseShape(
+                pulse_id=pulse_id,
+                algorithm="grape",
+                gate_type=gate_type_enum,
+                target_qubit_indices=list(target_qubits),
                 duration_ns=duration_ns,
                 num_time_steps=len(i_envelope),
-                target_qubits=list(target_qubits),
+                time_step_ns=duration_ns / len(i_envelope) if i_envelope else 0,
+                i_envelope=list(i_envelope),
+                q_envelope=list(q_envelope),
+            )
+
+            # Build request
+            request = ExecutePulseRequest(
+                backend_name=backend_name or "qutip_simulator",
+                pulse=pulse,
                 num_shots=num_shots,
-                measurement_basis=measurement_basis,
+                measurement_basis=measurement_basis.lower(),
+                measurement_qubits=list(target_qubits),
                 return_state_vector=return_state_vector,
                 include_noise=include_noise,
+            )
+
+            response = await self._stub.ExecutePulse(
+                request,
                 timeout=self.timeout,
             )
 
             # Check for errors
-            if response.error:
+            if not response.success and response.error:
                 raise HALClientError(
                     response.error.message,
-                    code=response.error.code,
+                    code=str(response.error.code),
                 )
 
             # Parse result
             result = response.result
-            bitstring_counts = dict(result.bitstring_counts.counts)
+            bitstring_counts = dict(result.bitstring_counts)
 
             state_vector = None
-            if result.state_vector_real and result.state_vector_imag:
-                state_vector = list(
-                    zip(
-                        result.state_vector_real,
-                        result.state_vector_imag,
-                        strict=False,
-                    )
-                )
+            if result.state_vector and result.state_vector.amplitudes:
+                # Amplitudes are stored as [re_0, im_0, re_1, im_1, ...]
+                amps = result.state_vector.amplitudes
+                state_vector = [(amps[i], amps[i + 1]) for i in range(0, len(amps), 2)]
 
             return MeasurementResult(
-                request_id=response.request_id,
-                pulse_id=response.pulse_id,
+                request_id=str(uuid.uuid4()),  # Generate locally since response may not have it
+                pulse_id=pulse_id,
                 bitstring_counts={k: int(v) for k, v in bitstring_counts.items()},
                 total_shots=result.total_shots,
                 successful_shots=result.successful_shots,
@@ -411,10 +433,22 @@ class HALClient:
         Returns:
             List of backend names
         """
-        # This would call a list_backends RPC if available
-        # For now, we use health_check to discover backends
-        health = await self.health_check()
-        return list(health.backends.keys())
+        self._ensure_connected()
+        assert self._stub is not None
+
+        try:
+            request = ListBackendsRequest(include_details=False)
+            response = await self._stub.ListBackends(
+                request,
+                timeout=self.timeout,
+            )
+            return list(response.backend_names)
+
+        except grpc.RpcError as e:
+            raise HALClientError(
+                f"List backends failed: {e.details()}",
+                code=e.code().name,
+            ) from e
 
 
 def _parse_health_status(status: int) -> HealthStatus:
@@ -428,24 +462,23 @@ def _parse_health_status(status: int) -> HealthStatus:
     return mapping.get(status, HealthStatus.UNKNOWN)
 
 
-class _PlaceholderStub:
-    """Placeholder stub for when protos aren't generated.
-
-    This allows the code to be valid Python even without generated protos.
-    In production, this would be replaced with actual generated stubs.
-    """
-
-    def __init__(self, channel):
-        self._channel = channel
-
-    async def health_check(self, **kwargs):
-        raise NotImplementedError("Proto stubs not generated. Run buf generate in qubit-os-proto.")
-
-    async def get_hardware_info(self, **kwargs):
-        raise NotImplementedError("Proto stubs not generated. Run buf generate in qubit-os-proto.")
-
-    async def execute_pulse(self, **kwargs):
-        raise NotImplementedError("Proto stubs not generated. Run buf generate in qubit-os-proto.")
+def _parse_gate_type(gate_type: str) -> int:
+    """Parse gate type string to proto enum value."""
+    gate_map = {
+        "X": GateType.GATE_TYPE_X,
+        "Y": GateType.GATE_TYPE_Y,
+        "Z": GateType.GATE_TYPE_Z,
+        "H": GateType.GATE_TYPE_H,
+        "SX": GateType.GATE_TYPE_SX,
+        "RX": GateType.GATE_TYPE_RX,
+        "RY": GateType.GATE_TYPE_RY,
+        "RZ": GateType.GATE_TYPE_RZ,
+        "CZ": GateType.GATE_TYPE_CZ,
+        "CNOT": GateType.GATE_TYPE_CNOT,
+        "ISWAP": GateType.GATE_TYPE_ISWAP,
+        "CUSTOM": GateType.GATE_TYPE_CUSTOM,
+    }
+    return gate_map.get(gate_type.upper(), GateType.GATE_TYPE_CUSTOM)
 
 
 # Synchronous wrapper for convenience

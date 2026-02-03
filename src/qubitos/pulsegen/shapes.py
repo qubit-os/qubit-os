@@ -270,10 +270,14 @@ def drag(
         sigma: Gaussian width (default: duration/6)
         center: Center time (default: middle)
         beta: DRAG coefficient (if provided directly)
-        anharmonicity: Qubit anharmonicity in Hz (alternative to beta)
+        anharmonicity: Qubit anharmonicity in Hz (alternative to beta).
+                       Must be non-zero if provided.
 
     Returns:
         Tuple of (I envelope, Q envelope)
+
+    Raises:
+        ValueError: If anharmonicity is zero (would cause division by zero)
 
     Reference:
         Motzoi et al., PRL 103, 110501 (2009)
@@ -287,6 +291,12 @@ def drag(
 
     # Compute beta from anharmonicity if provided
     if anharmonicity is not None and beta == 0.0:
+        # Validate anharmonicity to prevent division by zero
+        if anharmonicity == 0.0:
+            raise ValueError(
+                "anharmonicity cannot be zero (would cause division by zero). "
+                "Either provide a non-zero anharmonicity or specify beta directly."
+            )
         # Standard DRAG formula
         beta = -1 / (4 * anharmonicity)
 
@@ -320,18 +330,27 @@ def generate_envelope(
 
     Args:
         shape: Pulse shape type
-        num_time_steps: Number of time discretization points
-        duration_ns: Total duration in nanoseconds
+        num_time_steps: Number of time discretization points (must be >= 1)
+        duration_ns: Total duration in nanoseconds (must be > 0)
         amplitude: Pulse amplitude
         **kwargs: Additional parameters for the shape function
 
     Returns:
         PulseEnvelope with I and Q components
 
+    Raises:
+        ValueError: If parameters are invalid
+
     Example:
         >>> env = generate_envelope("gaussian", 100, 20.0, amplitude=1.0)
         >>> env = generate_envelope("drag", 100, 20.0, amplitude=1.0, beta=0.5)
     """
+    # Validate parameters
+    if num_time_steps < 1:
+        raise ValueError(f"num_time_steps must be >= 1, got {num_time_steps}")
+    if duration_ns <= 0:
+        raise ValueError(f"duration_ns must be > 0, got {duration_ns}")
+
     # Convert string to enum
     if isinstance(shape, str):
         shape = PulseShapeType(shape.lower())

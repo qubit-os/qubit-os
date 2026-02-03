@@ -44,6 +44,12 @@ from scipy import linalg as scipy_linalg
 
 logger = logging.getLogger(__name__)
 
+# Minimum time step to prevent division by zero (1 femtosecond)
+MIN_DT_SECONDS = 1e-15
+
+# Minimum number of time steps
+MIN_TIME_STEPS = 1
+
 
 class GateType(Enum):
     """Supported quantum gate types."""
@@ -70,8 +76,8 @@ class GrapeConfig:
     """Configuration for GRAPE optimization.
 
     Attributes:
-        num_time_steps: Number of time discretization steps
-        duration_ns: Total pulse duration in nanoseconds
+        num_time_steps: Number of time discretization steps (must be >= 1)
+        duration_ns: Total pulse duration in nanoseconds (must be > 0)
         target_fidelity: Target gate fidelity (0 to 1)
         max_iterations: Maximum optimization iterations
         learning_rate: Initial learning rate for gradient ascent
@@ -86,12 +92,29 @@ class GrapeConfig:
     duration_ns: float = 20.0
     target_fidelity: float = 0.999
     max_iterations: int = 1000
-    learning_rate: float = 0.1
+    learning_rate: float = 1.0  # Increased from 0.1
     convergence_threshold: float = 1e-8
     max_amplitude: float = 100.0  # MHz
     use_second_order: bool = False
     regularization: float = 0.0
     random_seed: int | None = None
+
+    def __post_init__(self) -> None:
+        """Validate configuration parameters."""
+        if self.num_time_steps < MIN_TIME_STEPS:
+            raise ValueError(
+                f"num_time_steps must be >= {MIN_TIME_STEPS}, got {self.num_time_steps}"
+            )
+        if self.duration_ns <= 0:
+            raise ValueError(f"duration_ns must be > 0, got {self.duration_ns}")
+        if not 0 <= self.target_fidelity <= 1:
+            raise ValueError(
+                f"target_fidelity must be in [0, 1], got {self.target_fidelity}"
+            )
+        if self.max_iterations < 1:
+            raise ValueError(f"max_iterations must be >= 1, got {self.max_iterations}")
+        if self.max_amplitude <= 0:
+            raise ValueError(f"max_amplitude must be > 0, got {self.max_amplitude}")
 
 
 @dataclass
@@ -101,7 +124,7 @@ class GrapeResult:
     Attributes:
         i_envelope: Optimized I (in-phase) pulse envelope
         q_envelope: Optimized Q (quadrature) pulse envelope
-        fidelity: Achieved gate fidelity
+        fidelity: Achieved gate fidelity (clamped to [0, 1])
         iterations: Number of iterations performed
         converged: Whether optimization converged
         fidelity_history: Fidelity at each iteration
@@ -154,10 +177,23 @@ class GrapeOptimizer:
 
         Returns:
             GrapeResult with optimized pulses and metrics
+
+        Raises:
+            ValueError: If parameters are invalid
         """
         dim = 2**num_qubits
         n_steps = self.config.num_time_steps
+
+        # Compute dt with protection against division by zero
+        # n_steps is guaranteed >= 1 by GrapeConfig validation
         dt = self.config.duration_ns * 1e-9 / n_steps  # Convert to seconds
+
+        # Additional safety check (should never trigger due to config validation)
+        if dt < MIN_DT_SECONDS:
+            logger.warning(
+                f"Computed dt={dt:.2e}s is very small, clamping to {MIN_DT_SECONDS:.2e}s"
+            )
+            dt = MIN_DT_SECONDS
 
         # Validate target unitary
         if target_unitary.shape != (dim, dim):
@@ -177,9 +213,12 @@ class GrapeOptimizer:
         if initial_pulses is not None:
             i_pulse, q_pulse = initial_pulses
         else:
-            # Random initialization with small amplitudes
-            i_pulse = self._rng.uniform(-0.1, 0.1, n_steps) * self.config.max_amplitude
-            q_pulse = self._rng.uniform(-0.1, 0.1, n_steps) * self.config.max_amplitude
+            # Initialize with significant amplitude to avoid saddle point at U=I
+            # For trace-zero targets like X, Y, CZ, the gradient vanishes when U~I
+            # Starting with ~25% of max amplitude helps escape this saddle point
+            init_amp = 0.25 * self.config.max_amplitude
+            i_pulse = self._rng.uniform(-init_amp, init_amp, n_steps)
+            q_pulse = self._rng.uniform(-init_amp, init_amp, n_steps)
 
         # Optimization loop
         fidelity_history = []
@@ -196,7 +235,7 @@ class GrapeOptimizer:
             # Compute total unitary
             total_unitary = self._chain_propagators(propagators)
 
-            # Compute fidelity
+            # Compute fidelity (clamped to [0, 1])
             fidelity = self._gate_fidelity(total_unitary, target_unitary)
             fidelity_history.append(fidelity)
 
@@ -237,7 +276,7 @@ class GrapeOptimizer:
 
             # Compute gradients
             grad_i, grad_q = self._compute_gradients(
-                propagators, target_unitary, control_hamiltonians, dt
+                propagators, target_unitary, control_hamiltonians, dt, total_unitary
             )
 
             # Apply regularization
@@ -245,11 +284,8 @@ class GrapeOptimizer:
                 grad_i -= self.config.regularization * i_pulse
                 grad_q -= self.config.regularization * q_pulse
 
-            # Update pulses (gradient ascent)
-            lr = self.config.learning_rate
-            if self.config.use_second_order:
-                lr = self._adaptive_learning_rate(iteration, fidelity_history)
-
+            # Update pulses (gradient ascent) with adaptive learning rate
+            lr = self._adaptive_learning_rate(iteration, fidelity_history)
             i_pulse += lr * grad_i
             q_pulse += lr * grad_q
 
@@ -352,11 +388,17 @@ class GrapeOptimizer:
         F = (|Tr(U_target^dag @ U_achieved)|^2 + d) / (d^2 + d)
 
         where d is the Hilbert space dimension.
+
+        Returns:
+            Fidelity clamped to [0.0, 1.0] to handle numerical errors.
         """
         d = achieved.shape[0]
         overlap = np.trace(target.conj().T @ achieved)
         fidelity = (np.abs(overlap) ** 2 + d) / (d**2 + d)
-        return float(fidelity)
+
+        # Clamp to [0, 1] to handle numerical errors
+        # The fidelity formula can produce values slightly > 1 due to floating point
+        return float(np.clip(fidelity, 0.0, 1.0))
 
     def _compute_gradients(
         self,
@@ -364,13 +406,37 @@ class GrapeOptimizer:
         target: NDArray[np.complex128],
         controls: list[NDArray[np.complex128]],
         dt: float,
+        total_unitary: NDArray[np.complex128],
     ) -> tuple[NDArray[np.float64], NDArray[np.float64]]:
-        """Compute gradients of fidelity with respect to pulse amplitudes."""
+        """Compute gradients of fidelity with respect to pulse amplitudes.
+
+        For average gate fidelity F = (|chi|^2 + d) / (d^2 + d) where chi = Tr(W^dag @ U),
+        the gradient with respect to control amplitude u_k is:
+
+            dF/du_k = 2 * Re(chi* . Tr(W^dag @ Q_k @ dU_k @ P_{k-1})) / (d^2 + d)
+
+        where:
+            - W is the target unitary
+            - U is the achieved unitary
+            - P_{k-1} = U_{k-1} @ ... @ U_1 (forward propagator)
+            - Q_k = U_n @ ... @ U_{k+1} (backward propagator)
+            - dU_k = -i * dt * H_control @ U_k (propagator derivative)
+
+        References:
+            - Khaneja et al., J. Magn. Reson. 172, 296-305 (2005)
+        """
         n_steps = len(propagators)
         dim = propagators[0].shape[0]
 
         grad_i = np.zeros(n_steps)
         grad_q = np.zeros(n_steps)
+
+        # Compute the overlap chi = Tr(W^dag @ U) - needed for chain rule
+        chi = np.trace(target.conj().T @ total_unitary)
+
+        # Normalization factor from fidelity derivative
+        # dF/d|chi|^2 = 1/(d^2 + d), and d|chi|^2/dchi = 2*Re(chi* . ...)
+        norm_factor = 2.0 / (dim**2 + dim)
 
         # Compute forward and backward propagators
         # Forward: P_k = U_k @ U_{k-1} @ ... @ U_1
@@ -384,30 +450,29 @@ class GrapeOptimizer:
             backward.append(backward[-1] @ U)
         backward = list(reversed(backward))
 
-        # Gradient computation
-        # dF/du_k ∝ Re(Tr(target^dag @ Q_k @ dU_k/du_k @ P_{k-1}))
+        # Gradient computation with proper chain rule
         for t in range(n_steps):
             P = forward[t]
             Q = backward[t + 1]
 
             # Derivative of propagator with respect to control
-            # dU/du ≈ -i * dt * H_control * U (first order)
+            # dU/du = -i * dt * H_control * U (first order)
             for c_idx, H_control in enumerate(controls[:2]):  # First qubit only
                 dU = -1j * 2 * np.pi * dt * 1e6 * H_control @ propagators[t]
 
-                # Gradient contribution
-                grad_contribution = np.real(np.trace(target.conj().T @ Q @ dU @ P))
+                # Inner product: Tr(W^dag @ Q @ dU @ P)
+                inner = np.trace(target.conj().T @ Q @ dU @ P)
+
+                # Apply chain rule: dF/du = norm_factor * Re(chi* . inner)
+                grad_contribution = norm_factor * np.real(np.conj(chi) * inner)
 
                 if c_idx == 0:
                     grad_i[t] = grad_contribution
                 else:
                     grad_q[t] = grad_contribution
 
-        # Normalize gradients
-        norm = np.sqrt(np.sum(grad_i**2) + np.sum(grad_q**2))
-        if norm > 1e-10:
-            grad_i /= norm
-            grad_q /= norm
+        # Note: We do NOT normalize gradients here - that was a bug!
+        # Normalizing destroys the magnitude information needed for proper gradient ascent.
 
         return grad_i, grad_q
 
@@ -418,6 +483,10 @@ class GrapeOptimizer:
     def _adaptive_learning_rate(self, iteration: int, history: list[float]) -> float:
         """Compute adaptive learning rate based on progress."""
         base_lr = self.config.learning_rate
+
+        # Scale by a factor that accounts for the typical gradient magnitude
+        # Gradients are typically O(1e-3) to O(1e-5), so we need larger steps
+        scale = 100.0  # Amplify learning rate
 
         # Decay learning rate over time
         decay = 0.999**iteration
@@ -432,7 +501,7 @@ class GrapeOptimizer:
                 # Going backwards - decrease
                 decay *= 0.5
 
-        return base_lr * decay
+        return base_lr * scale * decay
 
 
 def generate_pulse(
@@ -450,13 +519,16 @@ def generate_pulse(
     Args:
         gate: Target gate (e.g., "X", "H", "CZ")
         num_qubits: Number of qubits in the system
-        duration_ns: Pulse duration in nanoseconds
+        duration_ns: Pulse duration in nanoseconds (must be > 0)
         target_fidelity: Target gate fidelity
         qubit_indices: Indices of target qubits (default: [0] or [0,1])
         config: Advanced configuration options
 
     Returns:
         GrapeResult with optimized pulse envelopes
+
+    Raises:
+        ValueError: If parameters are invalid
 
     Example:
         >>> result = generate_pulse("X", duration_ns=20, target_fidelity=0.999)
