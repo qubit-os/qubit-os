@@ -1,20 +1,31 @@
-from google.protobuf.internal import containers as _containers
-from google.protobuf.internal import enum_type_wrapper as _enum_type_wrapper
+from collections.abc import Iterable as _Iterable
+from typing import ClassVar as _ClassVar
+
 from google.protobuf import descriptor as _descriptor
 from google.protobuf import message as _message
-from collections.abc import Iterable as _Iterable
-from typing import ClassVar as _ClassVar, Optional as _Optional, Union as _Union
+from google.protobuf.internal import containers as _containers
+from google.protobuf.internal import enum_type_wrapper as _enum_type_wrapper
 
 DESCRIPTOR: _descriptor.FileDescriptor
 
 class HamiltonianSpec(_message.Message):
-    __slots__ = ("format", "content", "hilbert_space_dim", "num_qubits", "validation_tolerance", "control_operators", "validated", "validation_error")
+    __slots__ = (
+        "format",
+        "content",
+        "hilbert_space_dim",
+        "num_qubits",
+        "validation_tolerance",
+        "control_operators",
+        "validated",
+        "validation_error",
+    )
     class RepresentationFormat(int, metaclass=_enum_type_wrapper.EnumTypeWrapper):
         __slots__ = ()
         REPRESENTATION_FORMAT_UNSPECIFIED: _ClassVar[HamiltonianSpec.RepresentationFormat]
         REPRESENTATION_FORMAT_PAULI_STRING: _ClassVar[HamiltonianSpec.RepresentationFormat]
         REPRESENTATION_FORMAT_MATRIX_SPARSE: _ClassVar[HamiltonianSpec.RepresentationFormat]
         REPRESENTATION_FORMAT_MATRIX_DENSE: _ClassVar[HamiltonianSpec.RepresentationFormat]
+
     REPRESENTATION_FORMAT_UNSPECIFIED: HamiltonianSpec.RepresentationFormat
     REPRESENTATION_FORMAT_PAULI_STRING: HamiltonianSpec.RepresentationFormat
     REPRESENTATION_FORMAT_MATRIX_SPARSE: HamiltonianSpec.RepresentationFormat
@@ -35,4 +46,14 @@ class HamiltonianSpec(_message.Message):
     control_operators: _containers.RepeatedScalarFieldContainer[str]
     validated: bool
     validation_error: str
-    def __init__(self, format: _Optional[_Union[HamiltonianSpec.RepresentationFormat, str]] = ..., content: _Optional[str] = ..., hilbert_space_dim: _Optional[int] = ..., num_qubits: _Optional[int] = ..., validation_tolerance: _Optional[float] = ..., control_operators: _Optional[_Iterable[str]] = ..., validated: bool = ..., validation_error: _Optional[str] = ...) -> None: ...
+    def __init__(
+        self,
+        format: HamiltonianSpec.RepresentationFormat | str | None = ...,
+        content: str | None = ...,
+        hilbert_space_dim: int | None = ...,
+        num_qubits: int | None = ...,
+        validation_tolerance: float | None = ...,
+        control_operators: _Iterable[str] | None = ...,
+        validated: bool = ...,
+        validation_error: str | None = ...,
+    ) -> None: ...

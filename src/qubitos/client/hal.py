@@ -40,13 +40,12 @@ import grpc
 # Import generated proto stubs
 from qubitos.proto import (
     ExecutePulseRequest,
-    ExecutePulseResponse,
+    GateType,
     GetHardwareInfoRequest,
     HealthRequest,
     ListBackendsRequest,
     PulseShape,
     QuantumBackendServiceStub,
-    GateType,
 )
 
 if TYPE_CHECKING:
@@ -269,7 +268,7 @@ class HALClient:
 
             return HealthCheckResult(
                 status=status,
-                message=response.message if hasattr(response, 'message') else "",
+                message=response.message if hasattr(response, "message") else "",
                 backends=backends,
             )
 

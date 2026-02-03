@@ -1,10 +1,12 @@
-from quantum.common.v1 import common_pb2 as _common_pb2
-from google.protobuf.internal import containers as _containers
-from google.protobuf.internal import enum_type_wrapper as _enum_type_wrapper
+from collections.abc import Iterable as _Iterable
+from collections.abc import Mapping as _Mapping
+from typing import ClassVar as _ClassVar
+
 from google.protobuf import descriptor as _descriptor
 from google.protobuf import message as _message
-from collections.abc import Iterable as _Iterable, Mapping as _Mapping
-from typing import ClassVar as _ClassVar, Optional as _Optional, Union as _Union
+from google.protobuf.internal import containers as _containers
+from google.protobuf.internal import enum_type_wrapper as _enum_type_wrapper
+from quantum.common.v1 import common_pb2 as _common_pb2
 
 DESCRIPTOR: _descriptor.FileDescriptor
 
@@ -28,6 +30,7 @@ class GateType(int, metaclass=_enum_type_wrapper.EnumTypeWrapper):
     GATE_TYPE_CX: _ClassVar[GateType]
     GATE_TYPE_SWAP: _ClassVar[GateType]
     GATE_TYPE_CUSTOM: _ClassVar[GateType]
+
 GATE_TYPE_UNSPECIFIED: GateType
 GATE_TYPE_X: GateType
 GATE_TYPE_Y: GateType
@@ -48,7 +51,29 @@ GATE_TYPE_SWAP: GateType
 GATE_TYPE_CUSTOM: GateType
 
 class PulseShape(_message.Message):
-    __slots__ = ("pulse_id", "algorithm", "gate_type", "target_qubit_indices", "target_fidelity", "duration_ns", "num_time_steps", "time_step_ns", "i_envelope", "q_envelope", "max_amplitude_mhz", "coupling_envelope", "rotation_angle", "validated", "validation_error", "proto_version", "created_at", "calibration_fingerprint", "code_version", "random_seed", "custom_unitary_json")
+    __slots__ = (
+        "pulse_id",
+        "algorithm",
+        "gate_type",
+        "target_qubit_indices",
+        "target_fidelity",
+        "duration_ns",
+        "num_time_steps",
+        "time_step_ns",
+        "i_envelope",
+        "q_envelope",
+        "max_amplitude_mhz",
+        "coupling_envelope",
+        "rotation_angle",
+        "validated",
+        "validation_error",
+        "proto_version",
+        "created_at",
+        "calibration_fingerprint",
+        "code_version",
+        "random_seed",
+        "custom_unitary_json",
+    )
     PULSE_ID_FIELD_NUMBER: _ClassVar[int]
     ALGORITHM_FIELD_NUMBER: _ClassVar[int]
     GATE_TYPE_FIELD_NUMBER: _ClassVar[int]
@@ -91,7 +116,30 @@ class PulseShape(_message.Message):
     code_version: str
     random_seed: int
     custom_unitary_json: str
-    def __init__(self, pulse_id: _Optional[str] = ..., algorithm: _Optional[str] = ..., gate_type: _Optional[_Union[GateType, str]] = ..., target_qubit_indices: _Optional[_Iterable[int]] = ..., target_fidelity: _Optional[float] = ..., duration_ns: _Optional[int] = ..., num_time_steps: _Optional[int] = ..., time_step_ns: _Optional[float] = ..., i_envelope: _Optional[_Iterable[float]] = ..., q_envelope: _Optional[_Iterable[float]] = ..., max_amplitude_mhz: _Optional[float] = ..., coupling_envelope: _Optional[_Iterable[float]] = ..., rotation_angle: _Optional[float] = ..., validated: bool = ..., validation_error: _Optional[str] = ..., proto_version: _Optional[int] = ..., created_at: _Optional[_Union[_common_pb2.Timestamp, _Mapping]] = ..., calibration_fingerprint: _Optional[str] = ..., code_version: _Optional[str] = ..., random_seed: _Optional[int] = ..., custom_unitary_json: _Optional[str] = ...) -> None: ...
+    def __init__(
+        self,
+        pulse_id: str | None = ...,
+        algorithm: str | None = ...,
+        gate_type: GateType | str | None = ...,
+        target_qubit_indices: _Iterable[int] | None = ...,
+        target_fidelity: float | None = ...,
+        duration_ns: int | None = ...,
+        num_time_steps: int | None = ...,
+        time_step_ns: float | None = ...,
+        i_envelope: _Iterable[float] | None = ...,
+        q_envelope: _Iterable[float] | None = ...,
+        max_amplitude_mhz: float | None = ...,
+        coupling_envelope: _Iterable[float] | None = ...,
+        rotation_angle: float | None = ...,
+        validated: bool = ...,
+        validation_error: str | None = ...,
+        proto_version: int | None = ...,
+        created_at: _common_pb2.Timestamp | _Mapping | None = ...,
+        calibration_fingerprint: str | None = ...,
+        code_version: str | None = ...,
+        random_seed: int | None = ...,
+        custom_unitary_json: str | None = ...,
+    ) -> None: ...
 
 class PulseLibraryEntry(_message.Message):
     __slots__ = ("name", "description", "pulse", "tags")
@@ -103,7 +151,13 @@ class PulseLibraryEntry(_message.Message):
     description: str
     pulse: PulseShape
     tags: _containers.RepeatedScalarFieldContainer[str]
-    def __init__(self, name: _Optional[str] = ..., description: _Optional[str] = ..., pulse: _Optional[_Union[PulseShape, _Mapping]] = ..., tags: _Optional[_Iterable[str]] = ...) -> None: ...
+    def __init__(
+        self,
+        name: str | None = ...,
+        description: str | None = ...,
+        pulse: PulseShape | _Mapping | None = ...,
+        tags: _Iterable[str] | None = ...,
+    ) -> None: ...
 
 class PulseLibrary(_message.Message):
     __slots__ = ("version", "updated_at", "entries")
@@ -113,4 +167,9 @@ class PulseLibrary(_message.Message):
     version: str
     updated_at: _common_pb2.Timestamp
     entries: _containers.RepeatedCompositeFieldContainer[PulseLibraryEntry]
-    def __init__(self, version: _Optional[str] = ..., updated_at: _Optional[_Union[_common_pb2.Timestamp, _Mapping]] = ..., entries: _Optional[_Iterable[_Union[PulseLibraryEntry, _Mapping]]] = ...) -> None: ...
+    def __init__(
+        self,
+        version: str | None = ...,
+        updated_at: _common_pb2.Timestamp | _Mapping | None = ...,
+        entries: _Iterable[PulseLibraryEntry | _Mapping] | None = ...,
+    ) -> None: ...

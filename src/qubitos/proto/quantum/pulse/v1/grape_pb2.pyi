@@ -1,16 +1,35 @@
+from collections.abc import Iterable as _Iterable
+from collections.abc import Mapping as _Mapping
+from typing import ClassVar as _ClassVar
+
+from google.protobuf import descriptor as _descriptor
+from google.protobuf import message as _message
+from google.protobuf.internal import containers as _containers
 from quantum.common.v1 import common_pb2 as _common_pb2
 from quantum.pulse.v1 import hamiltonian_pb2 as _hamiltonian_pb2
 from quantum.pulse.v1 import pulse_pb2 as _pulse_pb2
-from google.protobuf.internal import containers as _containers
-from google.protobuf import descriptor as _descriptor
-from google.protobuf import message as _message
-from collections.abc import Iterable as _Iterable, Mapping as _Mapping
-from typing import ClassVar as _ClassVar, Optional as _Optional, Union as _Union
 
 DESCRIPTOR: _descriptor.FileDescriptor
 
 class OptimizeRequest(_message.Message):
-    __slots__ = ("trace", "system_hamiltonian", "target_gate", "target_qubit_indices", "rotation_angle", "custom_unitary_json", "target_fidelity", "max_iterations", "num_time_steps", "duration_ns", "learning_rate", "random_seed", "options", "max_amplitude_mhz", "timeout_ms", "calibration_fingerprint")
+    __slots__ = (
+        "trace",
+        "system_hamiltonian",
+        "target_gate",
+        "target_qubit_indices",
+        "rotation_angle",
+        "custom_unitary_json",
+        "target_fidelity",
+        "max_iterations",
+        "num_time_steps",
+        "duration_ns",
+        "learning_rate",
+        "random_seed",
+        "options",
+        "max_amplitude_mhz",
+        "timeout_ms",
+        "calibration_fingerprint",
+    )
     TRACE_FIELD_NUMBER: _ClassVar[int]
     SYSTEM_HAMILTONIAN_FIELD_NUMBER: _ClassVar[int]
     TARGET_GATE_FIELD_NUMBER: _ClassVar[int]
@@ -43,10 +62,44 @@ class OptimizeRequest(_message.Message):
     max_amplitude_mhz: float
     timeout_ms: int
     calibration_fingerprint: str
-    def __init__(self, trace: _Optional[_Union[_common_pb2.TraceContext, _Mapping]] = ..., system_hamiltonian: _Optional[_Union[_hamiltonian_pb2.HamiltonianSpec, _Mapping]] = ..., target_gate: _Optional[_Union[_pulse_pb2.GateType, str]] = ..., target_qubit_indices: _Optional[_Iterable[int]] = ..., rotation_angle: _Optional[float] = ..., custom_unitary_json: _Optional[str] = ..., target_fidelity: _Optional[float] = ..., max_iterations: _Optional[int] = ..., num_time_steps: _Optional[int] = ..., duration_ns: _Optional[int] = ..., learning_rate: _Optional[float] = ..., random_seed: _Optional[int] = ..., options: _Optional[_Union[GRAPEOptions, _Mapping]] = ..., max_amplitude_mhz: _Optional[float] = ..., timeout_ms: _Optional[int] = ..., calibration_fingerprint: _Optional[str] = ...) -> None: ...
+    def __init__(
+        self,
+        trace: _common_pb2.TraceContext | _Mapping | None = ...,
+        system_hamiltonian: _hamiltonian_pb2.HamiltonianSpec | _Mapping | None = ...,
+        target_gate: _pulse_pb2.GateType | str | None = ...,
+        target_qubit_indices: _Iterable[int] | None = ...,
+        rotation_angle: float | None = ...,
+        custom_unitary_json: str | None = ...,
+        target_fidelity: float | None = ...,
+        max_iterations: int | None = ...,
+        num_time_steps: int | None = ...,
+        duration_ns: int | None = ...,
+        learning_rate: float | None = ...,
+        random_seed: int | None = ...,
+        options: GRAPEOptions | _Mapping | None = ...,
+        max_amplitude_mhz: float | None = ...,
+        timeout_ms: int | None = ...,
+        calibration_fingerprint: str | None = ...,
+    ) -> None: ...
 
 class GRAPEOptions(_message.Message):
-    __slots__ = ("optimizer", "lbfgs_memory", "learning_rate_decay", "decay_interval", "l2_amplitude_penalty", "smoothness_penalty", "bandwidth_limit_mhz", "convergence_threshold", "convergence_window", "gradient_clip_norm", "initial_pulse_id", "initial_guess_type", "include_decoherence", "include_leakage", "transmon_levels")
+    __slots__ = (
+        "optimizer",
+        "lbfgs_memory",
+        "learning_rate_decay",
+        "decay_interval",
+        "l2_amplitude_penalty",
+        "smoothness_penalty",
+        "bandwidth_limit_mhz",
+        "convergence_threshold",
+        "convergence_window",
+        "gradient_clip_norm",
+        "initial_pulse_id",
+        "initial_guess_type",
+        "include_decoherence",
+        "include_leakage",
+        "transmon_levels",
+    )
     OPTIMIZER_FIELD_NUMBER: _ClassVar[int]
     LBFGS_MEMORY_FIELD_NUMBER: _ClassVar[int]
     LEARNING_RATE_DECAY_FIELD_NUMBER: _ClassVar[int]
@@ -77,10 +130,40 @@ class GRAPEOptions(_message.Message):
     include_decoherence: bool
     include_leakage: bool
     transmon_levels: int
-    def __init__(self, optimizer: _Optional[str] = ..., lbfgs_memory: _Optional[int] = ..., learning_rate_decay: _Optional[float] = ..., decay_interval: _Optional[int] = ..., l2_amplitude_penalty: _Optional[float] = ..., smoothness_penalty: _Optional[float] = ..., bandwidth_limit_mhz: _Optional[float] = ..., convergence_threshold: _Optional[float] = ..., convergence_window: _Optional[int] = ..., gradient_clip_norm: _Optional[float] = ..., initial_pulse_id: _Optional[str] = ..., initial_guess_type: _Optional[str] = ..., include_decoherence: bool = ..., include_leakage: bool = ..., transmon_levels: _Optional[int] = ...) -> None: ...
+    def __init__(
+        self,
+        optimizer: str | None = ...,
+        lbfgs_memory: int | None = ...,
+        learning_rate_decay: float | None = ...,
+        decay_interval: int | None = ...,
+        l2_amplitude_penalty: float | None = ...,
+        smoothness_penalty: float | None = ...,
+        bandwidth_limit_mhz: float | None = ...,
+        convergence_threshold: float | None = ...,
+        convergence_window: int | None = ...,
+        gradient_clip_norm: float | None = ...,
+        initial_pulse_id: str | None = ...,
+        initial_guess_type: str | None = ...,
+        include_decoherence: bool = ...,
+        include_leakage: bool = ...,
+        transmon_levels: int | None = ...,
+    ) -> None: ...
 
 class OptimizeResponse(_message.Message):
-    __slots__ = ("trace", "success", "error", "optimized_pulse", "achieved_fidelity", "iterations_used", "convergence_reason", "fidelity_history", "gradient_norms", "final_regularization_cost", "wall_time_ms", "warnings")
+    __slots__ = (
+        "trace",
+        "success",
+        "error",
+        "optimized_pulse",
+        "achieved_fidelity",
+        "iterations_used",
+        "convergence_reason",
+        "fidelity_history",
+        "gradient_norms",
+        "final_regularization_cost",
+        "wall_time_ms",
+        "warnings",
+    )
     TRACE_FIELD_NUMBER: _ClassVar[int]
     SUCCESS_FIELD_NUMBER: _ClassVar[int]
     ERROR_FIELD_NUMBER: _ClassVar[int]
@@ -105,13 +188,27 @@ class OptimizeResponse(_message.Message):
     final_regularization_cost: float
     wall_time_ms: int
     warnings: _containers.RepeatedScalarFieldContainer[str]
-    def __init__(self, trace: _Optional[_Union[_common_pb2.TraceContext, _Mapping]] = ..., success: bool = ..., error: _Optional[_Union[_common_pb2.Error, _Mapping]] = ..., optimized_pulse: _Optional[_Union[_pulse_pb2.PulseShape, _Mapping]] = ..., achieved_fidelity: _Optional[float] = ..., iterations_used: _Optional[int] = ..., convergence_reason: _Optional[str] = ..., fidelity_history: _Optional[_Iterable[float]] = ..., gradient_norms: _Optional[_Iterable[float]] = ..., final_regularization_cost: _Optional[float] = ..., wall_time_ms: _Optional[int] = ..., warnings: _Optional[_Iterable[str]] = ...) -> None: ...
+    def __init__(
+        self,
+        trace: _common_pb2.TraceContext | _Mapping | None = ...,
+        success: bool = ...,
+        error: _common_pb2.Error | _Mapping | None = ...,
+        optimized_pulse: _pulse_pb2.PulseShape | _Mapping | None = ...,
+        achieved_fidelity: float | None = ...,
+        iterations_used: int | None = ...,
+        convergence_reason: str | None = ...,
+        fidelity_history: _Iterable[float] | None = ...,
+        gradient_norms: _Iterable[float] | None = ...,
+        final_regularization_cost: float | None = ...,
+        wall_time_ms: int | None = ...,
+        warnings: _Iterable[str] | None = ...,
+    ) -> None: ...
 
 class CancelRequest(_message.Message):
     __slots__ = ("trace_id",)
     TRACE_ID_FIELD_NUMBER: _ClassVar[int]
     trace_id: str
-    def __init__(self, trace_id: _Optional[str] = ...) -> None: ...
+    def __init__(self, trace_id: str | None = ...) -> None: ...
 
 class CancelResponse(_message.Message):
     __slots__ = ("cancelled", "partial_result")
@@ -119,4 +216,6 @@ class CancelResponse(_message.Message):
     PARTIAL_RESULT_FIELD_NUMBER: _ClassVar[int]
     cancelled: bool
     partial_result: OptimizeResponse
-    def __init__(self, cancelled: bool = ..., partial_result: _Optional[_Union[OptimizeResponse, _Mapping]] = ...) -> None: ...
+    def __init__(
+        self, cancelled: bool = ..., partial_result: OptimizeResponse | _Mapping | None = ...
+    ) -> None: ...

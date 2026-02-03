@@ -108,9 +108,7 @@ class GrapeConfig:
         if self.duration_ns <= 0:
             raise ValueError(f"duration_ns must be > 0, got {self.duration_ns}")
         if not 0 <= self.target_fidelity <= 1:
-            raise ValueError(
-                f"target_fidelity must be in [0, 1], got {self.target_fidelity}"
-            )
+            raise ValueError(f"target_fidelity must be in [0, 1], got {self.target_fidelity}")
         if self.max_iterations < 1:
             raise ValueError(f"max_iterations must be >= 1, got {self.max_iterations}")
         if self.max_amplitude <= 0:

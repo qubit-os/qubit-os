@@ -1,11 +1,13 @@
-from quantum.common.v1 import common_pb2 as _common_pb2
-from quantum.pulse.v1 import pulse_pb2 as _pulse_pb2
-from google.protobuf.internal import containers as _containers
-from google.protobuf.internal import enum_type_wrapper as _enum_type_wrapper
+from collections.abc import Iterable as _Iterable
+from collections.abc import Mapping as _Mapping
+from typing import ClassVar as _ClassVar
+
 from google.protobuf import descriptor as _descriptor
 from google.protobuf import message as _message
-from collections.abc import Iterable as _Iterable, Mapping as _Mapping
-from typing import ClassVar as _ClassVar, Optional as _Optional, Union as _Union
+from google.protobuf.internal import containers as _containers
+from google.protobuf.internal import enum_type_wrapper as _enum_type_wrapper
+from quantum.common.v1 import common_pb2 as _common_pb2
+from quantum.pulse.v1 import pulse_pb2 as _pulse_pb2
 
 DESCRIPTOR: _descriptor.FileDescriptor
 
@@ -13,16 +15,34 @@ class GetHardwareInfoRequest(_message.Message):
     __slots__ = ("backend_name",)
     BACKEND_NAME_FIELD_NUMBER: _ClassVar[int]
     backend_name: str
-    def __init__(self, backend_name: _Optional[str] = ...) -> None: ...
+    def __init__(self, backend_name: str | None = ...) -> None: ...
 
 class GetHardwareInfoResponse(_message.Message):
     __slots__ = ("info",)
     INFO_FIELD_NUMBER: _ClassVar[int]
     info: HardwareInfo
-    def __init__(self, info: _Optional[_Union[HardwareInfo, _Mapping]] = ...) -> None: ...
+    def __init__(self, info: HardwareInfo | _Mapping | None = ...) -> None: ...
 
 class HardwareInfo(_message.Message):
-    __slots__ = ("backend_name", "backend_type", "tier", "num_qubits", "available_qubit_indices", "supported_gates", "supported_algorithms", "supports_state_vector", "supports_noise_model", "connectivity", "performance", "limits", "requires_auth", "software_version", "proto_version", "status", "validation")
+    __slots__ = (
+        "backend_name",
+        "backend_type",
+        "tier",
+        "num_qubits",
+        "available_qubit_indices",
+        "supported_gates",
+        "supported_algorithms",
+        "supports_state_vector",
+        "supports_noise_model",
+        "connectivity",
+        "performance",
+        "limits",
+        "requires_auth",
+        "software_version",
+        "proto_version",
+        "status",
+        "validation",
+    )
     BACKEND_NAME_FIELD_NUMBER: _ClassVar[int]
     BACKEND_TYPE_FIELD_NUMBER: _ClassVar[int]
     TIER_FIELD_NUMBER: _ClassVar[int]
@@ -57,7 +77,26 @@ class HardwareInfo(_message.Message):
     proto_version: int
     status: OperationalStatus
     validation: ValidationStatus
-    def __init__(self, backend_name: _Optional[str] = ..., backend_type: _Optional[str] = ..., tier: _Optional[str] = ..., num_qubits: _Optional[int] = ..., available_qubit_indices: _Optional[_Iterable[int]] = ..., supported_gates: _Optional[_Iterable[_Union[_pulse_pb2.GateType, str]]] = ..., supported_algorithms: _Optional[_Iterable[str]] = ..., supports_state_vector: bool = ..., supports_noise_model: bool = ..., connectivity: _Optional[_Iterable[_Union[QubitPair, _Mapping]]] = ..., performance: _Optional[_Union[PerformanceHints, _Mapping]] = ..., limits: _Optional[_Union[ResourceLimits, _Mapping]] = ..., requires_auth: bool = ..., software_version: _Optional[str] = ..., proto_version: _Optional[int] = ..., status: _Optional[_Union[OperationalStatus, _Mapping]] = ..., validation: _Optional[_Union[ValidationStatus, _Mapping]] = ...) -> None: ...
+    def __init__(
+        self,
+        backend_name: str | None = ...,
+        backend_type: str | None = ...,
+        tier: str | None = ...,
+        num_qubits: int | None = ...,
+        available_qubit_indices: _Iterable[int] | None = ...,
+        supported_gates: _Iterable[_pulse_pb2.GateType | str] | None = ...,
+        supported_algorithms: _Iterable[str] | None = ...,
+        supports_state_vector: bool = ...,
+        supports_noise_model: bool = ...,
+        connectivity: _Iterable[QubitPair | _Mapping] | None = ...,
+        performance: PerformanceHints | _Mapping | None = ...,
+        limits: ResourceLimits | _Mapping | None = ...,
+        requires_auth: bool = ...,
+        software_version: str | None = ...,
+        proto_version: int | None = ...,
+        status: OperationalStatus | _Mapping | None = ...,
+        validation: ValidationStatus | _Mapping | None = ...,
+    ) -> None: ...
 
 class QubitPair(_message.Message):
     __slots__ = ("qubit_a", "qubit_b", "supported_gates", "coupling_strength_khz")
@@ -69,10 +108,24 @@ class QubitPair(_message.Message):
     qubit_b: int
     supported_gates: _containers.RepeatedScalarFieldContainer[_pulse_pb2.GateType]
     coupling_strength_khz: float
-    def __init__(self, qubit_a: _Optional[int] = ..., qubit_b: _Optional[int] = ..., supported_gates: _Optional[_Iterable[_Union[_pulse_pb2.GateType, str]]] = ..., coupling_strength_khz: _Optional[float] = ...) -> None: ...
+    def __init__(
+        self,
+        qubit_a: int | None = ...,
+        qubit_b: int | None = ...,
+        supported_gates: _Iterable[_pulse_pb2.GateType | str] | None = ...,
+        coupling_strength_khz: float | None = ...,
+    ) -> None: ...
 
 class PerformanceHints(_message.Message):
-    __slots__ = ("typical_latency_ms", "p95_latency_ms", "p99_latency_ms", "max_shots_per_request", "recommended_batch_size", "max_requests_per_second", "default_timeout_ms")
+    __slots__ = (
+        "typical_latency_ms",
+        "p95_latency_ms",
+        "p99_latency_ms",
+        "max_shots_per_request",
+        "recommended_batch_size",
+        "max_requests_per_second",
+        "default_timeout_ms",
+    )
     TYPICAL_LATENCY_MS_FIELD_NUMBER: _ClassVar[int]
     P95_LATENCY_MS_FIELD_NUMBER: _ClassVar[int]
     P99_LATENCY_MS_FIELD_NUMBER: _ClassVar[int]
@@ -87,10 +140,28 @@ class PerformanceHints(_message.Message):
     recommended_batch_size: int
     max_requests_per_second: float
     default_timeout_ms: int
-    def __init__(self, typical_latency_ms: _Optional[float] = ..., p95_latency_ms: _Optional[float] = ..., p99_latency_ms: _Optional[float] = ..., max_shots_per_request: _Optional[int] = ..., recommended_batch_size: _Optional[int] = ..., max_requests_per_second: _Optional[float] = ..., default_timeout_ms: _Optional[int] = ...) -> None: ...
+    def __init__(
+        self,
+        typical_latency_ms: float | None = ...,
+        p95_latency_ms: float | None = ...,
+        p99_latency_ms: float | None = ...,
+        max_shots_per_request: int | None = ...,
+        recommended_batch_size: int | None = ...,
+        max_requests_per_second: float | None = ...,
+        default_timeout_ms: int | None = ...,
+    ) -> None: ...
 
 class ResourceLimits(_message.Message):
-    __slots__ = ("max_hilbert_dim", "max_qubits", "max_shots", "max_pulse_duration_ns", "max_time_steps", "max_batch_size", "max_concurrent_requests", "max_grape_iterations")
+    __slots__ = (
+        "max_hilbert_dim",
+        "max_qubits",
+        "max_shots",
+        "max_pulse_duration_ns",
+        "max_time_steps",
+        "max_batch_size",
+        "max_concurrent_requests",
+        "max_grape_iterations",
+    )
     MAX_HILBERT_DIM_FIELD_NUMBER: _ClassVar[int]
     MAX_QUBITS_FIELD_NUMBER: _ClassVar[int]
     MAX_SHOTS_FIELD_NUMBER: _ClassVar[int]
@@ -107,7 +178,17 @@ class ResourceLimits(_message.Message):
     max_batch_size: int
     max_concurrent_requests: int
     max_grape_iterations: int
-    def __init__(self, max_hilbert_dim: _Optional[int] = ..., max_qubits: _Optional[int] = ..., max_shots: _Optional[int] = ..., max_pulse_duration_ns: _Optional[int] = ..., max_time_steps: _Optional[int] = ..., max_batch_size: _Optional[int] = ..., max_concurrent_requests: _Optional[int] = ..., max_grape_iterations: _Optional[int] = ...) -> None: ...
+    def __init__(
+        self,
+        max_hilbert_dim: int | None = ...,
+        max_qubits: int | None = ...,
+        max_shots: int | None = ...,
+        max_pulse_duration_ns: int | None = ...,
+        max_time_steps: int | None = ...,
+        max_batch_size: int | None = ...,
+        max_concurrent_requests: int | None = ...,
+        max_grape_iterations: int | None = ...,
+    ) -> None: ...
 
 class OperationalStatus(_message.Message):
     __slots__ = ("status", "message", "updated_at", "expected_recovery")
@@ -118,6 +199,7 @@ class OperationalStatus(_message.Message):
         STATUS_DEGRADED: _ClassVar[OperationalStatus.Status]
         STATUS_MAINTENANCE: _ClassVar[OperationalStatus.Status]
         STATUS_OFFLINE: _ClassVar[OperationalStatus.Status]
+
     STATUS_UNSPECIFIED: OperationalStatus.Status
     STATUS_ONLINE: OperationalStatus.Status
     STATUS_DEGRADED: OperationalStatus.Status
@@ -131,7 +213,13 @@ class OperationalStatus(_message.Message):
     message: str
     updated_at: _common_pb2.Timestamp
     expected_recovery: _common_pb2.Timestamp
-    def __init__(self, status: _Optional[_Union[OperationalStatus.Status, str]] = ..., message: _Optional[str] = ..., updated_at: _Optional[_Union[_common_pb2.Timestamp, _Mapping]] = ..., expected_recovery: _Optional[_Union[_common_pb2.Timestamp, _Mapping]] = ...) -> None: ...
+    def __init__(
+        self,
+        status: OperationalStatus.Status | str | None = ...,
+        message: str | None = ...,
+        updated_at: _common_pb2.Timestamp | _Mapping | None = ...,
+        expected_recovery: _common_pb2.Timestamp | _Mapping | None = ...,
+    ) -> None: ...
 
 class ValidationStatus(_message.Message):
     __slots__ = ("status", "method", "validated_at", "details", "metrics")
@@ -141,6 +229,7 @@ class ValidationStatus(_message.Message):
         STATUS_PASSED: _ClassVar[ValidationStatus.Status]
         STATUS_FAILED: _ClassVar[ValidationStatus.Status]
         STATUS_EXPIRED: _ClassVar[ValidationStatus.Status]
+
     STATUS_UNSPECIFIED: ValidationStatus.Status
     STATUS_PASSED: ValidationStatus.Status
     STATUS_FAILED: ValidationStatus.Status
@@ -151,7 +240,8 @@ class ValidationStatus(_message.Message):
         VALUE_FIELD_NUMBER: _ClassVar[int]
         key: str
         value: float
-        def __init__(self, key: _Optional[str] = ..., value: _Optional[float] = ...) -> None: ...
+        def __init__(self, key: str | None = ..., value: float | None = ...) -> None: ...
+
     STATUS_FIELD_NUMBER: _ClassVar[int]
     METHOD_FIELD_NUMBER: _ClassVar[int]
     VALIDATED_AT_FIELD_NUMBER: _ClassVar[int]
@@ -162,22 +252,37 @@ class ValidationStatus(_message.Message):
     validated_at: _common_pb2.Timestamp
     details: str
     metrics: _containers.ScalarMap[str, float]
-    def __init__(self, status: _Optional[_Union[ValidationStatus.Status, str]] = ..., method: _Optional[str] = ..., validated_at: _Optional[_Union[_common_pb2.Timestamp, _Mapping]] = ..., details: _Optional[str] = ..., metrics: _Optional[_Mapping[str, float]] = ...) -> None: ...
+    def __init__(
+        self,
+        status: ValidationStatus.Status | str | None = ...,
+        method: str | None = ...,
+        validated_at: _common_pb2.Timestamp | _Mapping | None = ...,
+        details: str | None = ...,
+        metrics: _Mapping[str, float] | None = ...,
+    ) -> None: ...
 
 class HealthRequest(_message.Message):
     __slots__ = ("backend_name",)
     BACKEND_NAME_FIELD_NUMBER: _ClassVar[int]
     backend_name: str
-    def __init__(self, backend_name: _Optional[str] = ...) -> None: ...
+    def __init__(self, backend_name: str | None = ...) -> None: ...
 
 class HealthResponse(_message.Message):
-    __slots__ = ("status", "message", "checked_at", "latency_ms", "backend_statuses", "backend_messages")
+    __slots__ = (
+        "status",
+        "message",
+        "checked_at",
+        "latency_ms",
+        "backend_statuses",
+        "backend_messages",
+    )
     class Status(int, metaclass=_enum_type_wrapper.EnumTypeWrapper):
         __slots__ = ()
         STATUS_UNSPECIFIED: _ClassVar[HealthResponse.Status]
         STATUS_HEALTHY: _ClassVar[HealthResponse.Status]
         STATUS_DEGRADED: _ClassVar[HealthResponse.Status]
         STATUS_UNAVAILABLE: _ClassVar[HealthResponse.Status]
+
     STATUS_UNSPECIFIED: HealthResponse.Status
     STATUS_HEALTHY: HealthResponse.Status
     STATUS_DEGRADED: HealthResponse.Status
@@ -188,14 +293,18 @@ class HealthResponse(_message.Message):
         VALUE_FIELD_NUMBER: _ClassVar[int]
         key: str
         value: HealthResponse.Status
-        def __init__(self, key: _Optional[str] = ..., value: _Optional[_Union[HealthResponse.Status, str]] = ...) -> None: ...
+        def __init__(
+            self, key: str | None = ..., value: HealthResponse.Status | str | None = ...
+        ) -> None: ...
+
     class BackendMessagesEntry(_message.Message):
         __slots__ = ("key", "value")
         KEY_FIELD_NUMBER: _ClassVar[int]
         VALUE_FIELD_NUMBER: _ClassVar[int]
         key: str
         value: str
-        def __init__(self, key: _Optional[str] = ..., value: _Optional[str] = ...) -> None: ...
+        def __init__(self, key: str | None = ..., value: str | None = ...) -> None: ...
+
     STATUS_FIELD_NUMBER: _ClassVar[int]
     MESSAGE_FIELD_NUMBER: _ClassVar[int]
     CHECKED_AT_FIELD_NUMBER: _ClassVar[int]
@@ -208,4 +317,12 @@ class HealthResponse(_message.Message):
     latency_ms: float
     backend_statuses: _containers.ScalarMap[str, HealthResponse.Status]
     backend_messages: _containers.ScalarMap[str, str]
-    def __init__(self, status: _Optional[_Union[HealthResponse.Status, str]] = ..., message: _Optional[str] = ..., checked_at: _Optional[_Union[_common_pb2.Timestamp, _Mapping]] = ..., latency_ms: _Optional[float] = ..., backend_statuses: _Optional[_Mapping[str, HealthResponse.Status]] = ..., backend_messages: _Optional[_Mapping[str, str]] = ...) -> None: ...
+    def __init__(
+        self,
+        status: HealthResponse.Status | str | None = ...,
+        message: str | None = ...,
+        checked_at: _common_pb2.Timestamp | _Mapping | None = ...,
+        latency_ms: float | None = ...,
+        backend_statuses: _Mapping[str, HealthResponse.Status] | None = ...,
+        backend_messages: _Mapping[str, str] | None = ...,
+    ) -> None: ...
