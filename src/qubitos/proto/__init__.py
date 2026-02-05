@@ -1,5 +1,8 @@
 # Copyright 2026 QubitOS Contributors
 # SPDX-License-Identifier: Apache-2.0
+# isort: skip_file
+# ruff: noqa: I001
+# ^^^ Import order is intentional - proto descriptor pool requires dependencies first
 
 """Generated Protocol Buffer stubs for QubitOS HAL.
 
