@@ -103,7 +103,7 @@ def health(server: str, backend: str | None, output_format: str) -> None:
                 sys.exit(1)
 
     except Exception as e:
-        click.echo(f"Error: {e}", err=True)
+        click.echo(f"Error ({type(e).__name__}): {e}", err=True)
         sys.exit(1)
 
 
@@ -140,7 +140,7 @@ def info(server: str, backend: str | None, output_format: str) -> None:
             _output(data, output_format)
 
     except Exception as e:
-        click.echo(f"Error: {e}", err=True)
+        click.echo(f"Error ({type(e).__name__}): {e}", err=True)
         sys.exit(1)
 
 
@@ -239,7 +239,7 @@ def generate(
         click.echo(f"\nPulse saved to: {output}")
 
     except Exception as e:
-        click.echo(f"Error: {e}", err=True)
+        click.echo(f"Error ({type(e).__name__}): {e}", err=True)
         sys.exit(1)
 
 
@@ -300,7 +300,7 @@ def execute(
             _output(data, output_format)
 
     except Exception as e:
-        click.echo(f"Error: {e}", err=True)
+        click.echo(f"Error ({type(e).__name__}): {e}", err=True)
         sys.exit(1)
 
 
@@ -342,7 +342,7 @@ def pulse_validate(pulse_file: str) -> None:
             sys.exit(1)
 
     except Exception as e:
-        click.echo(f"Error: {e}", err=True)
+        click.echo(f"Error ({type(e).__name__}): {e}", err=True)
         sys.exit(1)
 
 
@@ -405,7 +405,7 @@ def calibration_show(calibration_file: str, output_format: str) -> None:
         _output(data, output_format)
 
     except Exception as e:
-        click.echo(f"Error: {e}", err=True)
+        click.echo(f"Error ({type(e).__name__}): {e}", err=True)
         sys.exit(1)
 
 
@@ -470,7 +470,7 @@ def calibration_drift(
             sys.exit(1)
 
     except Exception as e:
-        click.echo(f"Error: {e}", err=True)
+        click.echo(f"Error ({type(e).__name__}): {e}", err=True)
         sys.exit(1)
 
 

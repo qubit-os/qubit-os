@@ -138,7 +138,7 @@ def tensor_product(operators: list[NDArray[np.complex128]]) -> NDArray[np.comple
     """
     result = operators[0]
     for op in operators[1:]:
-        result = np.kron(result, op)
+        result = np.kron(result, op)  # type: ignore[assignment]
     return result
 
 
@@ -333,20 +333,19 @@ def get_target_unitary(
         >>> RX = get_target_unitary("RX", num_qubits=1, angle=np.pi/2)
     """
     # Handle GateType enum
-    if hasattr(gate, "value"):
-        gate = gate.value
-    gate = gate.upper()
+    gate_str: str = gate.value if hasattr(gate, "value") else gate
+    gate_str = gate_str.upper()
 
     # Handle rotation gates
-    if gate in ("RX", "RY", "RZ"):
+    if gate_str in ("RX", "RY", "RZ"):
         if angle is None:
-            raise ValueError(f"{gate} requires an angle parameter")
-        axis = gate[1]  # X, Y, or Z
+            raise ValueError(f"{gate_str} requires an angle parameter")
+        axis = gate_str[1]  # X, Y, or Z
         base_gate = rotation_gate(axis, angle)
-    elif gate in STANDARD_GATES:
-        base_gate = STANDARD_GATES[gate]
+    elif gate_str in STANDARD_GATES:
+        base_gate = STANDARD_GATES[gate_str]
     else:
-        raise ValueError(f"Unknown gate: {gate}")
+        raise ValueError(f"Unknown gate: {gate_str}")
 
     # Determine gate size
     gate_qubits = int(np.log2(base_gate.shape[0]))

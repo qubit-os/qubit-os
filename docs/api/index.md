@@ -1,0 +1,107 @@
+# API Reference
+
+This section provides comprehensive API documentation for QubitOS.
+
+## Python API
+
+The core Python package `qubitos` provides four main modules:
+
+| Module | Description |
+|--------|-------------|
+| [`qubitos.client`](client.md) | HAL client for communicating with quantum backends |
+| [`qubitos.pulsegen`](pulsegen.md) | Pulse generation and GRAPE optimization |
+| [`qubitos.calibrator`](calibrator.md) | Calibration data loading and management |
+| [`qubitos.validation`](validation.md) | Validation utilities for quantum data |
+
+## Quick Import Reference
+
+```python
+# Client
+from qubitos.client import HALClient, HALClientSync
+
+# Pulse generation
+from qubitos.pulsegen import GrapeOptimizer, GrapeConfig, generate_pulse
+from qubitos.pulsegen.hamiltonians import (
+    parse_pauli_string,
+    get_target_unitary,
+    build_hamiltonian,
+)
+
+# Calibration
+from qubitos.calibrator import CalibrationLoader, load_calibration
+
+# Validation
+from qubitos.validation import (
+    validate_hamiltonian,
+    validate_pulse,
+    validate_unitary,
+)
+```
+
+## Interface APIs
+
+QubitOS exposes multiple interface layers for flexibility:
+
+| Interface | Use Case | Documentation |
+|-----------|----------|---------------|
+| **CLI** | Shell scripts, interactive use | [CLI Reference](cli.md) |
+| **REST API** | Web integration, language-agnostic | [REST API](rest.md) |
+| **gRPC API** | High-performance, low-latency | [gRPC API](grpc.md) |
+
+## Architecture Overview
+
+```
+┌─────────────────────────────────────────────────────────┐
+│                      Python Client                       │
+│  ┌─────────┐  ┌─────────┐  ┌─────────┐  ┌─────────────┐ │
+│  │ client  │  │pulsegen │  │calibrator│  │ validation │ │
+│  └────┬────┘  └────┬────┘  └────┬────┘  └─────────────┘ │
+└───────┼────────────┼────────────┼───────────────────────┘
+        │            │            │
+        │ gRPC       │ Pure Python│ Pure Python
+        ▼            │            │
+┌───────────────┐    │            │
+│   HAL Server  │◄───┴────────────┘
+│   (Rust)      │
+└───────┬───────┘
+        │
+        ▼
+┌───────────────┐
+│   Backends    │
+│ (QuTiP, HW)   │
+└───────────────┘
+```
+
+## Versioning
+
+QubitOS follows [Semantic Versioning](https://semver.org/):
+
+- **0.x.x**: Development phase, API may change
+- **1.x.x**: Stable API, backwards compatible minor releases
+
+Current version: **0.5.0**
+
+## Type Annotations
+
+All public APIs are fully type-annotated. Use `mypy` or your IDE for type checking:
+
+```bash
+# Check types
+mypy src/qubitos
+
+# Or with strict mode
+mypy --strict src/qubitos
+```
+
+## Error Handling
+
+QubitOS defines specific exception types for each module:
+
+```python
+from qubitos.client import HALClientError
+from qubitos.calibrator import CalibrationError
+from qubitos.validation import ValidationError
+from qubitos.pulsegen import GrapeConfig  # Raises ValueError for invalid config
+```
+
+All exceptions inherit from Python's built-in `Exception` class.

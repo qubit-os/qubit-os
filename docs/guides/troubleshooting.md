@@ -1,0 +1,448 @@
+# Troubleshooting Guide
+
+This guide covers common issues and their solutions when using QubitOS.
+
+## Quick Diagnostics
+
+Run this command to check your QubitOS setup:
+
+```bash
+# Check Python installation
+python -c "import qubitos; print(f'QubitOS {qubitos.__version__}')"
+
+# Check HAL server
+qubit-os hal health --server localhost:50051
+
+# Check CLI
+qubit-os --version
+```
+
+---
+
+## Installation Issues
+
+### `ModuleNotFoundError: No module named 'qubitos'`
+
+**Cause**: QubitOS is not installed or virtual environment is not activated.
+
+**Solution**:
+
+```bash
+# Activate your virtual environment
+source .venv/bin/activate
+
+# Or install QubitOS
+pip install qubitos
+```
+
+### `pip install` fails with compilation errors
+
+**Cause**: Missing build dependencies for `grpcio` or `numpy`.
+
+**Solution**:
+
+=== "Ubuntu/Debian"
+
+    ```bash
+    sudo apt install python3-dev build-essential
+    pip install --upgrade pip
+    pip install qubitos
+    ```
+
+=== "macOS"
+
+    ```bash
+    xcode-select --install
+    pip install --upgrade pip
+    pip install qubitos
+    ```
+
+=== "Windows (WSL)"
+
+    ```bash
+    sudo apt install python3-dev build-essential
+    pip install qubitos
+    ```
+
+### `ImportError: cannot import name 'GrapeOptimizer'`
+
+**Cause**: Incorrect import path or old installation.
+
+**Solution**:
+
+```bash
+# Reinstall to get latest version
+pip uninstall qubitos
+pip install qubitos
+
+# Correct import
+from qubitos.pulsegen import GrapeOptimizer
+```
+
+---
+
+## HAL Server Issues
+
+### `Connection refused` when connecting to HAL
+
+**Cause**: HAL server is not running or listening on wrong port.
+
+**Solution**:
+
+1. Start the HAL server:
+   ```bash
+   cd qubit-os-hardware
+   cargo run --release
+   ```
+
+2. Verify it's running:
+   ```bash
+   curl http://localhost:8080/api/v1/health
+   ```
+
+3. Check the port:
+   ```bash
+   # Default ports
+   # gRPC: 50051
+   # REST: 8080
+   
+   qubit-os hal health --server localhost:50051
+   ```
+
+### HAL server crashes on startup
+
+**Cause**: Port already in use or missing Python dependencies.
+
+**Solution**:
+
+```bash
+# Check if port is in use
+lsof -i :50051
+lsof -i :8080
+
+# Kill existing process if needed
+kill -9 <PID>
+
+# Or use different ports
+QUBITOS_GRPC_PORT=50052 QUBITOS_REST_PORT=8081 cargo run --release
+```
+
+### `QuTiP not found` error
+
+**Cause**: QuTiP is not installed or not in PYTHONPATH.
+
+**Solution**:
+
+```bash
+# Install QuTiP
+pip install qutip
+
+# Verify installation
+python -c "import qutip; print(qutip.__version__)"
+
+# Set PYTHONPATH if using from Rust
+export PYTHONPATH="$HOME/.venv/lib/python3.11/site-packages"
+```
+
+### Docker container won't start
+
+**Cause**: Port conflicts or missing configuration.
+
+**Solution**:
+
+```bash
+# Check for port conflicts
+docker ps -a
+
+# Run with explicit port mapping
+docker run --rm -p 50051:50051 -p 8080:8080 \
+    ghcr.io/qubit-os/qubit-os-hardware:latest
+
+# Check logs
+docker logs <container_id>
+```
+
+---
+
+## GRAPE Optimization Issues
+
+### Optimization doesn't converge
+
+**Cause**: Configuration not suitable for the target gate.
+
+**Solution**:
+
+```python
+# Try these adjustments:
+config = GrapeConfig(
+    # Increase iterations
+    max_iterations=500,
+    
+    # Use smaller learning rate
+    learning_rate=0.05,
+    
+    # Increase time steps
+    num_time_steps=200,
+    
+    # Longer pulse duration
+    duration_ns=100,
+    
+    # Lower initial target
+    target_fidelity=0.99,
+)
+```
+
+### Very slow optimization
+
+**Cause**: Too many time steps or large Hilbert space.
+
+**Solution**:
+
+```python
+# Reduce complexity
+config = GrapeConfig(
+    num_time_steps=50,    # Fewer time steps
+    max_iterations=100,   # Limit iterations
+)
+
+# Or use parallel optimization (if available)
+optimizer = GrapeOptimizer(config, use_parallel=True)
+```
+
+### Fidelity stuck at ~0.5
+
+**Cause**: Hamiltonian parameters may be incorrect.
+
+**Solution**:
+
+```python
+# Check Hamiltonian parameters match your system
+hamiltonian = TransmonHamiltonian(
+    omega_qubit=5.0,      # Check qubit frequency
+    anharmonicity=-0.3,   # Check anharmonicity
+    omega_drive=5.0,      # Drive should match qubit frequency
+)
+
+# Verify the target gate
+print(optimizer.target_unitary)
+```
+
+### `NaN` values in pulse envelope
+
+**Cause**: Numerical instability in optimization.
+
+**Solution**:
+
+```python
+# Use gradient clipping
+config = GrapeConfig(
+    gradient_clip=1.0,     # Limit gradient magnitude
+    learning_rate=0.01,    # Smaller step size
+)
+```
+
+---
+
+## CLI Issues
+
+### `qubit-os: command not found`
+
+**Cause**: CLI not installed or not in PATH.
+
+**Solution**:
+
+```bash
+# Check if installed
+pip show qubitos
+
+# Add to PATH (if using user install)
+export PATH="$HOME/.local/bin:$PATH"
+
+# Or run directly
+python -m qubitos.cli.main --help
+```
+
+### CLI hangs when connecting to HAL
+
+**Cause**: Server not responding or network issue.
+
+**Solution**:
+
+```bash
+# Use shorter timeout
+qubit-os hal health --server localhost:50051 --timeout 5
+
+# Check network connectivity
+nc -zv localhost 50051
+```
+
+### Output format issues
+
+**Cause**: Terminal doesn't support rich formatting.
+
+**Solution**:
+
+```bash
+# Disable rich output
+TERM=dumb qubit-os hal health
+
+# Or use JSON output
+qubit-os hal health --format json
+```
+
+---
+
+## Environment Issues
+
+### `PYTHONPATH` not set correctly
+
+**Cause**: Rust HAL server can't find Python packages.
+
+**Solution**:
+
+```bash
+# Find your Python site-packages
+python -c "import site; print(site.getsitepackages())"
+
+# Set PYTHONPATH
+export PYTHONPATH="/path/to/site-packages:$PYTHONPATH"
+
+# For venv
+export PYTHONPATH="$(python -c 'import sys; print(sys.prefix)')/lib/python3.11/site-packages"
+```
+
+### `LD_LIBRARY_PATH` issues on Linux
+
+**Cause**: Shared libraries not found.
+
+**Solution**:
+
+```bash
+# Common fix for Homebrew on Linux
+export LD_LIBRARY_PATH="/home/linuxbrew/.linuxbrew/lib:$LD_LIBRARY_PATH"
+
+# Or for system Python
+export LD_LIBRARY_PATH="/usr/lib/python3.11/config-3.11-x86_64-linux-gnu:$LD_LIBRARY_PATH"
+```
+
+### Version conflicts (NumPy, SciPy, QuTiP)
+
+**Cause**: Incompatible package versions.
+
+**Solution**:
+
+```bash
+# Check versions
+pip list | grep -E "numpy|scipy|qutip"
+
+# Reinstall with compatible versions
+pip install "numpy>=1.26.0,<2.0.0" "scipy>=1.12.0" "qutip>=5.0.0"
+```
+
+---
+
+## Execution Issues
+
+### Measurement results are all zeros
+
+**Cause**: Pulse amplitude too low or wrong target qubits.
+
+**Solution**:
+
+```python
+# Check pulse amplitudes
+print(f"Max I: {max(abs(result.i_envelope))}")
+print(f"Max Q: {max(abs(result.q_envelope))}")
+
+# Verify target qubits
+execution = client.execute_pulse(
+    target_qubits=[0],  # Make sure qubit index is correct
+    ...
+)
+```
+
+### Unexpected measurement distribution
+
+**Cause**: Initial state or gate type mismatch.
+
+**Solution**:
+
+```python
+# Verify you're starting from |0⟩
+# For X gate on |0⟩, expect mostly |1⟩
+
+# Check gate type
+print(f"Gate type: {result.gate_type}")
+print(f"Target unitary:\n{result.target_unitary}")
+```
+
+### Execution timeout
+
+**Cause**: Server overloaded or simulation taking too long.
+
+**Solution**:
+
+```python
+# Reduce simulation complexity
+execution = client.execute_pulse(
+    num_shots=100,  # Fewer shots
+    ...
+)
+
+# Or increase timeout
+client = HALClientSync("localhost:50051", timeout=60.0)
+```
+
+---
+
+## Getting Help
+
+### Collect Diagnostic Information
+
+Before asking for help, gather this information:
+
+```bash
+# System info
+uname -a
+python --version
+rustc --version
+
+# Package versions
+pip list | grep -E "qubitos|grpc|numpy|scipy|qutip"
+
+# HAL server version
+qubit-os hal version
+
+# Error logs
+cargo run --release 2>&1 | head -50
+```
+
+### Where to Get Help
+
+- **GitHub Issues**: [qubit-os/qubit-os-core/issues](https://github.com/qubit-os/qubit-os-core/issues)
+- **GitHub Discussions**: [qubit-os/qubit-os-core/discussions](https://github.com/qubit-os/qubit-os-core/discussions)
+- **Security Issues**: Email maintainers directly (do not open public issues)
+
+### Reporting Bugs
+
+Include:
+
+1. QubitOS version
+2. Python/Rust version
+3. Operating system
+4. Steps to reproduce
+5. Expected vs actual behavior
+6. Error messages and stack traces
+
+---
+
+## Common Error Messages
+
+| Error | Likely Cause | Solution |
+|-------|--------------|----------|
+| `Connection refused` | HAL server not running | Start with `cargo run --release` |
+| `Module not found` | Package not installed | `pip install qubitos` |
+| `Optimization failed` | Bad config parameters | Increase iterations, adjust learning rate |
+| `Timeout` | Slow simulation | Reduce shots or time steps |
+| `Permission denied` | File/port access | Check permissions, use different port |
+| `Invalid pulse shape` | Envelope values out of range | Check amplitude limits |

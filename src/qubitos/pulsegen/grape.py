@@ -327,11 +327,11 @@ class GrapeOptimizer:
 
             for i in range(num_qubits):
                 if i == q:
-                    Hx = np.kron(Hx, sigma_x)
-                    Hy = np.kron(Hy, sigma_y)
+                    Hx = np.kron(Hx, sigma_x)  # type: ignore[assignment]
+                    Hy = np.kron(Hy, sigma_y)  # type: ignore[assignment]
                 else:
-                    Hx = np.kron(Hx, identity)
-                    Hy = np.kron(Hy, identity)
+                    Hx = np.kron(Hx, identity)  # type: ignore[assignment]
+                    Hy = np.kron(Hy, identity)  # type: ignore[assignment]
 
             hamiltonians.extend([Hx, Hy])
 

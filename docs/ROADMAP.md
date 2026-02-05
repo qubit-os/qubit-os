@@ -460,7 +460,7 @@ git push
 
 ## Contributing
 
-See [CONTRIBUTING.md](CONTRIBUTING.md) for contribution guidelines.
+See the project contributing guidelines for contribution guidelines.
 
 Key points:
 1. Fork the repo

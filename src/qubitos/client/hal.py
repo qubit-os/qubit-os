@@ -461,7 +461,7 @@ def _parse_health_status(status: int) -> HealthStatus:
     return mapping.get(status, HealthStatus.UNKNOWN)
 
 
-def _parse_gate_type(gate_type: str) -> int:
+def _parse_gate_type(gate_type: str) -> GateType:
     """Parse gate type string to proto enum value."""
     gate_map = {
         "X": GateType.GATE_TYPE_X,

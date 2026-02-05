@@ -105,7 +105,7 @@ def validate_hermitian(
         ValidationResult with any errors found
     """
     errors = []
-    warnings = []
+    warnings: list[str] = []
 
     if matrix.ndim != 2:
         errors.append(f"{name} must be 2-dimensional, got {matrix.ndim}D")
@@ -143,7 +143,7 @@ def validate_unitary(
         ValidationResult with any errors found
     """
     errors = []
-    warnings = []
+    warnings: list[str] = []
 
     if matrix.ndim != 2:
         errors.append(f"{name} must be 2-dimensional, got {matrix.ndim}D")
@@ -180,7 +180,7 @@ def validate_fidelity(fidelity: float, name: str = "fidelity") -> ValidationResu
         ValidationResult with any errors found
     """
     errors = []
-    warnings = []
+    warnings: list[str] = []
 
     if not isinstance(fidelity, (int, float)):
         errors.append(f"{name} must be a number, got {type(fidelity).__name__}")
@@ -217,7 +217,7 @@ def validate_pulse_envelope(
         ValidationResult with any errors found
     """
     errors = []
-    warnings = []
+    warnings: list[str] = []
 
     if not isinstance(envelope, np.ndarray):
         envelope = np.array(envelope)
@@ -259,7 +259,7 @@ def validate_calibration_t1_t2(t1_us: float, t2_us: float) -> ValidationResult:
         ValidationResult with any errors found
     """
     errors = []
-    warnings = []
+    warnings: list[str] = []
 
     # Basic range checks
     if t1_us <= 0:

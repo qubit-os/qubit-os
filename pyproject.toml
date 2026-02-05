@@ -51,9 +51,12 @@ dev = [
     "agentbible @ git+https://github.com/rylanmalarchick/research-code-principles.git",
 ]
 docs = [
-    "sphinx>=7.0.0",
-    "sphinx-rtd-theme>=2.0.0",
-    "myst-parser>=2.0.0",
+    "mkdocs>=1.5.0",
+    "mkdocs-material>=9.5.0",
+    "mkdocstrings[python]>=0.24.0",
+    "mkdocs-jupyter>=0.24.0",
+    "mkdocs-gen-files>=0.5.0",
+    "mkdocs-literate-nav>=0.6.0",
 ]
 
 [project.scripts]
@@ -113,6 +116,11 @@ known-first-party = ["qubitos"]
 [tool.coverage.run]
 source = ["src/qubitos"]
 branch = true
+omit = [
+    "src/qubitos/proto/*",
+    "*_pb2.py",
+    "*_pb2_grpc.py",
+]
 
 [tool.coverage.report]
 exclude_lines = [
@@ -120,3 +128,6 @@ exclude_lines = [
     "if TYPE_CHECKING:",
     "raise NotImplementedError",
 ]
+# Fail if coverage is below target (excluding proto files)
+# Note: HAL client requires gRPC server, so 80% is realistic target
+fail_under = 80

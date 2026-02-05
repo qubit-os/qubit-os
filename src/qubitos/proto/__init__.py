@@ -18,8 +18,27 @@ Usage:
     from qubitos.proto.quantum.backend.v1 import service_pb2, execution_pb2
 """
 
-# gRPC service stubs
-# Execution messages
+# IMPORTANT: Proto imports must be in dependency order!
+# The protobuf descriptor pool requires dependencies to be loaded first.
+# Order: common -> pulse -> backend (execution, hardware, service)
+
+# Common messages (no dependencies - must be first)
+from qubitos.proto.quantum.common.v1.common_pb2 import (
+    Complex,
+    Error,
+    Timestamp,
+    TraceContext,
+)
+
+# Pulse messages (depends on common)
+from qubitos.proto.quantum.pulse.v1.pulse_pb2 import (
+    GateType,
+    PulseLibrary,
+    PulseLibraryEntry,
+    PulseShape,
+)
+
+# Execution messages (depends on common, pulse)
 from qubitos.proto.quantum.backend.v1.execution_pb2 import (
     ExecutePulseBatchRequest,
     ExecutePulseBatchResponse,
@@ -27,7 +46,7 @@ from qubitos.proto.quantum.backend.v1.execution_pb2 import (
     ExecutePulseResponse,
 )
 
-# Hardware messages
+# Hardware messages (depends on common)
 from qubitos.proto.quantum.backend.v1.hardware_pb2 import (
     GetHardwareInfoRequest,
     GetHardwareInfoResponse,
@@ -36,7 +55,7 @@ from qubitos.proto.quantum.backend.v1.hardware_pb2 import (
     HealthResponse,
 )
 
-# Service messages
+# Service messages (depends on execution, hardware)
 from qubitos.proto.quantum.backend.v1.service_pb2 import (
     ListBackendsRequest,
     ListBackendsResponse,
@@ -44,22 +63,6 @@ from qubitos.proto.quantum.backend.v1.service_pb2 import (
 from qubitos.proto.quantum.backend.v1.service_pb2_grpc import (
     QuantumBackendServiceServicer,
     QuantumBackendServiceStub,
-)
-
-# Common messages
-from qubitos.proto.quantum.common.v1.common_pb2 import (
-    Complex,
-    Error,
-    Timestamp,
-    TraceContext,
-)
-
-# Pulse messages
-from qubitos.proto.quantum.pulse.v1.pulse_pb2 import (
-    GateType,
-    PulseLibrary,
-    PulseLibraryEntry,
-    PulseShape,
 )
 
 __all__ = [

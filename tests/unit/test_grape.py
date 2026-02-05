@@ -55,6 +55,7 @@ class TestGeneratePulse:
             gate=gate,
             num_qubits=1,
             config=GrapeConfig(
+                random_seed=42,  # Use deterministic seed for reproducibility
                 target_fidelity=0.99,
                 max_iterations=500,
             ),

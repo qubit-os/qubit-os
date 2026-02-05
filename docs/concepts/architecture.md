@@ -1,0 +1,301 @@
+# Architecture
+
+QubitOS follows a **three-layer architecture** designed to separate concerns and enable
+maximum flexibility for researchers and hardware integrators.
+
+## Overview Diagram
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                              USER APPLICATIONS                               │
+│                                                                             │
+│   ┌─────────────┐   ┌──────────────┐   ┌─────────────┐   ┌──────────────┐  │
+│   │   Python    │   │   Jupyter    │   │     CLI     │   │   REST API   │  │
+│   │   Scripts   │   │  Notebooks   │   │  (qos ...)  │   │   Clients    │  │
+│   └──────┬──────┘   └──────┬───────┘   └──────┬──────┘   └──────┬───────┘  │
+│          │                 │                  │                 │          │
+└──────────┼─────────────────┼──────────────────┼─────────────────┼──────────┘
+           │                 │                  │                 │
+           └────────────┬────┴──────────────────┴────┬────────────┘
+                        │                            │
+                        ▼                            ▼
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                           QUBIT-OS-CORE (Python)                            │
+│                                                                             │
+│   ┌────────────────┐   ┌──────────────────┐   ┌──────────────────────────┐ │
+│   │   HALClient    │   │   Pulse Generator │   │     Calibrator           │ │
+│   │   (gRPC/REST)  │   │   (GRAPE, etc.)   │   │   (Load/Validate)        │ │
+│   └───────┬────────┘   └────────┬─────────┘   └──────────┬───────────────┘ │
+│           │                     │                        │                  │
+│   ┌───────┴─────────────────────┴────────────────────────┴───────────────┐ │
+│   │                         Validation Layer                              │ │
+│   │              (Parameter bounds, AgentBible, safety checks)            │ │
+│   └───────────────────────────────────────────┬──────────────────────────┘ │
+└───────────────────────────────────────────────┼──────────────────────────────┘
+                                                │
+                                                │ gRPC / REST
+                                                ▼
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                        QUBIT-OS-HARDWARE (Rust)                             │
+│                                                                             │
+│   ┌────────────────────────────────────────────────────────────────────┐   │
+│   │                         HAL Server                                  │   │
+│   │                     (Hardware Abstraction Layer)                    │   │
+│   └────────────┬────────────────────┬────────────────────┬─────────────┘   │
+│                │                    │                    │                  │
+│   ┌────────────▼────────┐ ┌────────▼─────────┐ ┌────────▼─────────┐       │
+│   │   OPX3 Backend      │ │   Zurich Backend  │ │   Mock Backend   │       │
+│   │   (Quantum Machines)│ │ (Zurich Instr.)   │ │   (Testing)      │       │
+│   └─────────────────────┘ └──────────────────┘ └──────────────────┘       │
+└─────────────────────────────────────────────────────────────────────────────┘
+                                                │
+                                                │ Vendor-specific protocols
+                                                ▼
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                            QUANTUM HARDWARE                                  │
+│                                                                             │
+│   ┌─────────────────┐   ┌─────────────────┐   ┌─────────────────┐          │
+│   │   AWGs          │   │   Digitizers    │   │   RF Sources    │          │
+│   └─────────────────┘   └─────────────────┘   └─────────────────┘          │
+│                                    │                                        │
+│                                    ▼                                        │
+│                         ┌─────────────────────┐                            │
+│                         │   Dilution Fridge   │                            │
+│                         │      + Qubits       │                            │
+│                         └─────────────────────┘                            │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+## Layer Details
+
+### Layer 1: User Applications
+
+The top layer provides multiple interfaces for interacting with QubitOS:
+
+| Interface | Description | Use Case |
+|-----------|-------------|----------|
+| **Python API** | Direct library imports | Integration, automation |
+| **Jupyter Notebooks** | Interactive environment | Research, exploration |
+| **CLI** | Command-line tool (`qos`) | Quick operations, scripting |
+| **REST API** | HTTP endpoints | Web integration, remote access |
+
+### Layer 2: qubit-os-core (Python)
+
+The core Python library provides high-level functionality:
+
+#### HALClient
+
+The Hardware Abstraction Layer client communicates with the HAL server:
+
+```python
+from qubitos.client import HALClient
+
+async with HALClient("localhost:50051") as client:
+    result = await client.execute_pulse(pulse_data)
+```
+
+**Responsibilities:**
+
+- Connection management (gRPC/REST)
+- Request serialization via Protocol Buffers
+- Response handling and error propagation
+- Automatic reconnection and retry logic
+
+#### Pulse Generator
+
+The GRAPE optimizer synthesizes control pulses:
+
+```python
+from qubitos.pulsegen import generate_pulse
+
+result = generate_pulse("X", duration_ns=20, target_fidelity=0.999)
+```
+
+**Responsibilities:**
+
+- Hamiltonian construction from Pauli strings
+- Gradient ascent optimization
+- Pulse envelope generation (I/Q)
+- Fidelity tracking and convergence
+
+#### Calibrator
+
+Manages qubit calibration data:
+
+```python
+from qubitos.calibrator import CalibrationLoader
+
+loader = CalibrationLoader("calibrations/")
+cal = loader.get_backend("ibm_kyoto")
+```
+
+**Responsibilities:**
+
+- Load calibration from JSON/YAML files
+- Parse OpenPulse/OpenQASM3 formats
+- Provide qubit parameters (frequencies, T1, T2)
+- Cache and refresh calibration data
+
+#### Validation Layer
+
+Ensures all parameters meet physical constraints:
+
+```python
+from qubitos.validation import validate_pulse
+
+validate_pulse(envelope, max_amplitude=100.0, duration_ns=20.0)
+```
+
+**Responsibilities:**
+
+- Parameter bound checking
+- AgentBible constraint enforcement
+- Safety interlocks
+- Error message generation
+
+### Layer 3: qubit-os-hardware (Rust)
+
+The HAL server handles hardware communication:
+
+#### HAL Server
+
+The gRPC/REST server receives requests from core:
+
+```rust
+// Simplified server structure
+struct HalServer {
+    backend: Box<dyn Backend>,
+    safety: SafetyController,
+}
+
+impl HalServer {
+    async fn execute_pulse(&self, req: PulseRequest) -> Result<PulseResult> {
+        self.safety.check(&req)?;
+        self.backend.execute(req).await
+    }
+}
+```
+
+**Responsibilities:**
+
+- Protocol handling (gRPC, REST)
+- Backend dispatch
+- Safety enforcement
+- Telemetry and logging
+
+#### Hardware Backends
+
+Vendor-specific implementations:
+
+| Backend | Hardware | Status |
+|---------|----------|--------|
+| `opx3` | Quantum Machines OPX3 | In development |
+| `zurich` | Zurich Instruments HDAWG/SHFQA | Planned |
+| `mock` | Simulated hardware | Complete |
+
+## Data Flow
+
+### Pulse Execution Flow
+
+```
+1. User calls generate_pulse("X")
+   │
+2. GRAPE optimizer computes I/Q envelopes
+   │
+3. validate_pulse() checks bounds
+   │
+4. HALClient serializes to protobuf
+   │
+5. gRPC sends to HAL server
+   │
+6. Backend converts to hardware commands
+   │
+7. AWG executes pulse sequence
+   │
+8. Digitizer captures measurement
+   │
+9. Response propagates back up
+```
+
+### Calibration Flow
+
+```
+1. CalibrationLoader reads JSON/YAML
+   │
+2. Parse into BackendCalibration dataclass
+   │
+3. GRAPE uses parameters for Hamiltonian
+   │
+4. Validation uses bounds from calibration
+```
+
+## Protocol Buffers
+
+Communication between layers uses Protocol Buffers defined in `qubit-os-proto`:
+
+```protobuf
+// Simplified example
+message PulseRequest {
+    string gate_name = 1;
+    repeated double i_envelope = 2;
+    repeated double q_envelope = 3;
+    double duration_ns = 4;
+    int32 qubit_index = 5;
+}
+
+message PulseResult {
+    bool success = 1;
+    double fidelity = 2;
+    repeated double measurements = 3;
+    string error_message = 4;
+}
+```
+
+## Extension Points
+
+QubitOS is designed for extensibility:
+
+### Adding a New Backend
+
+1. Implement the `Backend` trait in Rust
+2. Register in the backend factory
+3. Add configuration schema
+
+### Adding a New Gate
+
+1. Add to `GateType` enum
+2. Define unitary in `hamiltonians.py`
+3. Add CLI shortcut if needed
+
+### Adding a New Optimizer
+
+1. Implement optimizer class with `optimize()` method
+2. Return `GrapeResult`-compatible result
+3. Register in factory if using CLI
+
+## Security Model
+
+!!! warning "Production Deployment"
+    For production deployments, always use TLS and authentication.
+
+- **Transport**: TLS 1.3 for gRPC/REST
+- **Authentication**: mTLS or API keys
+- **Authorization**: Role-based access control (planned)
+- **Audit**: All operations logged with timestamps
+
+## Performance Considerations
+
+| Component | Typical Latency | Notes |
+|-----------|-----------------|-------|
+| GRAPE optimization | 100ms - 10s | Depends on fidelity target |
+| gRPC round-trip | 1-10ms | Local network |
+| AWG programming | 10-100ms | Hardware dependent |
+| Pulse execution | 10-1000µs | Gate duration |
+| Measurement | 1-10µs | Readout time |
+
+## Related Documentation
+
+- [API Reference](../api/index.md) - Detailed API documentation
+- [Quickstart Guide](../guides/quickstart.md) - Getting started
+- [CLI Reference](../api/cli.md) - Command-line interface
+- [gRPC Reference](../api/grpc.md) - Protocol details
