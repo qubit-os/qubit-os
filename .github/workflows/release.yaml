@@ -1,0 +1,30 @@
+# Publish to PyPI on GitHub release
+name: Release
+
+on:
+  release:
+    types: [published]
+
+permissions:
+  id-token: write  # Required for PyPI trusted publisher
+
+jobs:
+  publish:
+    name: Publish to PyPI
+    runs-on: ubuntu-latest
+    environment: release
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+
+      - name: Install build tools
+        run: pip install build setuptools grpcio-tools
+
+      - name: Build package
+        run: python -m build
+
+      - name: Publish to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
