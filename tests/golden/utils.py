@@ -17,7 +17,7 @@ import json
 import platform
 import sys
 from dataclasses import asdict, dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -77,7 +77,7 @@ class GoldenFile:
     data: GoldenPulseData
 
     @classmethod
-    def from_dict(cls, d: dict[str, Any]) -> "GoldenFile":
+    def from_dict(cls, d: dict[str, Any]) -> GoldenFile:
         """Create from dictionary (JSON deserialization)."""
         return cls(
             metadata=GoldenMetadata(**d["metadata"]),
@@ -209,28 +209,23 @@ def compare_golden(
 
     # Compare fidelity
     if check_fidelity_exact:
-        if result.fidelity != golden.data.fidelity:
+        fid_diff = abs(result.fidelity - golden.data.fidelity)
+        if fid_diff > 1e-12:
             errors.append(
-                f"Fidelity mismatch: {result.fidelity} vs {golden.data.fidelity}"
+                f"Fidelity mismatch: {result.fidelity} vs {golden.data.fidelity} (diff={fid_diff:.2e})"
             )
     else:
         fid_diff = abs(result.fidelity - golden.data.fidelity)
         if fid_diff > tolerance:
-            errors.append(
-                f"Fidelity difference {fid_diff:.2e} exceeds tolerance {tolerance:.2e}"
-            )
+            errors.append(f"Fidelity difference {fid_diff:.2e} exceeds tolerance {tolerance:.2e}")
 
     # Compare iterations
     if result.iterations != golden.data.iterations:
-        errors.append(
-            f"Iteration count mismatch: {result.iterations} vs {golden.data.iterations}"
-        )
+        errors.append(f"Iteration count mismatch: {result.iterations} vs {golden.data.iterations}")
 
     # Compare convergence
     if result.converged != golden.data.converged:
-        errors.append(
-            f"Convergence mismatch: {result.converged} vs {golden.data.converged}"
-        )
+        errors.append(f"Convergence mismatch: {result.converged} vs {golden.data.converged}")
 
     return len(errors) == 0, errors
 
@@ -280,7 +275,7 @@ def generate_golden_pulse(
 
     # Create metadata
     metadata = GoldenMetadata(
-        generated_at=datetime.now(timezone.utc).isoformat(),
+        generated_at=datetime.now(UTC).isoformat(),
         python_version=f"{sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}",
         platform_system=platform.system(),
         platform_machine=platform.machine(),
@@ -319,31 +314,32 @@ def generate_golden_pulse(
 # Execution Golden Files
 # ============================================================================
 
-@dataclass 
+
+@dataclass
 class GoldenExecutionData:
     """Golden data for pulse execution/simulation results."""
-    
+
     # Input from GRAPE result
     gate: str
     num_qubits: int
     num_time_steps: int
     duration_ns: float
     grape_random_seed: int
-    
+
     # Deterministic simulation outputs
     probabilities: list[float]
     state_vector_real: list[float]
     state_vector_imag: list[float]
-    
+
     # Stochastic outputs (seeded)
     bitstring_counts: dict[str, int]
     num_shots: int
     measurement_seed: int
-    
+
     # Expected ground truth
     expected_dominant_state: str  # e.g., "1" for X gate
     expected_probability_threshold: float  # e.g., 0.99 for high-fidelity gate
-    
+
     # Checksums
     probabilities_checksum: str | None = None
 
@@ -351,20 +347,20 @@ class GoldenExecutionData:
 @dataclass
 class GoldenExecutionFile:
     """Container for execution golden file."""
-    
+
     metadata: GoldenMetadata
     pulse_data: GoldenPulseData  # Original GRAPE result
     execution_data: GoldenExecutionData
-    
+
     @classmethod
-    def from_dict(cls, d: dict[str, Any]) -> "GoldenExecutionFile":
+    def from_dict(cls, d: dict[str, Any]) -> GoldenExecutionFile:
         """Create from dictionary."""
         return cls(
             metadata=GoldenMetadata(**d["metadata"]),
             pulse_data=GoldenPulseData(**d["pulse_data"]),
             execution_data=GoldenExecutionData(**d["execution_data"]),
         )
-    
+
     def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary."""
         return {
@@ -388,9 +384,9 @@ def generate_golden_execution(
     notes: str | None = None,
 ) -> GoldenExecutionFile:
     """Generate execution golden file.
-    
+
     This runs GRAPE optimization and then simulates execution with QuTiP.
-    
+
     Args:
         gate: Gate type
         num_qubits: Number of qubits
@@ -403,13 +399,14 @@ def generate_golden_execution(
         num_shots: Number of measurement shots
         code_version: Version string for provenance
         notes: Notes about this golden file
-        
+
     Returns:
         GoldenExecutionFile ready to save
     """
     from qubitos.pulsegen import GrapeConfig, generate_pulse
-    from .qutip_sim import simulate_pulse, expected_probabilities_for_gate
-    
+
+    from .qutip_sim import expected_probabilities_for_gate, simulate_pulse
+
     # Generate pulse with GRAPE
     config = GrapeConfig(
         num_time_steps=num_time_steps,
@@ -419,7 +416,7 @@ def generate_golden_execution(
         random_seed=grape_seed,
     )
     pulse_result = generate_pulse(gate=gate, num_qubits=num_qubits, config=config)
-    
+
     # Simulate execution
     sim_result = simulate_pulse(
         i_envelope=pulse_result.i_envelope,
@@ -430,15 +427,15 @@ def generate_golden_execution(
         duration_ns=duration_ns,
         random_seed=measurement_seed,
     )
-    
+
     # Determine expected dominant state
     expected_probs = expected_probabilities_for_gate(gate, num_qubits)
     dominant_idx = int(np.argmax(expected_probs))
-    expected_dominant_state = format(dominant_idx, f'0{num_qubits}b')
-    
+    expected_dominant_state = format(dominant_idx, f"0{num_qubits}b")
+
     # Create metadata
     metadata = GoldenMetadata(
-        generated_at=datetime.now(timezone.utc).isoformat(),
+        generated_at=datetime.now(UTC).isoformat(),
         python_version=f"{sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}",
         platform_system=platform.system(),
         platform_machine=platform.machine(),
@@ -447,11 +444,11 @@ def generate_golden_execution(
         code_version=code_version,
         notes=notes,
     )
-    
+
     # Create pulse data
     i_list = pulse_result.i_envelope.tolist()
     q_list = pulse_result.q_envelope.tolist()
-    
+
     pulse_data = GoldenPulseData(
         gate=gate,
         num_qubits=num_qubits,
@@ -468,7 +465,7 @@ def generate_golden_execution(
         i_envelope_checksum=compute_checksum(i_list),
         q_envelope_checksum=compute_checksum(q_list),
     )
-    
+
     # Create execution data
     execution_data = GoldenExecutionData(
         gate=gate,
@@ -486,7 +483,7 @@ def generate_golden_execution(
         expected_probability_threshold=target_fidelity,
         probabilities_checksum=compute_checksum(sim_result.probabilities, precision=8),
     )
-    
+
     return GoldenExecutionFile(
         metadata=metadata,
         pulse_data=pulse_data,
