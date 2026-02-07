@@ -15,6 +15,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Buf configuration for linting and code generation
 - GitHub Actions CI workflow
 
-## [0.1.0] - Unreleased
+## [0.1.0] - 2026-02-07
 
 Initial release of QubitOS protocol definitions.
