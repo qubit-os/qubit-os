@@ -45,6 +45,8 @@ dev = [
     "ruff>=0.2.0",
     "types-PyYAML>=6.0.0",
     "types-protobuf>=4.0.0",
+    "types-grpcio>=1.60.0",
+    "scipy-stubs>=1.17.0",
     "pre-commit>=3.6.0",
     # AgentBible - validation and reproducibility framework
     # Install from GitHub until published to PyPI

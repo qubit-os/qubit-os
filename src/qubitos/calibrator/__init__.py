@@ -31,11 +31,31 @@ Example:
     ...     print(f"Recalibration needed: {drift.reason}")
 """
 
+from .benchmarking import (
+    SINGLE_QUBIT_CLIFFORDS,
+    RBConfig,
+    RBResult,
+    find_inverse_clifford,
+    fit_rb,
+    generate_rb_sequence,
+)
 from .fingerprint import (
     CalibrationFingerprint,
     DriftMetrics,
     FingerprintConfig,
     FingerprintStore,
+)
+from .fitting import (
+    DecayFitResult,
+    counts_to_excited_probability,
+    fit_exponential_decay,
+    fit_t1,
+    fit_t2,
+)
+from .hardware_calibration import (
+    HardwareCalibrationDefaults,
+    hardware_info_to_calibration,
+    snapshot_calibration,
 )
 from .loader import (
     BackendCalibration,
@@ -46,8 +66,42 @@ from .loader import (
     get_default_loader,
     load_calibration,
 )
+from .protocols import (
+    CalibrationProtocol,
+    ProtocolConfig,
+    ProtocolStep,
+    generate_t1_protocol,
+    generate_t2_echo_protocol,
+    generate_t2_ramsey_protocol,
+)
+from .runner import (
+    CalibrationMeasurement,
+    CalibrationRunner,
+)
 
 __all__ = [
+    # Benchmarking
+    "RBConfig",
+    "RBResult",
+    "SINGLE_QUBIT_CLIFFORDS",
+    "find_inverse_clifford",
+    "fit_rb",
+    "generate_rb_sequence",
+    # Fitting
+    "DecayFitResult",
+    "counts_to_excited_probability",
+    "fit_exponential_decay",
+    "fit_t1",
+    "fit_t2",
+    # Fingerprint
+    "CalibrationFingerprint",
+    "DriftMetrics",
+    "FingerprintConfig",
+    "FingerprintStore",
+    # Hardware calibration
+    "HardwareCalibrationDefaults",
+    "hardware_info_to_calibration",
+    "snapshot_calibration",
     # Loader
     "QubitCalibration",
     "CouplerCalibration",
@@ -56,9 +110,14 @@ __all__ = [
     "CalibrationLoader",
     "get_default_loader",
     "load_calibration",
-    # Fingerprint
-    "CalibrationFingerprint",
-    "DriftMetrics",
-    "FingerprintConfig",
-    "FingerprintStore",
+    # Protocols
+    "CalibrationProtocol",
+    "ProtocolConfig",
+    "ProtocolStep",
+    "generate_t1_protocol",
+    "generate_t2_echo_protocol",
+    "generate_t2_ramsey_protocol",
+    # Runner
+    "CalibrationMeasurement",
+    "CalibrationRunner",
 ]
