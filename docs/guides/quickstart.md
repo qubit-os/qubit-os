@@ -140,7 +140,7 @@ Optimizing with GRAPE...
   Iteration 1: fidelity = 0.5231
   Iteration 10: fidelity = 0.8942
   Iteration 50: fidelity = 0.9876
-  Iteration 87: fidelity = 0.9990 ✓
+  Iteration 87: fidelity = 0.9990 [converged]
 
 Result
 ──────
@@ -413,10 +413,10 @@ plt.show()
 
 Congratulations! You've successfully:
 
-- ✅ Started the HAL server
-- ✅ Generated an optimized X-gate pulse with GRAPE
-- ✅ Executed the pulse on a quantum simulator
-- ✅ Interpreted the measurement results
+- Started the HAL server
+- Generated an optimized X-gate pulse with GRAPE
+- Executed the pulse on a quantum simulator
+- Interpreted the measurement results
 
 ### Continue Learning
 

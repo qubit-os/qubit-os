@@ -18,14 +18,14 @@ pytest tests/ -q
 
 | Check | Status | Tool | Rationale |
 |-------|--------|------|-----------|
-| No secrets in code | ✅ | manual/grep | Prevents credential leaks |
-| No pickle usage | ✅ | grep | Pickle is insecure for untrusted data |
-| SHA-256 (not MD5) | ✅ | grep | MD5 is cryptographically broken |
-| No SQL/command injection | ✅ | manual | Input validation on all external data |
-| Path traversal protection | ✅ | code review | Validate paths before file operations |
-| No eval/exec | ✅ | ruff B307 | Code injection risk |
-| Pinned dependencies | ⚠️ | requirements.lock | Reproducible builds |
-| No sensitive data in logs | ✅ | manual | GDPR/security compliance |
+| No secrets in code | Pass | manual/grep | Prevents credential leaks |
+| No pickle usage | Pass | grep | Pickle is insecure for untrusted data |
+| SHA-256 (not MD5) | Pass | grep | MD5 is cryptographically broken |
+| No SQL/command injection | Pass | manual | Input validation on all external data |
+| Path traversal protection | Pass | code review | Validate paths before file operations |
+| No eval/exec | Pass | ruff B307 | Code injection risk |
+| Pinned dependencies | Warn | requirements.lock | Reproducible builds |
+| No sensitive data in logs | Pass | manual | GDPR/security compliance |
 
 **Commands:**
 ```bash
@@ -42,12 +42,12 @@ grep -rn "\.md5\|hashlib\.md5" src/ --include="*.py"
 
 | Check | Status | Tool | Rationale |
 |-------|--------|------|-----------|
-| Seed propagation | ✅ | code review | All randomness controllable via seed |
-| Modern RNG API | ✅ | grep | Use `np.random.default_rng(seed)` |
-| Golden file tests | ✅ | pytest | Verify deterministic outputs |
-| Lock file | ⚠️ | requirements.lock | Pin exact dependency versions |
-| No uncontrolled randomness | ✅ | grep | No bare `random()` or `np.random.rand()` |
-| UUIDs for tracking only | ✅ | code review | UUIDs/timestamps not in computation |
+| Seed propagation | Pass | code review | All randomness controllable via seed |
+| Modern RNG API | Pass | grep | Use `np.random.default_rng(seed)` |
+| Golden file tests | Pass | pytest | Verify deterministic outputs |
+| Lock file | Warn | requirements.lock | Pin exact dependency versions |
+| No uncontrolled randomness | Pass | grep | No bare `random()` or `np.random.rand()` |
+| UUIDs for tracking only | Pass | code review | UUIDs/timestamps not in computation |
 
 **Commands:**
 ```bash
@@ -66,11 +66,11 @@ uv pip compile pyproject.toml -o requirements.lock
 
 | Check | Status | Tool | Rationale |
 |-------|--------|------|-----------|
-| Specific exceptions | ⚠️ | manual | Catch only what you can handle |
-| Exception chaining | ✅ | ruff B904 | Use `raise X from e` |
-| Actionable messages | ⚠️ | manual | Include context for debugging |
-| Resource cleanup | ✅ | code review | Use context managers |
-| Graceful degradation | ✅ | code review | Handle edge cases |
+| Specific exceptions | Warn | manual | Catch only what you can handle |
+| Exception chaining | Pass | ruff B904 | Use `raise X from e` |
+| Actionable messages | Warn | manual | Include context for debugging |
+| Resource cleanup | Pass | code review | Use context managers |
+| Graceful degradation | Pass | code review | Handle edge cases |
 
 **Anti-patterns to avoid:**
 ```python
@@ -119,8 +119,8 @@ pytest tests/unit/test_grape.py -v --cov=qubitos.optimizer.grape
 
 | Check | Status | Tool | Rationale |
 |-------|--------|------|-----------|
-| MyPy clean | ✅ | mypy | Catch type errors at build time |
-| Proto files excluded | ✅ | pyproject.toml | Auto-generated code |
+| MyPy clean | Pass | mypy | Catch type errors at build time |
+| Proto files excluded | Pass | pyproject.toml | Auto-generated code |
 | Type hints | Partial | manual | Document function signatures |
 
 **Commands:**
@@ -132,10 +132,10 @@ mypy src/qubitos/ --ignore-missing-imports
 
 | Check | Status | Tool | Rationale |
 |-------|--------|------|-----------|
-| No dead code | ✅ | ruff F401/F811 | Keep codebase clean |
-| No unused imports | ✅ | ruff F401 | Reduce noise |
-| Consistent style | ✅ | ruff format | Readable code |
-| No TODO bombs | ⚠️ | grep | Track technical debt |
+| No dead code | Pass | ruff F401/F811 | Keep codebase clean |
+| No unused imports | Pass | ruff F401 | Reduce noise |
+| Consistent style | Pass | ruff format | Readable code |
+| No TODO bombs | Warn | grep | Track technical debt |
 
 **Commands:**
 ```bash
@@ -151,12 +151,12 @@ ruff format src/
 
 | Check | Status | Job | Failure Action |
 |-------|--------|-----|----------------|
-| Lint | ✅ | lint | Blocks merge |
-| Type check | ✅ | typecheck | Blocks merge |
-| Unit tests | ✅ | test | Blocks merge |
-| Golden tests | ✅ | golden | Blocks merge |
-| Integration | ⚠️ | integration | Informational |
-| Build | ✅ | build | Blocks merge |
+| Lint | Pass | lint | Blocks merge |
+| Type check | Pass | typecheck | Blocks merge |
+| Unit tests | Pass | test | Blocks merge |
+| Golden tests | Pass | golden | Blocks merge |
+| Integration | Warn | integration | Informational |
+| Build | Pass | build | Blocks merge |
 
 ## Pre-commit Hook
 

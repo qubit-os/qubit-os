@@ -308,9 +308,9 @@ for gate in gates:
     result = optimizer.optimize(gate_type=gate, qubit=0)
     if result.converged:
         pulses[gate] = result
-        print(f"✓ {gate}: fidelity = {result.fidelity:.4f}")
+        print(f"[PASS] {gate}: fidelity = {result.fidelity:.4f}")
     else:
-        print(f"✗ {gate}: did not converge")
+        print(f"[FAIL] {gate}: did not converge")
 ```
 
 ### Random Initial Guess

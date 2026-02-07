@@ -23,16 +23,16 @@ YELLOW='\033[1;33m'
 NC='\033[0m' # No Color
 
 check_passed() {
-    echo -e "${GREEN}✓ $1${NC}"
+    echo -e "${GREEN}[PASS] $1${NC}"
 }
 
 check_failed() {
-    echo -e "${RED}✗ $1${NC}"
+    echo -e "${RED}[FAIL] $1${NC}"
     exit 1
 }
 
 check_warning() {
-    echo -e "${YELLOW}⚠ $1${NC}"
+    echo -e "${YELLOW}[WARN] $1${NC}"
 }
 
 # Activate virtual environment if it exists
