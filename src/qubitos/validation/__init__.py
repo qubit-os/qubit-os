@@ -29,6 +29,14 @@ from typing import Any
 
 import numpy as np
 
+from .crosscheck import (
+    CrosscheckConfig,
+    CrosscheckResult,
+    run_crosscheck,
+    run_crosscheck_from_measurements,
+)
+from .hellinger import hellinger_distance, hellinger_distance_batch
+
 logger = logging.getLogger(__name__)
 
 
@@ -492,4 +500,12 @@ __all__ = [
     "validate_hamiltonian",
     "validate_pulse",
     "validate_calibration",
+    # Hellinger distance
+    "hellinger_distance",
+    "hellinger_distance_batch",
+    # Crosscheck
+    "CrosscheckConfig",
+    "CrosscheckResult",
+    "run_crosscheck",
+    "run_crosscheck_from_measurements",
 ]
