@@ -49,8 +49,7 @@ dev = [
     "scipy-stubs>=1.17.0",
     "pre-commit>=3.6.0",
     # AgentBible - validation and reproducibility framework
-    # Install from GitHub until published to PyPI
-    "agentbible @ git+https://github.com/rylanmalarchick/research-code-principles.git",
+    # Not on PyPI yet; install separately: pip install git+https://github.com/rylanmalarchick/research-code-principles.git
 ]
 docs = [
     "mkdocs>=1.5.0",
