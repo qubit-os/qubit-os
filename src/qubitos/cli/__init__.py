@@ -18,5 +18,4 @@ Example:
     $ qubit-os pulse execute pulse.json --shots 1000
 """
 
-
 __all__: list[str] = []

@@ -36,12 +36,12 @@ from __future__ import annotations
 import logging
 from collections.abc import Callable
 from dataclasses import dataclass, field
-from enum import Enum
 
 import numpy as np
 from numpy.typing import NDArray
 from scipy import linalg as scipy_linalg
 
+from qubitos.target_unitary import TargetUnitary
 from qubitos.temporal import AWGClockConfig, TimePoint
 
 logger = logging.getLogger(__name__)
@@ -51,31 +51,6 @@ MIN_DT_SECONDS = 1e-15
 
 # Minimum number of time steps
 MIN_TIME_STEPS = 1
-
-
-class GateType(Enum):
-    """Supported quantum gate types."""
-
-    # Single-qubit gates
-    X = "X"
-    Y = "Y"
-    Z = "Z"
-    H = "H"
-    SX = "SX"
-    RX = "RX"
-    RY = "RY"
-    RZ = "RZ"
-    # Two-qubit gates
-    CZ = "CZ"
-    CNOT = "CNOT"
-    ISWAP = "iSWAP"
-    S = "S"
-    T = "T"
-    CX = "CX"
-    SQISWAP = "SQISWAP"
-    SWAP = "SWAP"
-    # Custom
-    CUSTOM = "CUSTOM"
 
 
 @dataclass
@@ -544,19 +519,21 @@ class GrapeOptimizer:
 
 
 def generate_pulse(
-    gate: str | GateType,
+    gate: str | TargetUnitary,
     num_qubits: int = 1,
     duration_ns: int = 20,
     target_fidelity: float = 0.999,
     qubit_indices: list[int] | None = None,
     config: GrapeConfig | None = None,
 ) -> GrapeResult:
-    """Generate an optimized pulse for a quantum gate.
+    """Generate an optimized pulse for a target unitary.
 
-    This is the main entry point for pulse generation.
+    This is the main entry point for pulse generation using preset targets.
+    For full control over the system Hamiltonian, use GrapeOptimizer.optimize()
+    directly with explicit drift and control Hamiltonians.
 
     Args:
-        gate: Target gate (e.g., "X", "H", "CZ")
+        gate: Target unitary name (e.g., "X", "CZ") or TargetUnitary enum.
         num_qubits: Number of qubits in the system
         duration_ns: Pulse duration in nanoseconds (must be > 0)
         target_fidelity: Target gate fidelity
@@ -571,13 +548,13 @@ def generate_pulse(
 
     Example:
         >>> result = generate_pulse("X", duration_ns=20, target_fidelity=0.999)
-        >>> print(f"Fidelity: {result.fidelity:.4f}")
+        >>> result = generate_pulse(TargetUnitary.CZ, num_qubits=2)
     """
     from .hamiltonians import get_target_unitary
 
     # Convert string to enum
     if isinstance(gate, str):
-        gate = GateType(gate.upper())
+        gate = TargetUnitary(gate.upper())
 
     # Set up configuration
     if config is None:
@@ -599,8 +576,30 @@ def generate_pulse(
     return result
 
 
+def __getattr__(name: str):  # type: ignore[misc]
+    """Lazy deprecation for renamed symbols (PEP 562).
+
+    Provides backward compatibility for GateType while emitting
+    deprecation warnings.
+    """
+    if name == "GateType":
+        import warnings
+
+        warnings.warn(
+            "GateType is deprecated and will be removed in v0.4.0. "
+            "Use TargetUnitary instead.\n"
+            "  Migration: replace 'from qubitos.pulsegen.grape import GateType' "
+            "with 'from qubitos.target_unitary import TargetUnitary'\n"
+            "  The TargetUnitary enum has the same values plus I and UNSPECIFIED.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        return TargetUnitary
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+
+
 __all__ = [
-    "GateType",
+    "TargetUnitary",
     "GrapeConfig",
     "GrapeResult",
     "GrapeOptimizer",

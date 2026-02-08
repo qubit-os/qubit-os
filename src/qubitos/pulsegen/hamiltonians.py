@@ -43,7 +43,7 @@ import numpy as np
 if TYPE_CHECKING:
     from numpy.typing import NDArray
 
-    from .grape import GateType
+    from qubitos.target_unitary import TargetUnitary
 
 # =============================================================================
 # Pauli Matrices
@@ -119,13 +119,20 @@ STANDARD_GATES = {
     "CX": GATE_CNOT,  # Alias
     "ISWAP": GATE_ISWAP,
     "SWAP": GATE_SWAP,
-    "SQISWAP": np.array([
-        [1, 0, 0, 0],
-        [0, 1/np.sqrt(2), 1j/np.sqrt(2), 0],
-        [0, 1j/np.sqrt(2), 1/np.sqrt(2), 0],
-        [0, 0, 0, 1]
-    ], dtype=complex),
+    "SQISWAP": np.array(
+        [
+            [1, 0, 0, 0],
+            [0, 1 / np.sqrt(2), 1j / np.sqrt(2), 0],
+            [0, 1j / np.sqrt(2), 1 / np.sqrt(2), 0],
+            [0, 0, 0, 1],
+        ],
+        dtype=complex,
+    ),
 }
+
+# Canonical name (v0.2.0): TargetUnitary presets as matrices.
+# STANDARD_GATES is the backward-compatible alias.
+TARGET_UNITARIES = STANDARD_GATES
 
 
 # =============================================================================
@@ -317,15 +324,15 @@ def rotation_gate(
 
 
 def get_target_unitary(
-    gate: str | GateType,
+    gate: str | TargetUnitary,
     num_qubits: int = 1,
     qubit_indices: list[int] | None = None,
     angle: float | None = None,
 ) -> NDArray[np.complex128]:
-    """Get the target unitary for a quantum gate.
+    """Get the target unitary matrix for a quantum gate or preset name.
 
     Args:
-        gate: Gate name or GateType enum
+        gate: Gate name string (e.g., "X", "CZ") or TargetUnitary enum.
         num_qubits: Total number of qubits in the system
         qubit_indices: Which qubits the gate acts on (default: first qubit(s))
         angle: Rotation angle for parameterized gates (RX, RY, RZ)
@@ -334,8 +341,9 @@ def get_target_unitary(
         Unitary matrix for the gate
 
     Example:
-        >>> X = get_target_unitary("X", num_qubits=1)
-        >>> CZ = get_target_unitary("CZ", num_qubits=2, qubit_indices=[0, 1])
+        >>> from qubitos.target_unitary import TargetUnitary
+        >>> X = get_target_unitary(TargetUnitary.X, num_qubits=1)
+        >>> X = get_target_unitary("X", num_qubits=1)  # Also works
         >>> RX = get_target_unitary("RX", num_qubits=1, angle=np.pi/2)
     """
     # Handle GateType enum
@@ -422,7 +430,9 @@ __all__ = [
     "PAULI_Y",
     "PAULI_Z",
     "PAULI_MATRICES",
-    # Standard gates
+    # Target unitaries (v0.2.0 canonical name)
+    "TARGET_UNITARIES",
+    # Backward compat alias
     "STANDARD_GATES",
     # Functions
     "tensor_product",

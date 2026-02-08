@@ -99,7 +99,7 @@ class TestGenerateAWGAlignment:
             [
                 "pulse",
                 "generate",
-                "--gate",
+                "--target-unitary",
                 "X",
                 "--duration",
                 "17.3",
@@ -129,7 +129,7 @@ class TestGenerateAWGAlignment:
             [
                 "pulse",
                 "generate",
-                "--gate",
+                "--target-unitary",
                 "X",
                 "--duration",
                 "20",
@@ -156,7 +156,7 @@ class TestGenerateAWGAlignment:
             [
                 "pulse",
                 "generate",
-                "--gate",
+                "--target-unitary",
                 "X",
                 "--duration",
                 "20",
@@ -187,7 +187,7 @@ class TestGenerateAWGAlignment:
             [
                 "pulse",
                 "generate",
-                "--gate",
+                "--target-unitary",
                 "X",
                 "--duration",
                 "20",
@@ -214,7 +214,7 @@ class TestGenerateAWGAlignment:
             [
                 "pulse",
                 "generate",
-                "--gate",
+                "--target-unitary",
                 "X",
                 "--duration",
                 "17.3",
@@ -254,7 +254,7 @@ class TestGenerateDecoherenceBudget:
             [
                 "pulse",
                 "generate",
-                "--gate",
+                "--target-unitary",
                 "X",
                 "--duration",
                 "20",
@@ -288,7 +288,7 @@ class TestGenerateDecoherenceBudget:
             [
                 "pulse",
                 "generate",
-                "--gate",
+                "--target-unitary",
                 "X",
                 "--duration",
                 "20",
@@ -320,7 +320,7 @@ class TestGenerateDecoherenceBudget:
             [
                 "pulse",
                 "generate",
-                "--gate",
+                "--target-unitary",
                 "X",
                 "--duration",
                 "20",

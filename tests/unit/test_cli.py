@@ -139,7 +139,42 @@ class TestPulseCommands:
         assert "validate" in result.output
 
     def test_pulse_generate_x_gate(self, runner, tmp_path):
-        """Test generating X gate pulse."""
+        """Test generating X pulse with --target-unitary flag."""
+        output_file = tmp_path / "x_gate.json"
+        result = runner.invoke(
+            cli,
+            [
+                "pulse",
+                "generate",
+                "--target-unitary",
+                "X",
+                "--duration",
+                "20",
+                "--time-steps",
+                "50",
+                "--max-iterations",
+                "100",
+                "--fidelity",
+                "0.99",
+                "--output",
+                str(output_file),
+            ],
+        )
+
+        assert result.exit_code == 0
+        assert "Generating X pulse" in result.output
+        assert output_file.exists()
+
+        # Verify output file content
+        with open(output_file) as f:
+            data = json.load(f)
+        assert data["target_unitary"] == "X"
+        assert data["gate"] == "X"  # backward compat key
+        assert "i_envelope" in data
+        assert "q_envelope" in data
+
+    def test_pulse_generate_deprecated_gate_flag(self, runner, tmp_path):
+        """Test that --gate still works but emits deprecation warning."""
         output_file = tmp_path / "x_gate.json"
         result = runner.invoke(
             cli,
@@ -162,25 +197,18 @@ class TestPulseCommands:
         )
 
         assert result.exit_code == 0
-        assert "Generating X gate" in result.output
+        assert "deprecated" in result.output.lower() or "deprecated" in (result.stderr or "").lower()
         assert output_file.exists()
 
-        # Verify output file content
-        with open(output_file) as f:
-            data = json.load(f)
-        assert data["gate"] == "X"
-        assert "i_envelope" in data
-        assert "q_envelope" in data
-
     def test_pulse_generate_h_gate(self, runner, tmp_path):
-        """Test generating H gate pulse."""
+        """Test generating H gate pulse with new flag."""
         output_file = tmp_path / "h_gate.json"
         result = runner.invoke(
             cli,
             [
                 "pulse",
                 "generate",
-                "--gate",
+                "--target-unitary",
                 "H",
                 "--duration",
                 "20",
@@ -206,7 +234,7 @@ class TestPulseCommands:
             [
                 "pulse",
                 "generate",
-                "--gate",
+                "--target-unitary",
                 "X",
                 "--time-steps",
                 "50",
@@ -235,7 +263,7 @@ class TestPulseCommands:
             [
                 "pulse",
                 "generate",
-                "--gate",
+                "--target-unitary",
                 "INVALID",
                 "--output",
                 str(tmp_path / "out.json"),
@@ -251,7 +279,7 @@ class TestPulseCommands:
             [
                 "pulse",
                 "generate",
-                "--gate",
+                "--target-unitary",
                 "X",
                 "--time-steps",
                 "50",
@@ -544,7 +572,7 @@ class TestEdgeCases:
             [
                 "pulse",
                 "generate",
-                "--gate",
+                "--target-unitary",
                 "CZ",
                 "--qubits",
                 "2",

@@ -319,14 +319,43 @@ def pulse() -> None:
 
 @pulse.command()
 @click.option(
+    "--target-unitary",
+    "-u",
+    "target_unitary",
+    default=None,
+    type=click.Choice(
+        [
+            "I",
+            "X",
+            "Y",
+            "Z",
+            "H",
+            "SX",
+            "S",
+            "T",
+            "RX",
+            "RY",
+            "RZ",
+            "CZ",
+            "CNOT",
+            "CX",
+            "iSWAP",
+            "SQISWAP",
+            "SWAP",
+        ],
+        case_sensitive=False,
+    ),
+    help="Target unitary preset (primary flag)",
+)
+@click.option(
     "--gate",
     "-g",
-    required=True,
+    default=None,
     type=click.Choice(
         ["X", "Y", "Z", "H", "SX", "CZ", "CNOT", "iSWAP"],
         case_sensitive=False,
     ),
-    help="Target gate",
+    help="DEPRECATED: use --target-unitary instead",
 )
 @click.option("--qubits", "-q", type=int, default=1, help="Number of qubits")
 @click.option(
@@ -372,7 +401,8 @@ def pulse() -> None:
     help="Target qubit index for decoherence budget (default: 0)",
 )
 def generate(
-    gate: str,
+    target_unitary: str | None,
+    gate: str | None,
     qubits: int,
     duration: float,
     fidelity: float,
@@ -391,21 +421,47 @@ def generate(
 
     Examples:
 
-        # Basic usage
+        # Basic usage (preferred)
+        qubit-os pulse generate --target-unitary X --duration 20 -o x_gate.json
+
+        # Deprecated (still works with warning):
         qubit-os pulse generate --gate X --duration 20 -o x_gate.json
 
         # With AWG alignment (1 GSa/s)
-        qubit-os pulse generate --gate X --duration 17.3 \
+        qubit-os pulse generate --target-unitary X --duration 17.3 \\
             --sample-rate 1.0 -o x.json
 
         # With decoherence budget display
-        qubit-os pulse generate --gate X --duration 20 --qubit 0 \
+        qubit-os pulse generate --target-unitary X --duration 20 --qubit 0 \\
             --calibration cal.yaml -o x.json
     """
     try:
         from ..pulsegen import GrapeConfig
         from ..pulsegen import generate_pulse as grape_generate
         from ..temporal import AWGClockConfig
+
+        # Resolve --gate (deprecated) vs --target-unitary
+        if target_unitary is not None:
+            gate_name = target_unitary.upper()
+        elif gate is not None:
+            import warnings
+
+            warnings.warn(
+                "--gate is deprecated and will be removed in v0.4.0. Use --target-unitary instead.",
+                DeprecationWarning,
+                stacklevel=1,
+            )
+            click.echo(
+                "WARNING: --gate is deprecated. Use --target-unitary instead.",
+                err=True,
+            )
+            gate_name = gate.upper()
+        else:
+            click.echo(
+                "Error: Either --target-unitary or --gate is required.",
+                err=True,
+            )
+            sys.exit(1)
 
         # Build AWG config if sample rate provided
         awg_config = None
@@ -433,7 +489,7 @@ def generate(
         if awg_config is not None:
             time_point = awg_config.make_timepoint(actual_duration)
 
-        click.echo(f"Generating {gate} gate pulse...")
+        click.echo(f"Generating {gate_name} pulse...")
         click.echo(f"  Target fidelity: {fidelity}")
         if time_point is not None:
             click.echo(
@@ -455,13 +511,13 @@ def generate(
         )
 
         result = grape_generate(
-            gate=gate.upper(),
+            gate=gate_name,
             num_qubits=qubits,
             config=config,
         )
 
         click.echo("\nOptimization complete:")
-        click.echo(f"  Gate: {gate.upper()} (target unitary)")
+        click.echo(f"  Target unitary: {gate_name}")
         click.echo(f"  Fidelity: {result.fidelity:.2%}")
         if time_point is not None:
             click.echo(
@@ -507,7 +563,8 @@ def generate(
 
         # Save result
         data = {
-            "gate": gate.upper(),
+            "target_unitary": gate_name,
+            "gate": gate_name,  # backward compat key
             "num_qubits": qubits,
             "duration_ns": actual_duration,
             "num_time_steps": time_steps,

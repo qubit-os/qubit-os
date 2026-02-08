@@ -13,27 +13,24 @@ Submodules:
 
 Example:
     >>> from qubitos.pulsegen import generate_pulse, GrapeConfig
+    >>> from qubitos.target_unitary import TargetUnitary
     >>>
     >>> # Simple usage
     >>> result = generate_pulse(
-    ...     gate="X",
+    ...     gate=TargetUnitary.X,
     ...     num_qubits=1,
     ...     duration_ns=20,
-    ...     target_fidelity=0.999
+    ...     target_fidelity=0.999,
     ... )
     >>> print(f"Fidelity: {result.fidelity:.4f}")
     >>>
-    >>> # Advanced usage with custom config
-    >>> config = GrapeConfig(
-    ...     num_time_steps=200,
-    ...     max_iterations=2000,
-    ...     learning_rate=0.05,
-    ... )
-    >>> result = generate_pulse("CZ", num_qubits=2, config=config)
+    >>> # String shorthand also works
+    >>> result = generate_pulse("CZ", num_qubits=2, duration_ns=80)
 """
 
+from qubitos.target_unitary import TargetUnitary
+
 from .grape import (
-    GateType,
     GrapeConfig,
     GrapeOptimizer,
     GrapeResult,
@@ -46,6 +43,7 @@ from .hamiltonians import (
     PAULI_Y,
     PAULI_Z,
     STANDARD_GATES,
+    TARGET_UNITARIES,
     build_hamiltonian,
     embed_gate,
     get_target_unitary,
@@ -68,8 +66,9 @@ from .shapes import (
 )
 
 __all__ = [
+    # Target unitaries (v0.2.0 — replaces GateType)
+    "TargetUnitary",
     # GRAPE
-    "GateType",
     "GrapeConfig",
     "GrapeOptimizer",
     "GrapeResult",
@@ -80,6 +79,7 @@ __all__ = [
     "PAULI_Y",
     "PAULI_Z",
     "PAULI_MATRICES",
+    "TARGET_UNITARIES",
     "STANDARD_GATES",
     "build_hamiltonian",
     "embed_gate",
@@ -100,3 +100,20 @@ __all__ = [
     "sech",
     "square",
 ]
+
+
+def __getattr__(name: str):  # type: ignore[misc]
+    """Lazy deprecation for GateType (PEP 562)."""
+    if name == "GateType":
+        import warnings
+
+        warnings.warn(
+            "GateType is deprecated and will be removed in v0.4.0. "
+            "Use TargetUnitary instead.\n"
+            "  Migration: replace 'from qubitos.pulsegen import GateType' "
+            "with 'from qubitos.pulsegen import TargetUnitary'",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        return TargetUnitary
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
