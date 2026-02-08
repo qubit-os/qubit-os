@@ -227,3 +227,31 @@ class TestGeneratePulseWithTargetUnitary:
 
         with pytest.raises(ValueError, match="Unknown gate"):
             get_target_unitary(TargetUnitary.UNSPECIFIED)
+
+
+class TestTargetUnitaryMatrix:
+    """Tests for matrix properties of target unitaries."""
+
+    @pytest.mark.parametrize(
+        "gate",
+        ["X", "Y", "Z", "H", "S", "T", "SX"],
+    )
+    def test_single_qubit_unitarity(self, gate):
+        """Every single-qubit gate must be unitary: U†U = I."""
+        from qubitos.pulsegen.hamiltonians import TARGET_UNITARIES
+
+        U = TARGET_UNITARIES[gate]
+        product = U.conj().T @ U
+        assert np.allclose(product, np.eye(2), atol=1e-14)
+
+    @pytest.mark.parametrize(
+        "gate",
+        ["CZ", "CNOT", "CX", "ISWAP", "SQISWAP", "SWAP"],
+    )
+    def test_two_qubit_unitarity(self, gate):
+        """Every two-qubit gate must be unitary: U†U = I."""
+        from qubitos.pulsegen.hamiltonians import TARGET_UNITARIES
+
+        U = TARGET_UNITARIES[gate]
+        product = U.conj().T @ U
+        assert np.allclose(product, np.eye(4), atol=1e-14)

@@ -27,6 +27,7 @@ from qubitos.provenance import (
     hash_envelope,
 )
 from qubitos.provenance.builder import _hash_internal, _hash_leaf
+from qubitos.target_unitary import TargetUnitary
 
 
 # =========================================================================
@@ -503,3 +504,107 @@ class TestProvenanceStore:
             store.store(tree)
         hist = store.history(limit=3)
         assert len(hist) == 3
+
+
+class TestProvenanceBuilderEdgeCases:
+    """Additional builder edge cases."""
+
+    def test_multiple_pulses(self):
+        """Tree with multiple pulses in sequence."""
+        builder = ProvenanceBuilder()
+        builder.set_calibration(
+            qubit_data=[
+                {"qubit_index": 0, "frequency_ghz": 5.0, "t1_us": 50.0, "t2_us": 30.0},
+                {"qubit_index": 1, "frequency_ghz": 5.1, "t1_us": 48.0, "t2_us": 28.0},
+            ],
+        )
+        rng = np.random.default_rng(42)
+        for pulse_id, gate, qubits in [("p0", "X", [0]), ("p1", "X", [1]), ("p2", "CZ", [0, 1])]:
+            builder.add_pulse(
+                pulse_id, gate, qubits, 20, 100, 0.999, 50.0,
+                rng.standard_normal(100), rng.standard_normal(100),
+            )
+        tree = builder.build()
+        ps = tree.find_node(NodeType.PULSE_SEQUENCE)
+        assert ps is not None
+        assert len(ps.children) == 3
+
+    def test_metadata_not_hashed(self):
+        """Metadata does not affect the root hash."""
+        tree_a = _make_builder().build()
+        builder_b = _make_builder()
+        builder_b.set_metadata("note", "test annotation")
+        tree_b = builder_b.build()
+        assert tree_a.root_hash == tree_b.root_hash
+
+    def test_set_calibration_from_fingerprint(self):
+        """Builder works with CalibrationFingerprint-like object."""
+        from types import SimpleNamespace
+
+        fp = SimpleNamespace(
+            qubit_fingerprints=[
+                {"index": 0, "frequency_ghz": 5.0, "t1_us": 50.0, "t2_us": 30.0,
+                 "readout_fidelity": 0.99, "gate_fidelity": 0.999},
+            ],
+            coupler_fingerprints=[],
+            hash="abc123",
+        )
+        builder = ProvenanceBuilder()
+        builder.set_calibration_from_fingerprint(fp)
+        tree = builder.build()
+        assert tree.metadata.get("legacy_calibration_hash") == "abc123"
+
+    def test_pulse_with_coupling_envelope(self):
+        """Pulse with coupling envelope hashes correctly."""
+        builder = _make_builder()
+        rng = np.random.default_rng(99)
+        builder.add_pulse(
+            "p1", "CZ", [0, 1], 40, 200, 0.99, 50.0,
+            rng.standard_normal(200), rng.standard_normal(200),
+            coupling_envelope=rng.standard_normal(200),
+        )
+        tree = builder.build()
+        ps = tree.find_node(NodeType.PULSE_SEQUENCE)
+        assert ps is not None
+        assert len(ps.children) == 2  # p0 + p1
+
+    def test_pulse_with_rotation_angle(self):
+        """Pulse with rotation angle is included in hash."""
+        builder_a = ProvenanceBuilder()
+        builder_a.set_calibration(
+            qubit_data=[{"qubit_index": 0, "frequency_ghz": 5.0, "t1_us": 50.0, "t2_us": 30.0}],
+        )
+        builder_b = ProvenanceBuilder()
+        builder_b.set_calibration(
+            qubit_data=[{"qubit_index": 0, "frequency_ghz": 5.0, "t1_us": 50.0, "t2_us": 30.0}],
+        )
+        rng = np.random.default_rng(42)
+        env = rng.standard_normal(100)
+        builder_a.add_pulse("p0", "RX", [0], 20, 100, 0.999, 100.0, env, env, rotation_angle=1.5708)
+        builder_b.add_pulse("p0", "RX", [0], 20, 100, 0.999, 100.0, env, env, rotation_angle=3.1416)
+        tree_a = builder_a.build()
+        tree_b = builder_b.build()
+        assert tree_a.root_hash != tree_b.root_hash
+
+
+class TestTargetUnitaryAdditional:
+    """Additional TargetUnitary tests for coverage."""
+
+    def test_all_fixed_gates_in_target_unitaries(self):
+        """Every fixed gate in TargetUnitary has a matrix in TARGET_UNITARIES."""
+        from qubitos.pulsegen.hamiltonians import TARGET_UNITARIES
+
+        for tu in TargetUnitary:
+            if tu.is_parametric or tu in (TargetUnitary.UNSPECIFIED, TargetUnitary.CUSTOM):
+                continue
+            assert tu.value in TARGET_UNITARIES
+
+    def test_target_unitary_iteration(self):
+        """Can iterate over all members."""
+        members = list(TargetUnitary)
+        assert len(members) == 19  # 8 fixed + 3 parametric + 6 two-qubit + UNSPECIFIED + CUSTOM
+
+    def test_target_unitary_name_value_match(self):
+        """Name equals value for all members."""
+        for tu in TargetUnitary:
+            assert tu.name == tu.value

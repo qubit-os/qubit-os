@@ -3112,3 +3112,807 @@ temporal.proto ──imports──> pulse.proto (for PulseShape)
 execution.proto ──imports──> temporal.proto (for ExecutePulseSequenceRequest)
 grape.proto (duration_ns type change only, no new imports)
 ```
+
+---
+
+## 7. Rust Implementation
+
+### 7.1 Module Structure
+
+```
+qubit-os-hardware/
+└── src/
+    ├── temporal/
+    │   ├── mod.rs              # Module re-exports and TemporalError
+    │   ├── time_point.rs       # TimePoint (§5.1.2)
+    │   ├── awg.rs              # AWGClockConfig, QuantizationResult (§5.2.2)
+    │   ├── constraints.rs      # ConstraintKind, TemporalConstraint (§5.3.3)
+    │   ├── budget.rs           # DecoherenceBudget, QubitDecoherenceBudget (§5.4.3)
+    │   └── sequence.rs         # ScheduledPulse, PulseSequence (§5.5.2, §5.6.2)
+    ├── validation/
+    │   ├── mod.rs              # Existing + new sequence validation
+    │   └── temporal.rs         # validate_pulse_sequence() integration
+    └── lib.rs                  # Add `pub mod temporal;`
+```
+
+### 7.2 Module Root (`temporal/mod.rs`)
+
+```rust
+pub mod time_point;
+pub mod awg;
+pub mod constraints;
+pub mod budget;
+pub mod sequence;
+
+// Re-exports for convenience
+pub use time_point::{TimePoint, TimePointError};
+pub use awg::{AWGClockConfig, AWGError, QuantizationResult};
+pub use constraints::{ConstraintKind, TemporalConstraint, ConstraintError, ConstraintCheckResult};
+pub use budget::{
+    DecoherenceBudget, QubitDecoherenceBudget, BudgetError, BudgetStatus, BudgetCheckResult,
+};
+pub use sequence::{
+    ScheduledPulse, ScheduledPulseError, PulseSequence, SequenceError,
+    SequenceValidationResult,
+};
+
+/// Top-level temporal error aggregating all sub-errors.
+#[derive(Debug, Clone, thiserror::Error)]
+pub enum TemporalError {
+    #[error(transparent)]
+    TimePoint(#[from] TimePointError),
+    #[error(transparent)]
+    AWG(#[from] AWGError),
+    #[error(transparent)]
+    Constraint(#[from] ConstraintError),
+    #[error(transparent)]
+    Budget(#[from] BudgetError),
+    #[error(transparent)]
+    Sequence(#[from] SequenceError),
+}
+```
+
+### 7.3 Validation Integration (`validation/temporal.rs`)
+
+```rust
+// src/validation/temporal.rs
+
+use crate::temporal::{
+    PulseSequence, SequenceValidationResult, BudgetStatus, TemporalError,
+};
+use super::ValidationError;
+
+/// Maximum total sequence duration (1 ms).
+pub const MAX_SEQUENCE_DURATION_NS: f64 = 1_000_000.0;
+
+/// Maximum number of pulses in a sequence.
+pub const MAX_SEQUENCE_PULSES: usize = 1_000;
+
+/// Maximum number of constraints in a sequence.
+pub const MAX_SEQUENCE_CONSTRAINTS: usize = 5_000;
+
+/// Validate a PulseSequence at the HAL boundary.
+///
+/// Performs:
+/// 1. Resource limit checks (duration, pulse count, constraint count).
+/// 2. Per-pulse validation (delegates to existing validate_pulse_envelope).
+/// 3. Sequence-level validation (constraints, conflicts, decoherence).
+pub fn validate_pulse_sequence(
+    sequence: &mut PulseSequence,
+) -> Result<SequenceValidationResult, ValidationError> {
+    // Resource limits
+    if sequence.pulse_count() > MAX_SEQUENCE_PULSES {
+        return Err(ValidationError::ResourceLimit {
+            resource: "pulse_count".to_string(),
+            message: format!(
+                "Sequence has {} pulses, max is {}",
+                sequence.pulse_count(),
+                MAX_SEQUENCE_PULSES
+            ),
+        });
+    }
+
+    if sequence.constraints.len() > MAX_SEQUENCE_CONSTRAINTS {
+        return Err(ValidationError::ResourceLimit {
+            resource: "constraint_count".to_string(),
+            message: format!(
+                "Sequence has {} constraints, max is {}",
+                sequence.constraints.len(),
+                MAX_SEQUENCE_CONSTRAINTS
+            ),
+        });
+    }
+
+    let total_duration = sequence.total_duration_ns();
+    if total_duration > MAX_SEQUENCE_DURATION_NS {
+        return Err(ValidationError::ResourceLimit {
+            resource: "total_duration_ns".to_string(),
+            message: format!(
+                "Sequence total duration {:.1} ns exceeds max {:.1} ns",
+                total_duration, MAX_SEQUENCE_DURATION_NS
+            ),
+        });
+    }
+
+    // Sequence-level validation
+    let result = sequence.validate();
+
+    if !result.valid {
+        // Convert to ValidationError for existing error pipeline
+        let combined_message = result.messages.join("; ");
+        return Err(ValidationError::PhysicsConstraint {
+            constraint: "temporal_sequence".to_string(),
+            message: combined_message,
+        });
+    }
+
+    // Check decoherence budget — warning is allowed to pass through,
+    // but exceeded is an error
+    if let Some(ref budget_result) = result.budget_result {
+        if budget_result.status == BudgetStatus::Exceeded {
+            return Err(ValidationError::PhysicsConstraint {
+                constraint: "decoherence_budget".to_string(),
+                message: budget_result.message.clone(),
+            });
+        }
+    }
+
+    Ok(result)
+}
+```
+
+### 7.4 Error Type Extensions
+
+Add to the existing `ValidationError` enum in `validation/mod.rs`:
+
+```rust
+#[derive(Debug, Clone, thiserror::Error)]
+pub enum ValidationError {
+    // ... existing variants ...
+
+    #[error("constraint violated: {kind}: {message}")]
+    ConstraintViolation { kind: String, message: String },
+
+    #[error("decoherence budget exceeded: {message}")]
+    BudgetExceeded { message: String },
+
+    #[error("AWG alignment error: {message}")]
+    AWGAlignmentError { message: String },
+}
+```
+
+### 7.5 Calibration Integration
+
+The Rust layer needs to construct `DecoherenceBudget` from calibration data
+received via proto. This happens in the HAL service handler:
+
+```rust
+// Sketch of integration in the gRPC service handler
+
+fn handle_execute_sequence(
+    &self,
+    request: ExecutePulseSequenceRequest,
+    calibration: &CalibrationData,
+) -> Result<ExecutePulseSequenceResponse, Status> {
+    let mut sequence = convert_proto_sequence(request.sequence)?;
+
+    // If no decoherence budget was provided by the client, create one
+    // from current calibration data
+    if sequence.decoherence_budget.is_none() {
+        let mut budget = DecoherenceBudget::with_defaults();
+        for qubit_cal in &calibration.qubits {
+            budget.register_qubit(
+                qubit_cal.qubit_id,
+                qubit_cal.t1_us,
+                qubit_cal.t2_us,
+            )?;
+        }
+        // Replay all pulses into the budget
+        for pulse in sequence.pulses.values() {
+            for &qid in &pulse.target_qubits {
+                if budget.qubits.contains_key(&qid) {
+                    budget.add_pulse(qid, pulse.duration_ns)?;
+                }
+            }
+        }
+        sequence.decoherence_budget = Some(budget);
+    }
+
+    let validation_result = validate_pulse_sequence(&mut sequence)?;
+
+    // Proceed with execution...
+    Ok(build_response(validation_result))
+}
+```
+
+---
+
+## 8. Python Implementation
+
+### 8.1 Module Structure
+
+```
+qubit-os-core/
+└── src/
+    └── qubitos/
+        ├── temporal/
+        │   ├── __init__.py         # Public API re-exports
+        │   ├── time_point.py       # TimePoint (§5.1.1)
+        │   ├── awg.py              # AWGClockConfig, QuantizationResult (§5.2.1)
+        │   ├── constraints.py      # ConstraintKind, TemporalConstraint (§5.3.2)
+        │   ├── budget.py           # DecoherenceBudget, QubitDecoherenceBudget (§5.4.2)
+        │   └── sequence.py         # ScheduledPulse, PulseSequence, Builder (§5.5.1, §5.6.1)
+        ├── pulsegen/
+        │   └── grape.py            # Modified: returns ScheduledPulse-compatible result
+        ├── validation/
+        │   └── __init__.py         # Modified: adds validate_pulse_sequence()
+        └── calibrator/
+            └── fingerprint.py      # Modified: DecoherenceBudget.from_calibration()
+```
+
+### 8.2 Package Init (`temporal/__init__.py`)
+
+```python
+"""Temporal model for QubitOS pulse sequences.
+
+This module provides data structures and validation for expressing timing
+relationships between pulses, tracking decoherence budget, and enforcing
+AWG clock alignment.
+
+Typical usage:
+
+    from qubitos.temporal import (
+        TimePoint, AWGClockConfig, PulseSequenceBuilder,
+        DecoherenceBudget, ConstraintKind,
+    )
+
+    budget = DecoherenceBudget.from_calibration(fingerprint.qubit_calibrations)
+    awg = AWGClockConfig.preset_2gsps()
+
+    seq = (
+        PulseSequenceBuilder("experiment-1")
+        .with_awg(awg)
+        .with_decoherence_budget(budget)
+        .add_pulse("x90", pulse, TimePoint(0.0), [0], 20.0)
+        .add_pulse("meas", meas, TimePoint(30.0), [0], 500.0)
+        .constrain_sequential("x90", "meas", max_gap_ns=50.0)
+        .build()
+    )
+"""
+
+from qubitos.temporal.time_point import TimePoint
+from qubitos.temporal.awg import AWGClockConfig, QuantizationResult
+from qubitos.temporal.constraints import (
+    ConstraintKind,
+    TemporalConstraint,
+    ConstraintCheckResult,
+)
+from qubitos.temporal.budget import (
+    QubitDecoherenceBudget,
+    DecoherenceBudget,
+    BudgetStatus,
+    BudgetCheckResult,
+)
+from qubitos.temporal.sequence import (
+    ScheduledPulse,
+    PulseSequence,
+    PulseSequenceBuilder,
+    SequenceValidationResult,
+)
+
+__all__ = [
+    "TimePoint",
+    "AWGClockConfig",
+    "QuantizationResult",
+    "ConstraintKind",
+    "TemporalConstraint",
+    "ConstraintCheckResult",
+    "QubitDecoherenceBudget",
+    "DecoherenceBudget",
+    "BudgetStatus",
+    "BudgetCheckResult",
+    "ScheduledPulse",
+    "PulseSequence",
+    "PulseSequenceBuilder",
+    "SequenceValidationResult",
+]
+```
+
+### 8.3 GRAPE Integration
+
+The GRAPE optimizer currently returns a `PulseShape`-like result. After this
+change, it additionally provides enough information to create a
+`ScheduledPulse`:
+
+```python
+# In qubitos/pulsegen/grape.py — modified generate_pulse() return
+
+class GrapeResult:
+    """Result of GRAPE optimization.
+
+    Existing fields preserved. New fields added for temporal integration.
+    """
+
+    # ... existing fields (pulse, fidelity, converged, iterations) ...
+
+    def to_scheduled_pulse(
+        self,
+        pulse_id: str,
+        start_time: Optional[TimePoint] = None,
+        target_qubits: Optional[List[int]] = None,
+    ) -> ScheduledPulse:
+        """Convert GRAPE result to a ScheduledPulse.
+
+        Args:
+            pulse_id: Unique identifier for this pulse.
+            start_time: When the pulse starts. Default: TimePoint(0.0).
+            target_qubits: Which qubits this pulse targets. Default: inferred
+                from GrapeConfig.
+
+        Returns:
+            A ScheduledPulse that can be added to a PulseSequence.
+        """
+        from qubitos.temporal import TimePoint, ScheduledPulse
+
+        if start_time is None:
+            start_time = TimePoint(nominal_ns=0.0)
+        if target_qubits is None:
+            target_qubits = list(range(self.config.n_qubits))
+
+        return ScheduledPulse(
+            pulse_id=pulse_id,
+            pulse=self.pulse,
+            start_time=start_time,
+            target_qubits=target_qubits,
+            duration_ns=self.config.duration_ns,
+        )
+```
+
+The `GrapeConfig.duration_ns` remains `float`. The proto field changes to
+`double`, resolving the type mismatch. No Python-side changes needed for
+the type itself.
+
+### 8.4 Validation Integration
+
+Add to `qubitos/validation/__init__.py`:
+
+```python
+def validate_pulse_sequence(
+    sequence: PulseSequence,
+    max_duration_ns: float = 1_000_000.0,
+    max_pulses: int = 1_000,
+    max_constraints: int = 5_000,
+) -> SequenceValidationResult:
+    """Validate a PulseSequence.
+
+    Performs:
+    1. Resource limit checks.
+    2. Per-pulse envelope validation (delegates to validate_pulse_envelope).
+    3. Sequence-level validation (constraints, conflicts, decoherence).
+
+    Args:
+        sequence: The PulseSequence to validate.
+        max_duration_ns: Maximum total sequence duration. Default: 1 ms.
+        max_pulses: Maximum number of pulses. Default: 1000.
+        max_constraints: Maximum number of constraints. Default: 5000.
+
+    Returns:
+        SequenceValidationResult.
+
+    Raises:
+        ValueError: If resource limits are exceeded (hard errors).
+    """
+    # Resource limits (hard fail)
+    if sequence.pulse_count > max_pulses:
+        raise ValueError(
+            f"Sequence has {sequence.pulse_count} pulses, max is {max_pulses}"
+        )
+    if len(sequence.constraints) > max_constraints:
+        raise ValueError(
+            f"Sequence has {len(sequence.constraints)} constraints, "
+            f"max is {max_constraints}"
+        )
+    if sequence.total_duration_ns > max_duration_ns:
+        raise ValueError(
+            f"Sequence duration {sequence.total_duration_ns:.1f} ns "
+            f"exceeds max {max_duration_ns:.1f} ns"
+        )
+
+    # Per-pulse validation
+    for pulse_id, sp in sequence.pulses.items():
+        if sp.pulse is not None and hasattr(sp.pulse, "i_envelope"):
+            validate_pulse_envelope(sp.pulse)
+
+    # Sequence-level validation
+    return sequence.validate()
+```
+
+### 8.5 Calibration Integration
+
+Add a factory method to connect `CalibrationFingerprint` with
+`DecoherenceBudget`:
+
+```python
+# In qubitos/calibrator/fingerprint.py — new method on CalibrationFingerprint
+
+def to_decoherence_budget(
+    self,
+    warning_threshold: float = 0.3,
+    blocking_threshold: float = 0.8,
+) -> DecoherenceBudget:
+    """Create a DecoherenceBudget from this fingerprint's calibration data.
+
+    Extracts T1/T2 for each qubit and registers them in the budget.
+
+    Args:
+        warning_threshold: T2 fraction for warnings.
+        blocking_threshold: T2 fraction for blocking.
+
+    Returns:
+        A new DecoherenceBudget with all qubits registered.
+    """
+    from qubitos.temporal import DecoherenceBudget
+
+    return DecoherenceBudget.from_calibration(
+        qubit_calibrations=list(self.qubit_calibrations.values()),
+        warning_threshold=warning_threshold,
+        blocking_threshold=blocking_threshold,
+    )
+```
+
+This is the key integration point that connects existing calibration data
+(T1/T2 per qubit) to the new temporal model.
+
+### 8.6 CLI Integration
+
+The CLI should surface decoherence budget status when executing sequences.
+This is a minimal change to the existing execution command:
+
+```python
+# Sketch for CLI integration
+
+def execute_sequence_command(sequence: PulseSequence, shots: int) -> None:
+    """Execute a pulse sequence with temporal validation."""
+
+    # Validate
+    result = validate_pulse_sequence(sequence)
+
+    if not result.valid:
+        print("Sequence validation FAILED:")
+        for msg in result.messages:
+            print(f"  ERROR: {msg}")
+        sys.exit(1)
+
+    # Warnings are not fatal but should be visible
+    if result.budget_result and result.budget_result.status == BudgetStatus.WARNING:
+        print(f"  WARNING: {result.budget_result.message}")
+
+    # AWG quantization info
+    for pid, qr in result.awg_quantization.items():
+        if qr.delta_ns != 0:
+            print(
+                f"  INFO: Pulse '{pid}' quantized from "
+                f"{qr.requested_ns:.3f} ns to {qr.actual_ns:.3f} ns"
+            )
+
+    # Execute
+    response = client.execute_pulse_sequence(sequence, shots)
+    print(f"Execution complete: {response.message}")
+```
+
+---
+
+## 9. Integration Points
+
+The time model touches every layer of QubitOS. This section maps the
+integration points, data flow, and contracts between subsystems.
+
+### 9.1 Data Flow Overview
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                       USER / CLI                                │
+│  PulseSequenceBuilder                                           │
+│    .add_pulse(...)                                              │
+│    .add_constraint(...)                                         │
+│    .build()                                                     │
+└────────────────────┬────────────────────────────────────────────┘
+                     │ PulseSequence
+                     ▼
+┌─────────────────────────────────────────────────────────────────┐
+│                   VALIDATION PIPELINE                            │
+│                                                                 │
+│  ┌──────────────┐  ┌──────────────┐  ┌────────────────────┐    │
+│  │ Per-Pulse    │  │ AWG Clock    │  │ Temporal            │    │
+│  │ Validation   │──│ Quantization │──│ Constraint Check    │    │
+│  │ (existing)   │  │ (new)        │  │ (new)               │    │
+│  └──────────────┘  └──────────────┘  └────────────────────┘    │
+│                                             │                   │
+│  ┌──────────────────────────────────────────┘                   │
+│  │                                                              │
+│  ▼                                                              │
+│  ┌──────────────────────────────────────┐                       │
+│  │ Decoherence Budget Check             │                       │
+│  │ (new — consumes T1/T2 from calib)    │                       │
+│  └──────────────────────────────────────┘                       │
+└────────────────────┬────────────────────────────────────────────┘
+                     │ Validated PulseSequence + QuantizationResults
+                     ▼
+┌─────────────────────────────────────────────────────────────────┐
+│                    PROTO SERIALIZATION                           │
+│  PulseSequence → ExecutePulseSequenceRequest (protobuf)         │
+└────────────────────┬────────────────────────────────────────────┘
+                     │ gRPC
+                     ▼
+┌─────────────────────────────────────────────────────────────────┐
+│                    RUST HAL SERVER                               │
+│                                                                 │
+│  ┌──────────────────────────────────────┐                       │
+│  │ validate_execute_pulse_sequence()    │                       │
+│  │  - Re-validates constraints          │                       │
+│  │  - Checks AWG alignment (authoritative)                      │
+│  │  - Verifies decoherence budget       │                       │
+│  └──────────────────────────────────────┘                       │
+│                     │                                            │
+│                     ▼                                            │
+│  ┌──────────────────────────────────────┐                       │
+│  │ Hardware Execution                   │                       │
+│  │  - Programs AWG with quantized pulses│                       │
+│  │  - Triggers in scheduled order       │                       │
+│  └──────────────────────────────────────┘                       │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+### 9.2 GRAPE Optimizer Integration
+
+The GRAPE optimizer produces optimized pulse envelopes. The time model
+connects to GRAPE at two points:
+
+| Integration Point | Direction | Data | Notes |
+|-------------------|-----------|------|-------|
+| Duration input | User → GRAPE | `duration_ns: float` | Now `f64` throughout; no more int32 truncation |
+| AWG pre-quantization | User → GRAPE | `AWGClockConfig` | Duration quantized *before* optimization starts; GRAPE optimizes for achievable duration |
+| Budget check | GRAPE → User | `DecoherenceBudget` | Post-optimization check: does the optimized pulse fit within coherence window? |
+| Decoherence-aware cost (v0.4.0) | Calib → GRAPE | `T1, T2` from budget | Lindbladian terms in cost function; NOT in v0.2.0 |
+
+**v0.2.0 contract:**
+
+```python
+# Before calling GRAPE, quantize the requested duration
+awg = AWGClockConfig.preset_2gsps()
+qr = awg.quantize_duration(config.duration_ns)
+
+# Use the quantized duration for optimization
+config = dataclasses.replace(config, duration_ns=qr.actual_ns)
+optimizer = GrapeOptimizer(config)
+result = optimizer.optimize(hamiltonian, target_unitary)
+
+# After optimization, check budget
+budget = calibration.to_decoherence_budget()
+for qubit_id in target_qubits:
+    budget.consume(qubit_id, qr.actual_ns, label="X90_gate")
+    status = budget.status(qubit_id)
+    if status == BudgetStatus.EXCEEDED:
+        raise CoherenceBudgetExceeded(qubit_id, budget.summary(qubit_id))
+```
+
+### 9.3 Calibration System Integration
+
+The calibration system is the *source* of T1/T2 data that feeds into
+`DecoherenceBudget`. The integration is mediated by the
+`CalibrationFingerprint.to_decoherence_budget()` method defined in
+Section 8.5.
+
+```
+┌───────────────────────┐
+│ CalibrationFingerprint │
+│                       │
+│  qubit_calibrations:  │
+│    Q0: {t1: 50μs,     │
+│         t2: 30μs, ...}│
+│    Q1: {t1: 45μs,     │
+│         t2: 25μs, ...}│
+└───────────┬───────────┘
+            │ .to_decoherence_budget()
+            ▼
+┌───────────────────────┐
+│  DecoherenceBudget    │
+│                       │
+│  budgets:             │
+│    Q0: QubitDecBudget │
+│      t1_ns: 50000     │
+│      t2_ns: 30000     │
+│      consumed: 0      │
+│    Q1: QubitDecBudget │
+│      t1_ns: 45000     │
+│      t2_ns: 25000     │
+│      consumed: 0      │
+└───────────────────────┘
+```
+
+**Staleness protection:** `CalibrationFingerprint` includes a `timestamp`
+field. When constructing a `DecoherenceBudget`, the system should warn
+if the calibration data is older than a configurable threshold (default:
+1 hour). Stale T1/T2 values may be optimistic or pessimistic, leading
+to incorrect budget calculations.
+
+```python
+# Staleness check (suggested for v0.2.0, required for v0.3.0)
+if fingerprint.age > timedelta(hours=1):
+    warnings.warn(
+        f"Calibration data is {fingerprint.age} old. "
+        "T1/T2 values may have drifted.",
+        CalibrationStalenessWarning,
+    )
+```
+
+### 9.4 Validation Pipeline Integration
+
+The existing validation pipeline (Python and Rust) operates on single
+pulses. The time model extends it with sequence-level validation.
+
+| Validator | Layer | Input | Checks | New in v0.2.0 |
+|-----------|-------|-------|--------|---------------|
+| `validate_pulse_envelope()` | Python | Single pulse | NaN, amplitude, length | No (existing) |
+| `validate_calibration_t1_t2()` | Python | T1, T2 | Positivity, T2 ≤ 2·T1 | No (existing) |
+| `validate_pulse_sequence()` | Python | PulseSequence | AWG quant, constraints, budget | **Yes** |
+| `validate_execute_pulse_request()` | Rust | Single request | Duration, amplitude, envelope | No (existing) |
+| `validate_execute_pulse_sequence()` | Rust | Sequence request | Re-validate all above | **Yes** |
+
+**Call flow for sequence validation:**
+
+```
+validate_pulse_sequence(seq)
+  │
+  ├── for each pulse in seq.pulses:
+  │     validate_pulse_envelope(pulse.shape)          # existing
+  │
+  ├── if seq.awg_config is not None:
+  │     for each pulse in seq.pulses:
+  │       awg_config.quantize_duration(pulse.duration_ns)  # new
+  │
+  ├── for each constraint in seq.constraints:
+  │     constraint.check(pulse_times...)              # new
+  │
+  └── if seq.budget is not None:
+        for each pulse in seq.pulses (sorted by start_time):
+          budget.consume(qubit_id, pulse.duration_ns)  # new
+          check budget.status()
+```
+
+### 9.5 Error Budget Spec Integration (GAP 2)
+
+The Error Budget spec (GAP 2, `ERROR-BUDGET-SPEC.md`) defines a
+comprehensive `ErrorBudget` that accounts for all error sources: gate
+infidelity, readout error, leakage, crosstalk, and **decoherence**.
+
+`DecoherenceBudget` from this spec is one *component* of the full
+`ErrorBudget`:
+
+```
+ErrorBudget (GAP 2)
+├── GateInfidelityBudget
+│     gate errors from imperfect unitaries
+├── ReadoutErrorBudget
+│     measurement assignment errors
+├── LeakageBudget
+│     population outside computational subspace
+├── CrosstalkBudget
+│     unwanted qubit-qubit interactions
+└── DecoherenceBudget (this spec, GAP 1)  ◄──── HERE
+      T1/T2 coherence consumption
+```
+
+**Interface contract:** `DecoherenceBudget` exposes a method
+`to_error_contribution()` that returns a float in [0, 1] representing
+the fraction of the error budget consumed by decoherence. This is used
+by `ErrorBudget.total()` in GAP 2:
+
+```python
+# DecoherenceBudget contributes to ErrorBudget (defined in GAP 2)
+class DecoherenceBudget:
+    def to_error_contribution(self, qubit_id: int) -> float:
+        """Return the decoherence error probability for this qubit.
+
+        This is the maximum of relaxation and dephasing error:
+            max(1 - exp(-t_consumed / T1), 1 - exp(-t_consumed / T2))
+
+        Returns:
+            Float in [0, 1]. Used by ErrorBudget.total() in GAP 2.
+        """
+        qb = self.budgets[qubit_id]
+        t = qb.consumed_ns
+        p_relax = 1.0 - math.exp(-t / qb.t1_ns) if qb.t1_ns > 0 else 1.0
+        p_dephase = 1.0 - math.exp(-t / qb.t2_ns) if qb.t2_ns > 0 else 1.0
+        return max(p_relax, p_dephase)
+```
+
+### 9.6 HAL (Hardware Abstraction Layer) Integration
+
+The Rust HAL receives the serialized `PulseSequence` via gRPC and is the
+authoritative validator. Even if the Python client validates locally, the
+HAL re-validates because:
+
+1. The Python client may be out of date.
+2. The actual AWG configuration is known only on the server side.
+3. Trust boundary: the server does not trust the client.
+
+**HAL validation contract:**
+
+```rust
+// qubit-os-hardware/src/validation/temporal.rs
+
+/// Validate a complete pulse sequence request.
+///
+/// This is the server-side (authoritative) validation.
+/// Returns Ok(()) or a vector of all violations found.
+pub fn validate_execute_pulse_sequence(
+    request: &ExecutePulseSequenceRequest,
+    hardware_config: &HardwareConfig,
+) -> Result<(), Vec<ValidationError>> {
+    let mut errors = Vec::new();
+
+    // 1. Per-pulse validation (existing)
+    for pulse in &request.pulses {
+        if let Err(e) = validate_execute_pulse_request(pulse) {
+            errors.push(e);
+        }
+    }
+
+    // 2. AWG quantization check (authoritative — uses real hardware config)
+    let awg = hardware_config.awg_clock_config();
+    for pulse in &request.pulses {
+        match awg.validate_duration(pulse.duration_ns, MAX_QUANTIZATION_ERROR) {
+            Ok(_) => {}
+            Err(e) => errors.push(ValidationError::from(e)),
+        }
+    }
+
+    // 3. Temporal constraint satisfaction
+    for constraint in &request.constraints {
+        let result = check_constraint(constraint, &request.pulses);
+        if !result.satisfied {
+            errors.push(ValidationError::ConstraintViolation {
+                kind: constraint.kind,
+                pulse_a: constraint.pulse_a_id.clone(),
+                pulse_b: constraint.pulse_b_id.clone(),
+                detail: result.detail,
+            });
+        }
+    }
+
+    // 4. Decoherence budget (if calibration data available)
+    if let Some(ref budget_config) = request.budget_config {
+        if let Some(ref calib) = hardware_config.current_calibration() {
+            let budget_result = check_decoherence_budget(
+                &request.pulses,
+                calib,
+                budget_config,
+            );
+            if budget_result.exceeded {
+                errors.push(ValidationError::CoherenceBudgetExceeded {
+                    detail: budget_result.detail,
+                });
+            }
+        }
+    }
+
+    if errors.is_empty() {
+        Ok(())
+    } else {
+        Err(errors)
+    }
+}
+```
+
+### 9.7 Integration Summary Table
+
+| Subsystem | Consumes From Time Model | Provides To Time Model | v0.2.0 Status |
+|-----------|--------------------------|------------------------|---------------|
+| GRAPE optimizer | `AWGClockConfig` (pre-quant duration) | Optimized pulse envelopes | Implemented |
+| Calibration | — | T1/T2 via `to_decoherence_budget()` | Implemented |
+| Validation (Python) | `PulseSequence` | `SequenceValidationResult` | Implemented |
+| Validation (Rust) | `ExecutePulseSequenceRequest` | `Vec<ValidationError>` or `Ok(())` | Implemented |
+| Error Budget (GAP 2) | `to_error_contribution()` | Error budget allocation | Interface only |
+| CLI | Validation results, budget status | — | Implemented |
+| Scheduler (v0.3.0) | `TemporalConstraint` list | Assigned start times | NOT implemented |
