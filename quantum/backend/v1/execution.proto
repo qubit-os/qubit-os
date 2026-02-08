@@ -9,6 +9,7 @@ package quantum.backend.v1;
 import "quantum/common/v1/common.proto";
 import "quantum/pulse/v1/pulse.proto";
 import "quantum/pulse/v1/temporal.proto";
+import "quantum/error/v1/error_budget.proto";
 
 option java_multiple_files = true;
 option java_package = "io.qubitos.backend.v1";
@@ -162,6 +163,15 @@ message MeasurementResult {
 
   // Execution timing statistics.
   ExecutionTiming timing = 12;
+
+  // --- Error Budget (v0.2.0) ---
+
+  // Predicted fidelity from error budget analysis (if computed).
+  // 0.0 if not computed.
+  double predicted_fidelity = 13;
+
+  // Full error budget analysis (if requested).
+  quantum.error.v1.ErrorBudgetSummary error_budget = 14;
 
   // Reserved for future use.
   reserved 50 to 100;
