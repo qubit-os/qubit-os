@@ -50,7 +50,7 @@ Generate optimal control pulses for quantum gates using the **GRadient Ascent Pu
 
 ```python
 from qubitos.pulsegen import GrapeOptimizer, GrapeConfig
-from qubitos.pulsegen.hamiltonians import TransmonHamiltonian
+from qubitos.pulsegen.hamiltonians import get_target_unitary
 
 # Configure optimization
 config = GrapeConfig(
@@ -61,8 +61,9 @@ config = GrapeConfig(
 
 # Optimize X-gate pulse
 optimizer = GrapeOptimizer(config)
-result = optimizer.optimize(gate_type="X", qubit=0)
-print(f"Achieved fidelity: {result.fidelity:.4f}")
+target = get_target_unitary("X", num_qubits=1)
+result = optimizer.optimize(target, num_qubits=1)
+print(f"Achieved fidelity: {result.fidelity:.4f}")  # result.fidelity is the final gate fidelity
 ```
 
 ### 2. Hardware Abstraction Layer (HAL)

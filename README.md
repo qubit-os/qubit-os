@@ -140,7 +140,7 @@ pytest
 pytest --cov=qubitos --cov-report=html
 
 # Specific module
-pytest tests/unit/test_pulsegen.py
+pytest tests/unit/test_grape.py
 
 # Integration tests (requires HAL running)
 pytest tests/integration/
@@ -148,8 +148,8 @@ pytest tests/integration/
 
 ## Documentation
 
-- [Design Document](docs/QubitOS-Design-v0.5.0.md)
-- [CLI Reference](docs/cli-reference.md)
+- [Design Document](docs/specs/QubitOS-Design-v0.5.0.md)
+- [CLI Reference](docs/api/cli.md)
 - [API Reference](docs/api/)
 - [User Guide](docs/guides/)
 

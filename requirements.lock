@@ -94,7 +94,7 @@ python-dateutil==2.9.0.post0
 PyYAML==6.0.3
 pyyaml_env_tag==1.1
 pyzmq==27.1.0
-qubit-os-proto @ file:///home/rylan/dev/research/qubit-os/qubit-os-proto/dist/qubit_os_proto-0.1.0-py3-none-any.whl#sha256=850a6741f3c1e53665f8aea390a26da5ba886629bf41a6f448705d738bbd8b7a
+# qubit-os-proto: install from sibling repo (pip install -e ../qubit-os-proto)
 -e git+https://github.com/qubit-os/qubit-os-core.git@9d9ad6b0e0dd5081bb0605700d239070c5dd5f0f#egg=qubitos
 qutip==5.2.3
 referencing==0.37.0

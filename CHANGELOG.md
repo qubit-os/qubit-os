@@ -58,12 +58,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Comprehensive error messages
 
 - **CLI** (`qubitos.cli`)
-  - `qos pulse generate` - Generate optimized pulses
-  - `qos pulse show` - Display pulse information
-  - `qos calibration load` - Load calibration data
-  - `qos calibration validate` - Validate calibration
-  - `qos hal status` - Check HAL server status
-  - `qos hal execute` - Execute pulse on hardware
+  - `qubit-os pulse generate` - Generate optimized pulses
+  - `qubit-os pulse show` - Display pulse information
+  - `qubit-os calibration load` - Load calibration data
+  - `qubit-os calibration validate` - Validate calibration
+  - `qubit-os hal status` - Check HAL server status
+  - `qubit-os hal execute` - Execute pulse on hardware
   - Rich terminal output with tables and progress bars
 
 #### Documentation
@@ -93,13 +93,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Dependencies
 - Python >= 3.11
-- numpy >= 1.24
-- scipy >= 1.11
+- numpy >= 1.26
+- scipy >= 1.12
 - grpcio >= 1.60
 - protobuf >= 4.25
-- click >= 8.1
+- click >= 8.0
 - pydantic >= 2.5
-- rich >= 13.7
+- rich >= 13.0
 - Optional: matplotlib, jupyter, qutip
 
 ## [0.0.1] - 2026-01-26

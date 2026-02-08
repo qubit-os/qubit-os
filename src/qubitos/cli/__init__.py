@@ -18,5 +18,5 @@ Example:
     $ qubit-os pulse execute pulse.json --shots 1000
 """
 
-# CLI implementation will be added in Phase 1
+
 __all__: list[str] = []

@@ -24,7 +24,6 @@ classifiers = [
 requires-python = ">=3.11"
 dependencies = [
     "grpcio>=1.60.0",
-    "grpcio-tools>=1.60.0",
     "protobuf>=4.25.0",
     "numpy>=1.26.0",
     "scipy>=1.12.0",
@@ -48,6 +47,7 @@ dev = [
     "types-grpcio>=1.0.0",
     "scipy-stubs>=1.17.0",
     "pre-commit>=3.6.0",
+    "grpcio-tools>=1.60.0",
     # AgentBible - validation and reproducibility framework
     # Not on PyPI yet; install separately: pip install git+https://github.com/rylanmalarchick/research-code-principles.git
 ]
