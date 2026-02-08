@@ -156,6 +156,11 @@ class TestTensorProduct:
         result = tensor_product([PAULI_I, PAULI_I])
         assert np.allclose(result, np.eye(4))
 
+    def test_tensor_product_empty_list_raises(self):
+        """Test that empty list raises ValueError."""
+        with pytest.raises(ValueError, match="at least one operator"):
+            tensor_product([])
+
 
 class TestPauliStringToMatrix:
     """Tests for pauli_string_to_matrix function.

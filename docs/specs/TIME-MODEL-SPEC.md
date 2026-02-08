@@ -1497,3 +1497,639 @@ impl TemporalConstraint {
     }
 }
 ```
+
+### 5.4 DecoherenceBudget
+
+Tracks cumulative time consumption against T1/T2 coherence limits per qubit.
+
+The key insight: every nanosecond of a pulse sequence — whether active
+(pulse being applied) or idle (waiting between pulses) — consumes coherence.
+The decoherence budget makes this consumption explicit and trackable.
+
+#### 5.4.1 Physics Background
+
+For a qubit with relaxation time T1 and dephasing time T2, the probability
+of error after time *t* is:
+
+```
+p_relax(t) = 1 - exp(-t / T1)       # energy relaxation (T1)
+p_dephase(t) = 1 - exp(-t / T2)     # pure dephasing (T2)
+```
+
+These are the leading-order decoherence contributions. In practice, T2
+includes both T1 effects and pure dephasing (T_phi), related by:
+
+```
+1/T2 = 1/(2·T1) + 1/T_phi
+```
+
+The physical constraint T2 ≤ 2·T1 follows directly.
+
+For a sequence of operations with total active time t_active and total idle
+time t_idle on a qubit, the relevant time is t_total = t_active + t_idle.
+The "fraction of coherence consumed" is:
+
+```
+f_T1 = t_total / T1
+f_T2 = t_total / T2
+```
+
+When f_T2 approaches 1.0, the qubit has lost most of its phase coherence.
+When f_T1 approaches 1.0, the qubit is likely to have decayed to the ground
+state.
+
+#### 5.4.2 Python Implementation
+
+```python
+from __future__ import annotations
+
+import math
+from dataclasses import dataclass, field
+from typing import Dict, List, Optional
+
+
+@dataclass
+class QubitDecoherenceBudget:
+    """Tracks coherence consumption for a single qubit.
+
+    Attributes:
+        qubit_id: Identifier for this qubit.
+        t1_us: T1 relaxation time in microseconds. Must be > 0.
+        t2_us: T2 dephasing time in microseconds. Must be > 0, <= 2*T1.
+        active_duration_ns: Total time this qubit is being driven (pulses).
+        idle_duration_ns: Total time this qubit is idle (gaps between pulses).
+    """
+
+    qubit_id: int
+    t1_us: float
+    t2_us: float
+    active_duration_ns: float = 0.0
+    idle_duration_ns: float = 0.0
+
+    def __post_init__(self) -> None:
+        if self.t1_us <= 0:
+            raise ValueError(f"t1_us must be > 0, got {self.t1_us}")
+        if self.t2_us <= 0:
+            raise ValueError(f"t2_us must be > 0, got {self.t2_us}")
+        if self.t2_us > 2 * self.t1_us + 1e-9:
+            raise ValueError(
+                f"t2_us ({self.t2_us}) must be <= 2 * t1_us ({2 * self.t1_us})"
+            )
+
+    @property
+    def t1_ns(self) -> float:
+        """T1 in nanoseconds."""
+        return self.t1_us * 1000.0
+
+    @property
+    def t2_ns(self) -> float:
+        """T2 in nanoseconds."""
+        return self.t2_us * 1000.0
+
+    @property
+    def total_duration_ns(self) -> float:
+        """Total time consumed on this qubit."""
+        return self.active_duration_ns + self.idle_duration_ns
+
+    @property
+    def t1_fraction(self) -> float:
+        """Fraction of T1 consumed. 0 = fresh, 1 = fully decayed."""
+        return self.total_duration_ns / self.t1_ns
+
+    @property
+    def t2_fraction(self) -> float:
+        """Fraction of T2 consumed. 0 = fresh, 1 = fully dephased."""
+        return self.total_duration_ns / self.t2_ns
+
+    @property
+    def relaxation_probability(self) -> float:
+        """Probability of T1 relaxation error: 1 - exp(-t/T1)."""
+        return 1.0 - math.exp(-self.total_duration_ns / self.t1_ns)
+
+    @property
+    def dephasing_probability(self) -> float:
+        """Probability of T2 dephasing error: 1 - exp(-t/T2)."""
+        return 1.0 - math.exp(-self.total_duration_ns / self.t2_ns)
+
+    @property
+    def coherence_remaining(self) -> float:
+        """Fraction of coherence remaining: exp(-t/T2).
+
+        This is the amplitude of the off-diagonal density matrix elements
+        relative to their initial value.
+        """
+        return math.exp(-self.total_duration_ns / self.t2_ns)
+
+    def remaining_time_ns(self, target_fraction: float = 1.0) -> float:
+        """Nanoseconds of T2 budget remaining before reaching target_fraction.
+
+        Args:
+            target_fraction: The T2 fraction at which we consider the budget
+                exhausted. Default is 1.0 (full T2).
+
+        Returns:
+            Remaining nanoseconds. May be negative if already exceeded.
+        """
+        budget_ns = target_fraction * self.t2_ns
+        return budget_ns - self.total_duration_ns
+
+    def add_pulse(self, duration_ns: float) -> None:
+        """Record a pulse of given duration on this qubit.
+
+        Args:
+            duration_ns: Pulse duration in nanoseconds. Must be >= 0.
+        """
+        if duration_ns < 0:
+            raise ValueError(f"duration_ns must be >= 0, got {duration_ns}")
+        object.__setattr__(
+            self, "active_duration_ns", self.active_duration_ns + duration_ns
+        )
+
+    def add_idle(self, duration_ns: float) -> None:
+        """Record idle time on this qubit.
+
+        Args:
+            duration_ns: Idle duration in nanoseconds. Must be >= 0.
+        """
+        if duration_ns < 0:
+            raise ValueError(f"duration_ns must be >= 0, got {duration_ns}")
+        object.__setattr__(
+            self, "idle_duration_ns", self.idle_duration_ns + duration_ns
+        )
+
+
+class BudgetStatus:
+    """Status of a decoherence budget check."""
+
+    OK = "ok"
+    WARNING = "warning"
+    EXCEEDED = "exceeded"
+
+
+@dataclass
+class BudgetCheckResult:
+    """Result of checking the decoherence budget.
+
+    Attributes:
+        status: "ok", "warning", or "exceeded".
+        qubit_details: Per-qubit details.
+        worst_t2_fraction: The highest T2 fraction across all qubits.
+        worst_qubit_id: The qubit with the worst T2 fraction.
+        message: Human-readable summary.
+    """
+
+    status: str
+    qubit_details: Dict[int, QubitDecoherenceBudget]
+    worst_t2_fraction: float
+    worst_qubit_id: int
+    message: str
+
+
+@dataclass
+class DecoherenceBudget:
+    """Tracks decoherence consumption across all qubits in a sequence.
+
+    Attributes:
+        qubits: Per-qubit budgets, keyed by qubit_id.
+        warning_threshold: T2 fraction at which to issue a warning.
+            Default: 0.3 (30% of T2 consumed).
+        blocking_threshold: T2 fraction at which to block further pulses.
+            Default: 0.8 (80% of T2 consumed).
+    """
+
+    qubits: Dict[int, QubitDecoherenceBudget] = field(default_factory=dict)
+    warning_threshold: float = 0.3
+    blocking_threshold: float = 0.8
+
+    def __post_init__(self) -> None:
+        if not (0 < self.warning_threshold < self.blocking_threshold <= 1.0):
+            raise ValueError(
+                f"Required: 0 < warning ({self.warning_threshold}) "
+                f"< blocking ({self.blocking_threshold}) <= 1.0"
+            )
+
+    def register_qubit(self, qubit_id: int, t1_us: float, t2_us: float) -> None:
+        """Register a qubit with its coherence times.
+
+        If the qubit is already registered, this is a no-op (to allow
+        idempotent registration from calibration data).
+        """
+        if qubit_id not in self.qubits:
+            self.qubits[qubit_id] = QubitDecoherenceBudget(
+                qubit_id=qubit_id, t1_us=t1_us, t2_us=t2_us
+            )
+
+    @classmethod
+    def from_calibration(
+        cls,
+        qubit_calibrations: List,
+        warning_threshold: float = 0.3,
+        blocking_threshold: float = 0.8,
+    ) -> DecoherenceBudget:
+        """Create a DecoherenceBudget from calibration data.
+
+        Args:
+            qubit_calibrations: List of QubitCalibration objects (or any object
+                with qubit_id, t1_us, t2_us attributes).
+            warning_threshold: T2 fraction for warnings.
+            blocking_threshold: T2 fraction for blocking.
+
+        Returns:
+            A new DecoherenceBudget with all qubits registered.
+        """
+        budget = cls(
+            warning_threshold=warning_threshold,
+            blocking_threshold=blocking_threshold,
+        )
+        for cal in qubit_calibrations:
+            budget.register_qubit(cal.qubit_id, cal.t1_us, cal.t2_us)
+        return budget
+
+    def add_pulse(self, qubit_id: int, duration_ns: float) -> None:
+        """Record a pulse on a qubit.
+
+        Raises:
+            KeyError: If qubit_id is not registered.
+        """
+        if qubit_id not in self.qubits:
+            raise KeyError(
+                f"Qubit {qubit_id} not registered in decoherence budget. "
+                f"Registered qubits: {list(self.qubits.keys())}"
+            )
+        self.qubits[qubit_id].add_pulse(duration_ns)
+
+    def add_idle(self, qubit_id: int, duration_ns: float) -> None:
+        """Record idle time on a qubit.
+
+        Raises:
+            KeyError: If qubit_id is not registered.
+        """
+        if qubit_id not in self.qubits:
+            raise KeyError(
+                f"Qubit {qubit_id} not registered in decoherence budget. "
+                f"Registered qubits: {list(self.qubits.keys())}"
+            )
+        self.qubits[qubit_id].add_idle(duration_ns)
+
+    def add_global_idle(self, duration_ns: float) -> None:
+        """Record idle time on all registered qubits.
+
+        Used when the entire system is idle (e.g., waiting between sequence steps).
+        """
+        for qubit in self.qubits.values():
+            qubit.add_idle(duration_ns)
+
+    def check(self) -> BudgetCheckResult:
+        """Check the decoherence budget across all qubits.
+
+        Returns:
+            BudgetCheckResult with status, per-qubit details, and worst case.
+        """
+        if not self.qubits:
+            return BudgetCheckResult(
+                status=BudgetStatus.OK,
+                qubit_details={},
+                worst_t2_fraction=0.0,
+                worst_qubit_id=-1,
+                message="No qubits registered.",
+            )
+
+        worst_fraction = 0.0
+        worst_id = -1
+        for qid, qbudget in self.qubits.items():
+            if qbudget.t2_fraction > worst_fraction:
+                worst_fraction = qbudget.t2_fraction
+                worst_id = qid
+
+        if worst_fraction >= self.blocking_threshold:
+            status = BudgetStatus.EXCEEDED
+            message = (
+                f"Decoherence budget EXCEEDED on qubit {worst_id}: "
+                f"T2 fraction = {worst_fraction:.3f} "
+                f"(threshold: {self.blocking_threshold:.3f}). "
+                f"Total time: {self.qubits[worst_id].total_duration_ns:.1f} ns, "
+                f"T2: {self.qubits[worst_id].t2_ns:.1f} ns. "
+                f"Coherence remaining: {self.qubits[worst_id].coherence_remaining:.4f}."
+            )
+        elif worst_fraction >= self.warning_threshold:
+            status = BudgetStatus.WARNING
+            remaining = self.qubits[worst_id].remaining_time_ns(self.blocking_threshold)
+            message = (
+                f"Decoherence budget WARNING on qubit {worst_id}: "
+                f"T2 fraction = {worst_fraction:.3f} "
+                f"(warning at {self.warning_threshold:.3f}, "
+                f"blocking at {self.blocking_threshold:.3f}). "
+                f"Remaining before block: {remaining:.1f} ns."
+            )
+        else:
+            message = (
+                f"Decoherence budget OK. Worst qubit: {worst_id} "
+                f"at T2 fraction = {worst_fraction:.4f}."
+            )
+            status = BudgetStatus.OK
+
+        return BudgetCheckResult(
+            status=status,
+            qubit_details=dict(self.qubits),
+            worst_t2_fraction=worst_fraction,
+            worst_qubit_id=worst_id,
+            message=message,
+        )
+
+    @property
+    def total_duration_ns(self) -> float:
+        """Maximum total duration across all qubits."""
+        if not self.qubits:
+            return 0.0
+        return max(q.total_duration_ns for q in self.qubits.values())
+```
+
+#### 5.4.3 Rust Implementation
+
+```rust
+// src/temporal/budget.rs
+
+use std::collections::HashMap;
+use serde::{Deserialize, Serialize};
+use thiserror::Error;
+
+#[derive(Debug, Clone, Error)]
+pub enum BudgetError {
+    #[error("t1_us must be > 0, got {0}")]
+    InvalidT1(f64),
+    #[error("t2_us must be > 0, got {0}")]
+    InvalidT2(f64),
+    #[error("t2_us ({t2}) must be <= 2 * t1_us ({t1_limit})")]
+    T2ExceedsLimit { t2: f64, t1_limit: f64 },
+    #[error("qubit {0} not registered in decoherence budget")]
+    UnregisteredQubit(u32),
+    #[error("duration_ns must be >= 0, got {0}")]
+    NegativeDuration(f64),
+    #[error("decoherence budget exceeded on qubit {qubit_id}: T2 fraction = {fraction:.3}, threshold = {threshold:.3}")]
+    BudgetExceeded {
+        qubit_id: u32,
+        fraction: f64,
+        threshold: f64,
+    },
+    #[error("invalid thresholds: need 0 < warning ({warning}) < blocking ({blocking}) <= 1.0")]
+    InvalidThresholds { warning: f64, blocking: f64 },
+}
+
+/// Per-qubit coherence budget tracking.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct QubitDecoherenceBudget {
+    pub qubit_id: u32,
+    pub t1_us: f64,
+    pub t2_us: f64,
+    pub active_duration_ns: f64,
+    pub idle_duration_ns: f64,
+}
+
+impl QubitDecoherenceBudget {
+    pub fn new(qubit_id: u32, t1_us: f64, t2_us: f64) -> Result<Self, BudgetError> {
+        if t1_us <= 0.0 {
+            return Err(BudgetError::InvalidT1(t1_us));
+        }
+        if t2_us <= 0.0 {
+            return Err(BudgetError::InvalidT2(t2_us));
+        }
+        if t2_us > 2.0 * t1_us + 1e-9 {
+            return Err(BudgetError::T2ExceedsLimit {
+                t2: t2_us,
+                t1_limit: 2.0 * t1_us,
+            });
+        }
+        Ok(Self {
+            qubit_id,
+            t1_us,
+            t2_us,
+            active_duration_ns: 0.0,
+            idle_duration_ns: 0.0,
+        })
+    }
+
+    pub fn t1_ns(&self) -> f64 {
+        self.t1_us * 1000.0
+    }
+
+    pub fn t2_ns(&self) -> f64 {
+        self.t2_us * 1000.0
+    }
+
+    pub fn total_duration_ns(&self) -> f64 {
+        self.active_duration_ns + self.idle_duration_ns
+    }
+
+    pub fn t1_fraction(&self) -> f64 {
+        self.total_duration_ns() / self.t1_ns()
+    }
+
+    pub fn t2_fraction(&self) -> f64 {
+        self.total_duration_ns() / self.t2_ns()
+    }
+
+    /// Probability of T1 relaxation error: 1 - exp(-t/T1).
+    pub fn relaxation_probability(&self) -> f64 {
+        1.0 - (-self.total_duration_ns() / self.t1_ns()).exp()
+    }
+
+    /// Probability of T2 dephasing error: 1 - exp(-t/T2).
+    pub fn dephasing_probability(&self) -> f64 {
+        1.0 - (-self.total_duration_ns() / self.t2_ns()).exp()
+    }
+
+    /// Fraction of coherence remaining: exp(-t/T2).
+    pub fn coherence_remaining(&self) -> f64 {
+        (-self.total_duration_ns() / self.t2_ns()).exp()
+    }
+
+    /// Nanoseconds of T2 budget remaining before reaching target_fraction.
+    pub fn remaining_time_ns(&self, target_fraction: f64) -> f64 {
+        let budget_ns = target_fraction * self.t2_ns();
+        budget_ns - self.total_duration_ns()
+    }
+
+    pub fn add_pulse(&mut self, duration_ns: f64) -> Result<(), BudgetError> {
+        if duration_ns < 0.0 {
+            return Err(BudgetError::NegativeDuration(duration_ns));
+        }
+        self.active_duration_ns += duration_ns;
+        Ok(())
+    }
+
+    pub fn add_idle(&mut self, duration_ns: f64) -> Result<(), BudgetError> {
+        if duration_ns < 0.0 {
+            return Err(BudgetError::NegativeDuration(duration_ns));
+        }
+        self.idle_duration_ns += duration_ns;
+        Ok(())
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum BudgetStatus {
+    Ok,
+    Warning,
+    Exceeded,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct BudgetCheckResult {
+    pub status: BudgetStatus,
+    pub worst_t2_fraction: f64,
+    pub worst_qubit_id: u32,
+    pub message: String,
+}
+
+/// Tracks decoherence consumption across all qubits.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DecoherenceBudget {
+    pub qubits: HashMap<u32, QubitDecoherenceBudget>,
+    pub warning_threshold: f64,
+    pub blocking_threshold: f64,
+}
+
+impl DecoherenceBudget {
+    pub fn new(
+        warning_threshold: f64,
+        blocking_threshold: f64,
+    ) -> Result<Self, BudgetError> {
+        if !(warning_threshold > 0.0
+            && warning_threshold < blocking_threshold
+            && blocking_threshold <= 1.0)
+        {
+            return Err(BudgetError::InvalidThresholds {
+                warning: warning_threshold,
+                blocking: blocking_threshold,
+            });
+        }
+        Ok(Self {
+            qubits: HashMap::new(),
+            warning_threshold,
+            blocking_threshold,
+        })
+    }
+
+    pub fn with_defaults() -> Self {
+        Self {
+            qubits: HashMap::new(),
+            warning_threshold: 0.3,
+            blocking_threshold: 0.8,
+        }
+    }
+
+    pub fn register_qubit(
+        &mut self,
+        qubit_id: u32,
+        t1_us: f64,
+        t2_us: f64,
+    ) -> Result<(), BudgetError> {
+        if !self.qubits.contains_key(&qubit_id) {
+            let budget = QubitDecoherenceBudget::new(qubit_id, t1_us, t2_us)?;
+            self.qubits.insert(qubit_id, budget);
+        }
+        Ok(())
+    }
+
+    pub fn add_pulse(&mut self, qubit_id: u32, duration_ns: f64) -> Result<(), BudgetError> {
+        let budget = self
+            .qubits
+            .get_mut(&qubit_id)
+            .ok_or(BudgetError::UnregisteredQubit(qubit_id))?;
+        budget.add_pulse(duration_ns)
+    }
+
+    pub fn add_idle(&mut self, qubit_id: u32, duration_ns: f64) -> Result<(), BudgetError> {
+        let budget = self
+            .qubits
+            .get_mut(&qubit_id)
+            .ok_or(BudgetError::UnregisteredQubit(qubit_id))?;
+        budget.add_idle(duration_ns)
+    }
+
+    pub fn add_global_idle(&mut self, duration_ns: f64) -> Result<(), BudgetError> {
+        for budget in self.qubits.values_mut() {
+            budget.add_idle(duration_ns)?;
+        }
+        Ok(())
+    }
+
+    pub fn check(&self) -> BudgetCheckResult {
+        if self.qubits.is_empty() {
+            return BudgetCheckResult {
+                status: BudgetStatus::Ok,
+                worst_t2_fraction: 0.0,
+                worst_qubit_id: 0,
+                message: "No qubits registered.".to_string(),
+            };
+        }
+
+        let mut worst_fraction: f64 = 0.0;
+        let mut worst_id: u32 = 0;
+        for (qid, qbudget) in &self.qubits {
+            let frac = qbudget.t2_fraction();
+            if frac > worst_fraction {
+                worst_fraction = frac;
+                worst_id = *qid;
+            }
+        }
+
+        let (status, message) = if worst_fraction >= self.blocking_threshold {
+            let q = &self.qubits[&worst_id];
+            (
+                BudgetStatus::Exceeded,
+                format!(
+                    "Decoherence budget EXCEEDED on qubit {}: \
+                     T2 fraction = {:.3} (threshold: {:.3}). \
+                     Total time: {:.1} ns, T2: {:.1} ns. \
+                     Coherence remaining: {:.4}.",
+                    worst_id,
+                    worst_fraction,
+                    self.blocking_threshold,
+                    q.total_duration_ns(),
+                    q.t2_ns(),
+                    q.coherence_remaining(),
+                ),
+            )
+        } else if worst_fraction >= self.warning_threshold {
+            let remaining = self.qubits[&worst_id]
+                .remaining_time_ns(self.blocking_threshold);
+            (
+                BudgetStatus::Warning,
+                format!(
+                    "Decoherence budget WARNING on qubit {}: \
+                     T2 fraction = {:.3} (warning: {:.3}, blocking: {:.3}). \
+                     Remaining before block: {:.1} ns.",
+                    worst_id,
+                    worst_fraction,
+                    self.warning_threshold,
+                    self.blocking_threshold,
+                    remaining,
+                ),
+            )
+        } else {
+            (
+                BudgetStatus::Ok,
+                format!(
+                    "Decoherence budget OK. Worst qubit: {} at T2 fraction = {:.4}.",
+                    worst_id, worst_fraction,
+                ),
+            )
+        };
+
+        BudgetCheckResult {
+            status,
+            worst_t2_fraction: worst_fraction,
+            worst_qubit_id: worst_id,
+            message,
+        }
+    }
+
+    pub fn total_duration_ns(&self) -> f64 {
+        self.qubits
+            .values()
+            .map(|q| q.total_duration_ns())
+            .fold(0.0, f64::max)
+    }
+}
+```

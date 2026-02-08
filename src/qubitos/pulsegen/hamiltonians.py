@@ -144,11 +144,16 @@ def tensor_product(operators: list[NDArray[np.complex128]]) -> NDArray[np.comple
     """Compute tensor product of a list of operators.
 
     Args:
-        operators: List of 2x2 matrices
+        operators: List of square matrices (typically 2x2).
 
     Returns:
-        Tensor product matrix
+        Tensor product matrix.
+
+    Raises:
+        ValueError: If operators list is empty.
     """
+    if not operators:
+        raise ValueError("tensor_product requires at least one operator (got empty list)")
     result = operators[0]
     for op in operators[1:]:
         result = np.kron(result, op)  # type: ignore[assignment]
