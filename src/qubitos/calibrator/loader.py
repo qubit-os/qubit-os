@@ -374,9 +374,7 @@ class CalibrationLoader:
             with open(path, "w") as f:
                 yaml.dump(data, f, default_flow_style=False, sort_keys=False)
         except OSError as e:
-            raise CalibrationError(
-                f"Failed to write calibration file {path}: {e}"
-            ) from e
+            raise CalibrationError(f"Failed to write calibration file {path}: {e}") from e
 
         logger.info(f"Saved calibration to {path}")
 

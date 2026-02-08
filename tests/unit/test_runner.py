@@ -6,9 +6,8 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock
 
-import numpy as np
 import pytest
 
 from qubitos.calibrator.runner import CalibrationMeasurement, CalibrationRunner

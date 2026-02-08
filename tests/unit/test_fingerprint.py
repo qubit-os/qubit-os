@@ -43,7 +43,7 @@ def make_calibration(
     couplers = []
     if num_qubits >= 2:
         couplers.append(CouplerCalibration(qubit_a=0, qubit_b=1))
-    
+
     return BackendCalibration(
         name=name,
         version="1.0",
@@ -312,7 +312,7 @@ class TestFingerprintComparison:
     def test_compare_different_backends_warning(self, caplog):
         """Test warning when comparing different backends."""
         import logging
-        
+
         cal1 = make_calibration(name="backend_a")
         cal2 = make_calibration(name="backend_b")
 

@@ -86,18 +86,14 @@ class TestStandardGates:
         single_qubit = ["X", "Y", "Z", "H", "S", "T", "SX"]
         for name in single_qubit:
             G = STANDARD_GATES[name]
-            assert np.allclose(
-                G @ G.conj().T, np.eye(2)
-            ), f"{name} is not unitary"
+            assert np.allclose(G @ G.conj().T, np.eye(2)), f"{name} is not unitary"
 
     def test_two_qubit_gates_are_unitary(self):
         """Test two-qubit gates are unitary."""
         two_qubit = ["CZ", "CNOT", "SWAP", "ISWAP"]
         for name in two_qubit:
             G = STANDARD_GATES[name]
-            assert np.allclose(
-                G @ G.conj().T, np.eye(4)
-            ), f"{name} is not unitary"
+            assert np.allclose(G @ G.conj().T, np.eye(4)), f"{name} is not unitary"
 
     def test_hadamard_creates_superposition(self):
         """Test Hadamard creates equal superposition from |0>."""
@@ -123,10 +119,7 @@ class TestStandardGates:
 
     def test_standard_gates_dict_complete(self):
         """Test standard gates dictionary has expected gates."""
-        expected_gates = [
-            "I", "X", "Y", "Z", "H", "S", "T", "SX",
-            "CZ", "CNOT", "SWAP", "ISWAP"
-        ]
+        expected_gates = ["I", "X", "Y", "Z", "H", "S", "T", "SX", "CZ", "CNOT", "SWAP", "ISWAP"]
         for gate in expected_gates:
             assert gate in STANDARD_GATES, f"{gate} missing from STANDARD_GATES"
 
@@ -164,7 +157,7 @@ class TestTensorProduct:
 
 class TestPauliStringToMatrix:
     """Tests for pauli_string_to_matrix function.
-    
+
     Uses big-endian convention: qubit 0 = leftmost position in tensor product.
     """
 
@@ -175,7 +168,7 @@ class TestPauliStringToMatrix:
 
     def test_single_pauli_two_qubit_system(self):
         """Test single Pauli X on qubit 0 in 2-qubit system.
-        
+
         Big-endian: qubit 0 = leftmost, so X0 = X ⊗ I
         """
         result = pauli_string_to_matrix("X0", num_qubits=2)
@@ -184,7 +177,7 @@ class TestPauliStringToMatrix:
 
     def test_single_pauli_on_second_qubit(self):
         """Test single Pauli X on qubit 1 in 2-qubit system.
-        
+
         Big-endian: qubit 1 = rightmost, so X1 = I ⊗ X
         """
         result = pauli_string_to_matrix("X1", num_qubits=2)
@@ -227,7 +220,7 @@ class TestPauliStringToMatrix:
 
 class TestParsePauliString:
     """Tests for parse_pauli_string function.
-    
+
     Uses big-endian convention: qubit 0 = leftmost position in tensor product.
     """
 
@@ -249,7 +242,7 @@ class TestParsePauliString:
 
     def test_subtraction(self):
         """Test subtraction in expression using negative coefficient.
-        
+
         The parser handles subtraction by converting '-' to '+-', so we use
         the explicit negative coefficient form.
         """
@@ -408,7 +401,7 @@ class TestGetTargetUnitary:
 
     def test_gate_embedding(self):
         """Test gate is embedded in larger system.
-        
+
         Uses little-endian convention: qubit 0 = rightmost (LSB).
         """
         X = get_target_unitary("X", num_qubits=2, qubit_indices=[0])
@@ -418,7 +411,7 @@ class TestGetTargetUnitary:
 
     def test_gate_on_second_qubit(self):
         """Test gate on second qubit of two-qubit system.
-        
+
         Little-endian: qubit 1 = leftmost.
         """
         X = get_target_unitary("X", num_qubits=2, qubit_indices=[1])
@@ -440,7 +433,7 @@ class TestGetTargetUnitary:
 
 class TestEmbedGate:
     """Tests for embed_gate function.
-    
+
     Uses little-endian convention: qubit 0 = rightmost (LSB) position.
     """
 

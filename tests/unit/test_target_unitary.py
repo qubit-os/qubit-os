@@ -6,11 +6,12 @@
 from __future__ import annotations
 
 import warnings
+from pathlib import Path
 
 import numpy as np
 import pytest
 
-from qubitos.target_unitary import TargetUnitary, _PROTO_FIELD_NUMBERS
+from qubitos.target_unitary import _PROTO_FIELD_NUMBERS, TargetUnitary
 
 
 class TestTargetUnitary:
@@ -19,9 +20,24 @@ class TestTargetUnitary:
     def test_all_members_exist(self):
         """All expected target unitaries are present."""
         expected = {
-            "UNSPECIFIED", "I", "X", "Y", "Z", "H", "SX", "S", "T",
-            "RX", "RY", "RZ",
-            "CZ", "CNOT", "CX", "ISWAP", "SQISWAP", "SWAP",
+            "UNSPECIFIED",
+            "I",
+            "X",
+            "Y",
+            "Z",
+            "H",
+            "SX",
+            "S",
+            "T",
+            "RX",
+            "RY",
+            "RZ",
+            "CZ",
+            "CNOT",
+            "CX",
+            "ISWAP",
+            "SQISWAP",
+            "SWAP",
             "CUSTOM",
         }
         actual = {m.name for m in TargetUnitary}
@@ -44,10 +60,17 @@ class TestTargetUnitary:
     def test_num_qubits_single(self):
         """Single-qubit gates report 1 qubit."""
         singles = [
-            TargetUnitary.I, TargetUnitary.X, TargetUnitary.Y,
-            TargetUnitary.Z, TargetUnitary.H, TargetUnitary.SX,
-            TargetUnitary.S, TargetUnitary.T,
-            TargetUnitary.RX, TargetUnitary.RY, TargetUnitary.RZ,
+            TargetUnitary.I,
+            TargetUnitary.X,
+            TargetUnitary.Y,
+            TargetUnitary.Z,
+            TargetUnitary.H,
+            TargetUnitary.SX,
+            TargetUnitary.S,
+            TargetUnitary.T,
+            TargetUnitary.RX,
+            TargetUnitary.RY,
+            TargetUnitary.RZ,
         ]
         for tu in singles:
             assert tu.num_qubits == 1, f"{tu.name} should be 1-qubit"
@@ -55,8 +78,12 @@ class TestTargetUnitary:
     def test_num_qubits_two(self):
         """Two-qubit gates report 2 qubits."""
         twos = [
-            TargetUnitary.CZ, TargetUnitary.CNOT, TargetUnitary.CX,
-            TargetUnitary.ISWAP, TargetUnitary.SQISWAP, TargetUnitary.SWAP,
+            TargetUnitary.CZ,
+            TargetUnitary.CNOT,
+            TargetUnitary.CX,
+            TargetUnitary.ISWAP,
+            TargetUnitary.SQISWAP,
+            TargetUnitary.SWAP,
         ]
         for tu in twos:
             assert tu.num_qubits == 2, f"{tu.name} should be 2-qubit"
@@ -67,8 +94,15 @@ class TestTargetUnitary:
         assert TargetUnitary.CUSTOM.num_qubits == 0
 
     def test_proto_field_numbers_complete(self):
-        """Every TargetUnitary member has a proto field number."""
+        """Every TargetUnitary member except I has a proto field number.
+
+        TargetUnitary.I is a Python-only convenience (identity gate);
+        it has no corresponding proto GateType enum value.
+        """
         for member in TargetUnitary:
+            if member == TargetUnitary.I:
+                assert member not in _PROTO_FIELD_NUMBERS, "I should NOT be in proto map"
+                continue
             assert member in _PROTO_FIELD_NUMBERS, f"{member.name} missing from proto map"
 
     def test_proto_field_numbers_unique(self):
@@ -182,7 +216,9 @@ class TestTargetUnitariesDict:
             dim = matrix.shape[0]
             product = matrix @ matrix.conj().T
             np.testing.assert_allclose(
-                product, np.eye(dim), atol=1e-12,
+                product,
+                np.eye(dim),
+                atol=1e-12,
                 err_msg=f"{name} is not unitary",
             )
 
@@ -255,3 +291,52 @@ class TestTargetUnitaryMatrix:
         U = TARGET_UNITARIES[gate]
         product = U.conj().T @ U
         assert np.allclose(product, np.eye(4), atol=1e-14)
+
+
+class TestProtoFieldNumberCrossValidation:
+    """Cross-validate _PROTO_FIELD_NUMBERS against pulse.proto."""
+
+    def test_proto_field_numbers_match_proto_file(self):
+        """_PROTO_FIELD_NUMBERS must match the GateType enum in pulse.proto.
+
+        Parses the actual .proto file to prevent desync.
+        """
+        import re
+
+        proto_path = (
+            Path(__file__).resolve().parents[2]
+            / ".."
+            / "qubit-os-proto"
+            / "quantum"
+            / "pulse"
+            / "v1"
+            / "pulse.proto"
+        )
+        if not proto_path.exists():
+            pytest.skip("pulse.proto not found (cross-repo)")
+
+        text = proto_path.read_text()
+
+        # Extract GateType enum block
+        match = re.search(r"enum GateType \{(.*?)\}", text, re.DOTALL)
+        assert match, "Could not find GateType enum in pulse.proto"
+        block = match.group(1)
+
+        # Parse "GATE_TYPE_X = 1;" lines
+        proto_map: dict[str, int] = {}
+        for line_match in re.finditer(r"GATE_TYPE_(\w+)\s*=\s*(\d+)", block):
+            name = line_match.group(1)
+            number = int(line_match.group(2))
+            proto_map[name] = number
+
+        # Verify every Python mapping matches proto
+        for tu, py_number in _PROTO_FIELD_NUMBERS.items():
+            proto_name = tu.value  # e.g. "X", "CZ"
+            assert proto_name in proto_map, (
+                f"TargetUnitary.{proto_name} has proto number {py_number} "
+                f"but GATE_TYPE_{proto_name} not found in pulse.proto"
+            )
+            assert proto_map[proto_name] == py_number, (
+                f"TargetUnitary.{proto_name}: Python says {py_number}, "
+                f"proto says {proto_map[proto_name]}"
+            )

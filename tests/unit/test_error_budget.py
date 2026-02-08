@@ -19,8 +19,7 @@ import math
 import pytest
 
 from qubitos.error_budget import ErrorBudget, ErrorContribution, ErrorSource
-from qubitos.error_budget.analysis import SequenceAnalysis, analyze_sequence
-
+from qubitos.error_budget.analysis import analyze_sequence
 
 # =============================================================================
 # ErrorContribution
@@ -70,15 +69,11 @@ class TestErrorContribution:
             )
 
     def test_zero_infidelity_allowed(self):
-        c = ErrorContribution(
-            source=ErrorSource.IDLE, infidelity=0.0, qubit=0
-        )
+        c = ErrorContribution(source=ErrorSource.IDLE, infidelity=0.0, qubit=0)
         assert c.infidelity == 0.0
 
     def test_frozen(self):
-        c = ErrorContribution(
-            source=ErrorSource.GATE_INFIDELITY, infidelity=0.005, qubit=0
-        )
+        c = ErrorContribution(source=ErrorSource.GATE_INFIDELITY, infidelity=0.005, qubit=0)
         with pytest.raises(AttributeError):
             c.infidelity = 0.01  # type: ignore[misc]
 
@@ -169,9 +164,7 @@ class TestAccumulationMath:
         for _ in range(4):
             budget.add_gate(infidelity=0.01, qubit=0, duration_ns=0)
         expected_coherent = (4 * math.sqrt(0.01)) ** 2  # 0.16
-        assert budget.coherent_correction == pytest.approx(
-            expected_coherent, abs=1e-10
-        )
+        assert budget.coherent_correction == pytest.approx(expected_coherent, abs=1e-10)
         # Total = stochastic(0.04) + coherent(0.16) = 0.20
         assert budget.projected_infidelity == pytest.approx(0.20, abs=1e-10)
 
@@ -216,9 +209,7 @@ class TestAccumulationMath:
         expected_decoherence = expected_t1 + expected_t2
         expected_total = 0.01 + expected_decoherence + 0.03
 
-        assert budget.projected_infidelity == pytest.approx(
-            expected_total, abs=1e-8
-        )
+        assert budget.projected_infidelity == pytest.approx(expected_total, abs=1e-8)
 
 
 # =============================================================================
@@ -301,9 +292,7 @@ class TestErrorSourceCalculations:
             + (1 - math.exp(-t1_us / 40.0))
             + (1 - math.exp(-t1_us / 25.0))
         )
-        assert budget.decoherence_error == pytest.approx(
-            expected_deco, abs=1e-10
-        )
+        assert budget.decoherence_error == pytest.approx(expected_deco, abs=1e-10)
 
     def test_t1_zero_skipped(self):
         """T1=0 does not cause division by zero."""
@@ -339,34 +328,26 @@ class TestCanAppend:
         """Budget at ~50% usage: can add small gate."""
         budget = ErrorBudget(target_fidelity=0.90)
         budget.add_gate(infidelity=0.05, qubit=0, duration_ns=0)
-        assert budget.can_append(
-            gate_infidelity=0.01, gate_duration_ns=0, qubit=0
-        )
+        assert budget.can_append(gate_infidelity=0.01, gate_duration_ns=0, qubit=0)
 
     def test_exactly_at_limit(self):
         """Budget exactly at target: can add zero-error gate."""
         budget = ErrorBudget(target_fidelity=0.99)
         budget.add_gate(infidelity=0.01, qubit=0, duration_ns=0)
         # Now at exactly 0.99. Adding a zero-error gate should be fine.
-        assert budget.can_append(
-            gate_infidelity=0.0, gate_duration_ns=0, qubit=0
-        )
+        assert budget.can_append(gate_infidelity=0.0, gate_duration_ns=0, qubit=0)
 
     def test_would_exceed(self):
         """Budget at 99% usage: adding 2% gate exceeds."""
         budget = ErrorBudget(target_fidelity=0.90)
         budget.add_gate(infidelity=0.09, qubit=0, duration_ns=0)
         # At F=0.91, budget has 0.01 remaining. Adding 0.02 exceeds.
-        assert not budget.can_append(
-            gate_infidelity=0.02, gate_duration_ns=0, qubit=0
-        )
+        assert not budget.can_append(gate_infidelity=0.02, gate_duration_ns=0, qubit=0)
 
     def test_empty_budget(self):
         """Fresh budget: can add any reasonable gate."""
         budget = ErrorBudget(target_fidelity=0.95)
-        assert budget.can_append(
-            gate_infidelity=0.01, gate_duration_ns=20, qubit=0
-        )
+        assert budget.can_append(gate_infidelity=0.01, gate_duration_ns=20, qubit=0)
 
     def test_decoherence_pushes_over(self):
         """Gate fits in gate budget but decoherence tips it over."""
@@ -378,9 +359,7 @@ class TestCanAppend:
         budget.add_gate(infidelity=0.005, qubit=0, duration_ns=0)
         # Gate error alone is fine (0.005 < 0.01 budget)
         # But a 200ns gate on a qubit with T1=100ns will add massive decoherence
-        assert not budget.can_append(
-            gate_infidelity=0.001, gate_duration_ns=200, qubit=0
-        )
+        assert not budget.can_append(gate_infidelity=0.001, gate_duration_ns=200, qubit=0)
 
     def test_can_append_new_qubit(self):
         """can_append on a qubit not yet in the budget."""
@@ -391,9 +370,7 @@ class TestCanAppend:
         )
         budget.add_gate(infidelity=0.01, qubit=0, duration_ns=20)
         # Qubit 1 not yet tracked
-        assert budget.can_append(
-            gate_infidelity=0.01, gate_duration_ns=20, qubit=1
-        )
+        assert budget.can_append(gate_infidelity=0.01, gate_duration_ns=20, qubit=1)
 
     def test_can_append_does_not_mutate(self):
         """can_append must not modify the budget."""
@@ -402,9 +379,7 @@ class TestCanAppend:
         n_before = len(budget.contributions)
         fidelity_before = budget.projected_fidelity
 
-        budget.can_append(
-            gate_infidelity=0.01, gate_duration_ns=20, qubit=0
-        )
+        budget.can_append(gate_infidelity=0.01, gate_duration_ns=20, qubit=0)
 
         assert len(budget.contributions) == n_before
         assert budget.projected_fidelity == fidelity_before
@@ -654,9 +629,7 @@ class TestPhysicsValidation:
         expected_total = expected_stochastic + expected_coherent
         expected_fidelity = max(0.0, 1.0 - expected_total)
 
-        assert budget.projected_fidelity == pytest.approx(
-            expected_fidelity, abs=1e-10
-        )
+        assert budget.projected_fidelity == pytest.approx(expected_fidelity, abs=1e-10)
 
 
 # =============================================================================

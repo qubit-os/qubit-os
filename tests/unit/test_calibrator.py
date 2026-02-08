@@ -7,7 +7,6 @@ These tests verify calibration loading, validation, and saving.
 """
 
 from pathlib import Path
-import tempfile
 
 import pytest
 import yaml

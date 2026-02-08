@@ -97,27 +97,28 @@ class TargetUnitary(Enum):
         return 1
 
 
-# Proto field number mapping (for cross-reference with proto enum values)
+# Proto field number mapping — MUST match quantum/pulse/v1/pulse.proto GateType enum.
+# Note: TargetUnitary.I has no proto equivalent (it's a Python-only convenience).
 _PROTO_FIELD_NUMBERS: dict[TargetUnitary, int] = {
     TargetUnitary.UNSPECIFIED: 0,
-    TargetUnitary.I: 1,
-    TargetUnitary.X: 2,
-    TargetUnitary.Y: 3,
-    TargetUnitary.Z: 4,
-    TargetUnitary.H: 5,
-    TargetUnitary.SX: 6,
-    TargetUnitary.S: 7,
-    TargetUnitary.T: 8,
-    TargetUnitary.RX: 10,
-    TargetUnitary.RY: 11,
-    TargetUnitary.RZ: 12,
-    TargetUnitary.CZ: 20,
-    TargetUnitary.CNOT: 21,
-    TargetUnitary.CX: 22,
-    TargetUnitary.ISWAP: 23,
-    TargetUnitary.SQISWAP: 24,
-    TargetUnitary.SWAP: 25,
-    TargetUnitary.CUSTOM: 99,
+    # TargetUnitary.I has no proto mapping (Python-only identity convenience)
+    TargetUnitary.X: 1,  # GATE_TYPE_X = 1
+    TargetUnitary.Y: 2,  # GATE_TYPE_Y = 2
+    TargetUnitary.Z: 3,  # GATE_TYPE_Z = 3
+    TargetUnitary.SX: 4,  # GATE_TYPE_SX = 4
+    TargetUnitary.H: 5,  # GATE_TYPE_H = 5
+    TargetUnitary.RX: 6,  # GATE_TYPE_RX = 6
+    TargetUnitary.RY: 7,  # GATE_TYPE_RY = 7
+    TargetUnitary.RZ: 8,  # GATE_TYPE_RZ = 8
+    TargetUnitary.S: 9,  # GATE_TYPE_S = 9
+    TargetUnitary.T: 10,  # GATE_TYPE_T = 10
+    TargetUnitary.CZ: 20,  # GATE_TYPE_CZ = 20
+    TargetUnitary.CNOT: 21,  # GATE_TYPE_CNOT = 21
+    TargetUnitary.ISWAP: 22,  # GATE_TYPE_ISWAP = 22
+    TargetUnitary.SQISWAP: 23,  # GATE_TYPE_SQISWAP = 23
+    TargetUnitary.CX: 24,  # GATE_TYPE_CX = 24
+    TargetUnitary.SWAP: 25,  # GATE_TYPE_SWAP = 25
+    TargetUnitary.CUSTOM: 99,  # GATE_TYPE_CUSTOM = 99
 }
 
 

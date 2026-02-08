@@ -77,7 +77,7 @@ class TestGeneratePulse:
         """Test that result envelopes have correct shape."""
         config = GrapeConfig(num_time_steps=75)
         result = generate_pulse(gate="X", config=config)
-        
+
         assert len(result.i_envelope) == 75
         assert len(result.q_envelope) == 75
         assert result.i_envelope.dtype == np.float64
@@ -86,12 +86,12 @@ class TestGeneratePulse:
     def test_seed_reproducibility(self):
         """Test that same seed produces same result."""
         config = GrapeConfig(max_iterations=100, random_seed=42)
-        
+
         result1 = generate_pulse(gate="X", config=config)
         result2 = generate_pulse(gate="X", config=config)
-        
+
         np.testing.assert_array_almost_equal(
-            result1.i_envelope, 
+            result1.i_envelope,
             result2.i_envelope,
             decimal=10,
         )
@@ -106,10 +106,10 @@ class TestGeneratePulse:
         """Test that different seeds produce different results."""
         config1 = GrapeConfig(max_iterations=50, random_seed=42)
         config2 = GrapeConfig(max_iterations=50, random_seed=123)
-        
+
         result1 = generate_pulse(gate="X", config=config1)
         result2 = generate_pulse(gate="X", config=config2)
-        
+
         # Results should be different (with high probability)
         # We check that they're not exactly the same
         with pytest.raises(AssertionError):
@@ -140,16 +140,18 @@ class TestGrapeGradient:
         """Test that following gradient increases fidelity over iterations."""
         config = GrapeConfig(num_time_steps=20, max_iterations=20)
         optimizer = GrapeOptimizer(config)
-        
+
         target = get_target_unitary("X", 1)
-        
+
         # Run iterations and check fidelity improves over time
         result = optimizer.optimize(target, num_qubits=1)
-        
+
         # Fidelity should increase during optimization
         # Check that final > initial in the history
         if len(result.fidelity_history) > 1:
-            assert result.fidelity_history[-1] > result.fidelity_history[0], "Fidelity should increase"
+            assert result.fidelity_history[-1] > result.fidelity_history[0], (
+                "Fidelity should increase"
+            )
 
 
 class TestGoldenTests:
@@ -165,11 +167,11 @@ class TestGoldenTests:
             random_seed=42,
         )
         result = generate_pulse(gate="X", config=config)
-        
+
         # Fidelity should be at least 99.9%
         assert result.fidelity >= 0.999, f"Golden test fidelity {result.fidelity} < 0.999"
         assert result.converged
-        
+
         # Envelope should have reasonable properties
         assert np.max(np.abs(result.i_envelope)) > 0.01  # Not all zeros
         assert not np.any(np.isnan(result.i_envelope))

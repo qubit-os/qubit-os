@@ -45,8 +45,6 @@ class TestRunCrosscheck:
 
     def test_pass_rate_boundary(self):
         # 19/20 pass at 0.95 threshold -> 0.95 >= 0.95 -> pass
-        sim = [{"0": 50, "1": 50}] * 20
-        hw = [{"0": 50, "1": 50}] * 19 + [{"0": 100}]
         # The last one will have H > 0 but we need it < 0.05
         # Actually identical counts -> H=0, different counts -> H > 0
         # Let's make 19 identical (H=0) and 1 orthogonal (H=1)
@@ -92,9 +90,7 @@ class TestRunCrosscheck:
             run_crosscheck([{"0": 1}], [{"0": 1}, {"1": 1}])
 
     def test_labels_in_output(self):
-        result = run_crosscheck(
-            [{"0": 100}], [{"0": 100}], labels=["my_pulse"]
-        )
+        result = run_crosscheck([{"0": 100}], [{"0": 100}], labels=["my_pulse"])
         assert "my_pulse" in result.distances
 
     def test_default_labels(self):

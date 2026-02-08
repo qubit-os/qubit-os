@@ -85,17 +85,13 @@ class TestErrorBudgetGolden:
 
     def test_total_gate_infidelity(self, golden_budget: ErrorBudget, golden_data: dict):
         expected = golden_data["expected"]["total_gate_infidelity"]
-        assert golden_budget.total_gate_infidelity == pytest.approx(
-            expected, abs=1e-10
-        )
+        assert golden_budget.total_gate_infidelity == pytest.approx(expected, abs=1e-10)
 
     def test_per_qubit_time(self, golden_budget: ErrorBudget, golden_data: dict):
         expected = golden_data["expected"]["per_qubit_time_ns"]
         for qubit_str, expected_time in expected.items():
             qubit = int(qubit_str)
-            assert golden_budget._qubit_time_ns[qubit] == pytest.approx(
-                expected_time, abs=1e-10
-            )
+            assert golden_budget._qubit_time_ns[qubit] == pytest.approx(expected_time, abs=1e-10)
 
     def test_readout_error(self, golden_budget: ErrorBudget, golden_data: dict):
         expected = golden_data["expected"]["readout_error"]
@@ -117,9 +113,7 @@ class TestErrorBudgetGolden:
         """
         amp_sum = 4 * math.sqrt(0.003) + 2 * math.sqrt(0.008)
         expected = 0.1 * amp_sum**2
-        assert golden_budget.coherent_correction == pytest.approx(
-            expected, abs=1e-8
-        )
+        assert golden_budget.coherent_correction == pytest.approx(expected, abs=1e-8)
 
     def test_decoherence_error(self, golden_budget: ErrorBudget):
         """Verify decoherence against analytical per-qubit formulas."""
@@ -134,9 +128,7 @@ class TestErrorBudgetGolden:
         q1_t2 = 1.0 - math.exp(-t1_us / 28.0)
 
         expected = q0_t1 + q0_t2 + q1_t1 + q1_t2
-        assert golden_budget.decoherence_error == pytest.approx(
-            expected, abs=1e-10
-        )
+        assert golden_budget.decoherence_error == pytest.approx(expected, abs=1e-10)
 
     def test_projected_fidelity_analytical(self, golden_budget: ErrorBudget):
         """Verify total projected fidelity from all sources."""
@@ -159,9 +151,7 @@ class TestErrorBudgetGolden:
         total_infidelity = gate + coherent + deco + readout + crosstalk
         expected_fidelity = max(0.0, 1.0 - total_infidelity)
 
-        assert golden_budget.projected_fidelity == pytest.approx(
-            expected_fidelity, abs=1e-8
-        )
+        assert golden_budget.projected_fidelity == pytest.approx(expected_fidelity, abs=1e-8)
 
     def test_grade(self, golden_budget: ErrorBudget, golden_data: dict):
         expected_grade = golden_data["expected"]["grade"]
@@ -171,6 +161,7 @@ class TestErrorBudgetGolden:
     def test_summary_round_trips(self, golden_budget: ErrorBudget):
         """Summary dict is JSON-serializable (no numpy, no complex types)."""
         import json
+
         s = golden_budget.summary()
         # Should not raise
         json_str = json.dumps(s)

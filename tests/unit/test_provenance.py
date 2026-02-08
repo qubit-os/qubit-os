@@ -16,11 +16,8 @@ import numpy as np
 import pytest
 
 from qubitos.provenance import (
-    NodeChange,
     NodeType,
     ProvenanceBuilder,
-    ProvenanceDiff,
-    ProvenanceNode,
     ProvenanceStore,
     ProvenanceTree,
     canonicalize_float,
@@ -28,7 +25,6 @@ from qubitos.provenance import (
 )
 from qubitos.provenance.builder import _hash_internal, _hash_leaf
 from qubitos.target_unitary import TargetUnitary
-
 
 # =========================================================================
 # Helpers
@@ -218,8 +214,15 @@ class TestTreeConstruction:
         )
         builder.set_grape_config(cfg)
         builder.add_pulse(
-            "cz_01", "CZ", [0, 1], 40, 50, 0.99, 50.0,
-            rng.standard_normal(50), rng.standard_normal(50),
+            "cz_01",
+            "CZ",
+            [0, 1],
+            40,
+            50,
+            0.99,
+            50.0,
+            rng.standard_normal(50),
+            rng.standard_normal(50),
         )
         builder.set_software_versions()
         tree = builder.build()
@@ -377,8 +380,8 @@ class TestCanonicalizeFloat:
         assert abs(result - 1.23456789012e-15) < 1e-25
 
     def test_very_large(self):
-        result = canonicalize_float(1.23456789012e+15)
-        assert abs(result - 1.23456789012e+15) < 1e5
+        result = canonicalize_float(1.23456789012e15)
+        assert abs(result - 1.23456789012e15) < 1e5
 
     def test_precision_boundary_same(self):
         a = 5.123456789012345
@@ -521,8 +524,15 @@ class TestProvenanceBuilderEdgeCases:
         rng = np.random.default_rng(42)
         for pulse_id, gate, qubits in [("p0", "X", [0]), ("p1", "X", [1]), ("p2", "CZ", [0, 1])]:
             builder.add_pulse(
-                pulse_id, gate, qubits, 20, 100, 0.999, 50.0,
-                rng.standard_normal(100), rng.standard_normal(100),
+                pulse_id,
+                gate,
+                qubits,
+                20,
+                100,
+                0.999,
+                50.0,
+                rng.standard_normal(100),
+                rng.standard_normal(100),
             )
         tree = builder.build()
         ps = tree.find_node(NodeType.PULSE_SEQUENCE)
@@ -543,8 +553,14 @@ class TestProvenanceBuilderEdgeCases:
 
         fp = SimpleNamespace(
             qubit_fingerprints=[
-                {"index": 0, "frequency_ghz": 5.0, "t1_us": 50.0, "t2_us": 30.0,
-                 "readout_fidelity": 0.99, "gate_fidelity": 0.999},
+                {
+                    "index": 0,
+                    "frequency_ghz": 5.0,
+                    "t1_us": 50.0,
+                    "t2_us": 30.0,
+                    "readout_fidelity": 0.99,
+                    "gate_fidelity": 0.999,
+                },
             ],
             coupler_fingerprints=[],
             hash="abc123",
@@ -559,8 +575,15 @@ class TestProvenanceBuilderEdgeCases:
         builder = _make_builder()
         rng = np.random.default_rng(99)
         builder.add_pulse(
-            "p1", "CZ", [0, 1], 40, 200, 0.99, 50.0,
-            rng.standard_normal(200), rng.standard_normal(200),
+            "p1",
+            "CZ",
+            [0, 1],
+            40,
+            200,
+            0.99,
+            50.0,
+            rng.standard_normal(200),
+            rng.standard_normal(200),
             coupling_envelope=rng.standard_normal(200),
         )
         tree = builder.build()

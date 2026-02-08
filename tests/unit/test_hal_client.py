@@ -29,6 +29,7 @@ try:
         HealthStatus,
         MeasurementResult,
     )
+
     HAS_CLIENT = True
 except (ImportError, TypeError) as e:
     HAS_CLIENT = False
@@ -366,8 +367,10 @@ class TestHALClientConnection:
     @pytest.mark.asyncio
     async def test_connect_secure(self):
         """Test secure connection."""
-        with patch("qubitos.client.hal.grpc.aio") as mock_grpc_aio, \
-             patch("qubitos.client.hal.grpc.ssl_channel_credentials") as mock_ssl:
+        with (
+            patch("qubitos.client.hal.grpc.aio") as mock_grpc_aio,
+            patch("qubitos.client.hal.grpc.ssl_channel_credentials") as mock_ssl,
+        ):
             mock_channel = AsyncMock()
             mock_grpc_aio.secure_channel.return_value = mock_channel
             mock_ssl.return_value = MagicMock()
@@ -389,9 +392,7 @@ class TestHALClientConnection:
             client = HALClient(secure=True, credentials=mock_credentials)
             await client.connect()
 
-            mock_grpc.secure_channel.assert_called_once_with(
-                "localhost:50051", mock_credentials
-            )
+            mock_grpc.secure_channel.assert_called_once_with("localhost:50051", mock_credentials)
             assert client._connected is True
 
     @pytest.mark.asyncio
@@ -985,7 +986,7 @@ class TestHALClientSync:
         with patch.object(HALClient, "connect", new_callable=AsyncMock):
             with patch.object(HALClient, "close", new_callable=AsyncMock) as mock_close:
                 with pytest.raises(ValueError):
-                    with HALClientSync() as client:
+                    with HALClientSync() as _client:
                         raise ValueError("test")
                 mock_close.assert_called_once()
 
@@ -1137,7 +1138,20 @@ class TestGateParsing:
         client._stub.ExecutePulse = AsyncMock(return_value=mock_response)
 
         # Test different gate types
-        for gate_type in ["X", "Y", "Z", "H", "SX", "RX", "RY", "RZ", "CZ", "CNOT", "ISWAP", "CUSTOM"]:
+        for gate_type in [
+            "X",
+            "Y",
+            "Z",
+            "H",
+            "SX",
+            "RX",
+            "RY",
+            "RZ",
+            "CZ",
+            "CNOT",
+            "ISWAP",
+            "CUSTOM",
+        ]:
             await client.execute_pulse(
                 i_envelope=[0.1],
                 q_envelope=[0.0],

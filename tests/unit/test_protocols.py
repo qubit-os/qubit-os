@@ -5,13 +5,8 @@
 
 from __future__ import annotations
 
-import numpy as np
-import pytest
-
 from qubitos.calibrator.protocols import (
-    CalibrationProtocol,
     ProtocolConfig,
-    ProtocolStep,
     generate_t1_protocol,
     generate_t2_echo_protocol,
     generate_t2_ramsey_protocol,

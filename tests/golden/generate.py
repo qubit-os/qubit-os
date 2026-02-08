@@ -34,7 +34,7 @@ def generate_pulse_golden_files(version: str | None = None) -> int:
         generate_golden_pulse,
         save_golden,
     )
-    
+
     print("=" * 60)
     print("Generating GRAPE pulse golden files...")
     print(f"Output directory: {GOLDEN_DIR}")
@@ -105,7 +105,7 @@ def generate_pulse_golden_files(version: str | None = None) -> int:
     print(f"  Q checksum: {golden_y.data.q_envelope_checksum}")
     print(f"  Saved to: {filepath_y}")
     print()
-    
+
     return 0
 
 
@@ -116,7 +116,7 @@ def generate_execution_golden_files(version: str | None = None) -> int:
         generate_golden_execution,
         save_golden_execution,
     )
-    
+
     print("=" * 60)
     print("Generating QuTiP execution golden files...")
     print(f"Output directory: {GOLDEN_DIR}")
@@ -165,7 +165,7 @@ def generate_execution_golden_files(version: str | None = None) -> int:
     print(f"  GRAPE fidelity: {exec_golden_h.pulse_data.fidelity:.6f}")
     print(f"  P(0): {exec_golden_h.execution_data.probabilities[0]:.6f}")
     print(f"  P(1): {exec_golden_h.execution_data.probabilities[1]:.6f}")
-    print(f"  Expected: ~0.5 for each state (H gate on |0>)")
+    print("  Expected: ~0.5 for each state (H gate on |0>)")
     print(f"  Counts: {exec_golden_h.execution_data.bitstring_counts}")
     print(f"  Saved to: {filepath_h}")
     print()
@@ -174,9 +174,7 @@ def generate_execution_golden_files(version: str | None = None) -> int:
 
 
 def main():
-    parser = argparse.ArgumentParser(
-        description="Generate golden files for reproducibility tests"
-    )
+    parser = argparse.ArgumentParser(description="Generate golden files for reproducibility tests")
     parser.add_argument(
         "--force",
         action="store_true",
@@ -199,7 +197,7 @@ def main():
         help="Only generate execution golden files (skip pulse)",
     )
     args = parser.parse_args()
-    
+
     from tests.golden.utils import GOLDEN_DIR
 
     # Check for existing files
@@ -214,10 +212,10 @@ def main():
             return 1
 
     ret = 0
-    
+
     if not args.exec_only:
         ret |= generate_pulse_golden_files(args.version)
-    
+
     if not args.pulse_only:
         ret |= generate_execution_golden_files(args.version)
 

@@ -7,8 +7,6 @@ These tests verify CLI commands using Click's CliRunner.
 """
 
 import json
-import os
-from pathlib import Path
 
 import pytest
 import yaml
@@ -197,7 +195,9 @@ class TestPulseCommands:
         )
 
         assert result.exit_code == 0
-        assert "deprecated" in result.output.lower() or "deprecated" in (result.stderr or "").lower()
+        assert (
+            "deprecated" in result.output.lower() or "deprecated" in (result.stderr or "").lower()
+        )
         assert output_file.exists()
 
     def test_pulse_generate_h_gate(self, runner, tmp_path):
@@ -382,16 +382,12 @@ class TestCalibrationCommands:
 
     def test_calibration_show_nonexistent(self, runner):
         """Test showing nonexistent calibration file."""
-        result = runner.invoke(
-            cli, ["calibration", "show", "/nonexistent/path.yaml"]
-        )
+        result = runner.invoke(cli, ["calibration", "show", "/nonexistent/path.yaml"])
         assert result.exit_code != 0
 
     def test_calibration_validate_valid(self, runner, sample_calibration):
         """Test validating a valid calibration file."""
-        result = runner.invoke(
-            cli, ["calibration", "validate", str(sample_calibration)]
-        )
+        result = runner.invoke(cli, ["calibration", "validate", str(sample_calibration)])
         assert result.exit_code == 0
         assert "valid" in result.output.lower()
 
@@ -455,9 +451,7 @@ class TestCalibrationCommands:
         with open(new_cal, "w") as f:
             yaml.dump(new_data, f)
 
-        result = runner.invoke(
-            cli, ["calibration", "drift", str(old_cal), str(new_cal)]
-        )
+        result = runner.invoke(cli, ["calibration", "drift", str(old_cal), str(new_cal)])
 
         # Should detect drift and exit with error (needs recalibration)
         assert result.exit_code != 0
@@ -544,9 +538,7 @@ class TestEdgeCases:
         with open(empty_cal, "w") as f:
             yaml.dump({"name": "empty"}, f)
 
-        result = runner.invoke(
-            cli, ["calibration", "show", str(empty_cal)]
-        )
+        result = runner.invoke(cli, ["calibration", "show", str(empty_cal)])
         # Should handle gracefully
         assert result.exit_code == 0
 
@@ -621,31 +613,48 @@ class TestExperimentCommands:
 
     def test_experiment_provenance_found(self, runner, tmp_path):
         """Test provenance lookup with a stored tree."""
-        import numpy as np
         from types import SimpleNamespace
+
+        import numpy as np
+
         from qubitos.provenance import ProvenanceBuilder, ProvenanceStore
 
         # Build a tree
         builder = ProvenanceBuilder()
         builder.set_calibration(
-            qubit_data=[{
-                "qubit_index": 0,
-                "frequency_ghz": 5.0,
-                "t1_us": 50.0,
-                "t2_us": 30.0,
-            }],
+            qubit_data=[
+                {
+                    "qubit_index": 0,
+                    "frequency_ghz": 5.0,
+                    "t1_us": 50.0,
+                    "t2_us": 30.0,
+                }
+            ],
         )
         cfg = SimpleNamespace(
-            num_time_steps=100, duration_ns=20, target_fidelity=0.999,
-            max_iterations=1000, learning_rate=1.0, convergence_threshold=1e-8,
-            max_amplitude=100.0, use_second_order=False, regularization=0.0,
+            num_time_steps=100,
+            duration_ns=20,
+            target_fidelity=0.999,
+            max_iterations=1000,
+            learning_rate=1.0,
+            convergence_threshold=1e-8,
+            max_amplitude=100.0,
+            use_second_order=False,
+            regularization=0.0,
             random_seed=42,
         )
         builder.set_grape_config(cfg)
         rng = np.random.default_rng(0)
         builder.add_pulse(
-            "p0", "X", [0], 20, 100, 0.999, 100.0,
-            rng.standard_normal(100), rng.standard_normal(100),
+            "p0",
+            "X",
+            [0],
+            20,
+            100,
+            0.999,
+            100.0,
+            rng.standard_normal(100),
+            rng.standard_normal(100),
         )
         builder.set_software_versions()
         tree = builder.build()

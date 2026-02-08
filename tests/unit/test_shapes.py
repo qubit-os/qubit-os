@@ -227,8 +227,7 @@ class TestDRAGPulse:
         i_env, q_env = drag(times, amplitude=1.0, anharmonicity=anharmonicity)
         # Q should not be zero
         assert not np.allclose(q_env, 0.0)
-        # Expected beta = -1 / (4 * anharmonicity)
-        expected_beta = -1 / (4 * anharmonicity)
+        # Expected beta = -1 / (4 * anharmonicity) — verified by Q amplitude scale
         # Verify by checking Q amplitude scale
         assert max(abs(q_env)) > 0
 
@@ -375,7 +374,7 @@ class TestPulseEnvelopeDataclass:
         i_env = np.ones(50)
         q_env = np.zeros(50)
         times = np.linspace(0, 10e-9, 50)
-        
+
         env = PulseEnvelope(
             i_envelope=i_env,
             q_envelope=q_env,
@@ -383,7 +382,7 @@ class TestPulseEnvelopeDataclass:
             shape_type=PulseShapeType.SQUARE,
             parameters={"amplitude": 1.0},
         )
-        
+
         assert np.array_equal(env.i_envelope, i_env)
         assert np.array_equal(env.q_envelope, q_env)
         assert env.shape_type == PulseShapeType.SQUARE

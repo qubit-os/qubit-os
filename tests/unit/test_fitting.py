@@ -9,7 +9,6 @@ import numpy as np
 import pytest
 
 from qubitos.calibrator.fitting import (
-    DecayFitResult,
     counts_to_excited_probability,
     fit_exponential_decay,
     fit_t1,

@@ -109,6 +109,4 @@ class TestHellingerDistanceBatch:
 
     def test_mismatched_labels_raises(self):
         with pytest.raises(ValueError, match="labels length"):
-            hellinger_distance_batch(
-                [{"0": 1}], [{"0": 1}], labels=["a", "b"]
-            )
+            hellinger_distance_batch([{"0": 1}], [{"0": 1}], labels=["a", "b"])

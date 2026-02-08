@@ -9,9 +9,8 @@ import numpy as np
 import pytest
 
 from qubitos.calibrator.benchmarking import (
-    RBConfig,
-    RBResult,
     SINGLE_QUBIT_CLIFFORDS,
+    RBResult,
     find_inverse_clifford,
     fit_rb,
     generate_rb_sequence,
@@ -59,7 +58,6 @@ class TestCliffordGroup:
 
 class TestFindInverseClifford:
     def test_inverse_gives_identity(self) -> None:
-        eye = np.eye(2, dtype=np.complex128)
         for i, c in enumerate(SINGLE_QUBIT_CLIFFORDS):
             inv_idx = find_inverse_clifford(c)
             product = SINGLE_QUBIT_CLIFFORDS[inv_idx] @ c
