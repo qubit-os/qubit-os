@@ -3916,3 +3916,778 @@ pub fn validate_execute_pulse_sequence(
 | Error Budget (GAP 2) | `to_error_contribution()` | Error budget allocation | Interface only |
 | CLI | Validation results, budget status | — | Implemented |
 | Scheduler (v0.3.0) | `TemporalConstraint` list | Assigned start times | NOT implemented |
+
+---
+
+## 10. Migration Path
+
+### 10.1 Backward Compatibility Guarantee
+
+**Single-pulse callers are unaffected.** The existing `ExecutePulseRequest`
+message and `execute_pulse()` gRPC method continue to work without changes.
+A single pulse is implicitly treated as a sequence of length 1 with:
+
+- No temporal constraints.
+- No AWG clock config (raw duration passed to hardware, as before).
+- No decoherence budget (no coherence checking, as before).
+
+This is enforced by a compatibility shim in the Rust server:
+
+```rust
+/// Wrap a single-pulse request as a trivial sequence.
+/// This provides backward compatibility for existing callers.
+fn single_pulse_to_sequence(
+    request: ExecutePulseRequest,
+) -> ExecutePulseSequenceRequest {
+    ExecutePulseSequenceRequest {
+        pulses: vec![ScheduledPulseProto {
+            pulse_id: "single".to_string(),
+            pulse: Some(request.pulse),
+            start_time_ns: 0.0,
+            target_qubits: request.target_qubits,
+        }],
+        constraints: vec![],
+        budget_config: None,
+        awg_config: None,
+        num_shots: request.num_shots,
+    }
+}
+```
+
+### 10.2 Proto Migration: `duration_ns` int32 → double
+
+This is a **wire-incompatible** change. `int32` (wire type 0, varint) and
+`double` (wire type 1, 64-bit) are not interchangeable. A message encoded
+with the old schema cannot be decoded with the new schema for this field.
+
+**Migration strategy: coordinated deploy.**
+
+Since QubitOS is pre-1.0 and all deployments are controlled (no third-party
+consumers), the migration is a coordinated version bump:
+
+| Step | Action | Risk |
+|------|--------|------|
+| 1 | Tag current proto as `v0.1.x-final` | None |
+| 2 | Update `pulse.proto` and `grape.proto`: `int32 duration_ns` → `double duration_ns` | Wire break |
+| 3 | Regenerate all bindings (`protoc --python_out`, Rust prost) | None |
+| 4 | Update Python `GrapeConfig`: annotate `duration_ns: float` (already float, no change) | None |
+| 5 | Update Rust validation: `u32` → `f64` for duration comparisons | Low |
+| 6 | Deploy server and client together | Requires coordination |
+| 7 | Remove `MAX_PULSE_DURATION_NS: u32`, replace with `MAX_PULSE_DURATION_NS: f64 = 100_000.0` | Low |
+
+**Rollback:** If issues arise, revert to the `v0.1.x-final` tag. Since
+client and server are co-deployed, rollback is atomic.
+
+### 10.3 Default Values for New Fields
+
+All new fields are optional with sensible defaults. Existing callers that
+do not set these fields get the pre-v0.2.0 behavior.
+
+| Field | Proto Type | Default | Behavior When Default |
+|-------|-----------|---------|----------------------|
+| `ExecutePulseSequenceRequest.constraints` | `repeated` | Empty list | No constraint checking |
+| `ExecutePulseSequenceRequest.budget_config` | `optional` | Not present | No decoherence budget tracking |
+| `ExecutePulseSequenceRequest.awg_config` | `optional` | Not present | No AWG quantization; raw durations used |
+| `ScheduledPulse.start_time_ns` | `double` | `0.0` | Pulse starts at sequence time 0 |
+| `ScheduledPulse.pulse_id` | `string` | `""` | Auto-generated ID (index-based) |
+| `TemporalConstraintProto.tolerance_ns` | `double` | `0.0` | Exact constraint (no slack) |
+| `BudgetConfig.warning_threshold` | `double` | `0.8` | Warn at 80% T2 consumed |
+| `BudgetConfig.blocking_threshold` | `double` | `1.0` | Block at 100% T2 consumed |
+
+### 10.4 Rollout Plan
+
+**Phase 1: Core types (Week 1-2)**
+
+- Implement `TimePoint`, `AWGClockConfig`, `QuantizationResult` in Python and Rust.
+- Unit tests for all types (Section 11, categories T and A).
+- No integration with existing code yet.
+- Deliverable: `qubitos.temporal` module, `src/temporal/` Rust module.
+
+**Phase 2: Constraints and budget (Week 3-4)**
+
+- Implement `TemporalConstraint`, `DecoherenceBudget`, `ScheduledPulse`, `PulseSequence`.
+- Implement `PulseSequenceBuilder`.
+- Unit tests for all types (Section 11, categories C, D, S).
+- Implement `validate_pulse_sequence()` in Python.
+- Implement `CalibrationFingerprint.to_decoherence_budget()`.
+- Proto changes: update `duration_ns`, add `temporal.proto`, regenerate bindings.
+- Deliverable: Full Python time model with validation.
+
+**Phase 3: Rust server integration (Week 5-6)**
+
+- Implement `validate_execute_pulse_sequence()` in Rust.
+- Add `ExecutePulseSequence` gRPC method.
+- Integration tests (Section 11, category I).
+- Backward compatibility tests (Section 11, category B).
+- CLI integration.
+- Deliverable: Full stack working, all tests passing.
+
+**Phase 4: Hardening (Week 7-8)**
+
+- Golden file tests (Section 11, category G).
+- Property-based tests (Section 11, category P).
+- Documentation: update `QubitOS-Design-v0.4.1-Final.md` and `CONTRIBUTING.md`.
+- Performance benchmarking: ensure < 1 ms overhead for 100-pulse sequences.
+- Code review and merge.
+- Deliverable: v0.2.0 release candidate.
+
+---
+
+## 11. Test Plan
+
+Tests are organized by data structure and integration level. All tests
+use `pytest` with `@pytest.mark.parametrize` where applicable (per
+CONTRIBUTING.md). Rust tests use `#[test]` with `rstest` for
+parameterized cases.
+
+### 11.1 TimePoint Tests
+
+| # | Test Case | Input | Expected |
+|---|-----------|-------|----------|
+| T1 | Construct valid TimePoint | `nominal_ns=100.0` | Success, defaults applied |
+| T2 | Reject negative nominal | `nominal_ns=-1.0` | `ValueError` |
+| T3 | Reject zero precision | `precision_ns=0.0` | `ValueError` |
+| T4 | Reject negative jitter | `jitter_bound_ns=-0.5` | `ValueError` |
+| T5 | earliest_ns with zero jitter | `nominal=50.0, jitter=0.0` | `50.0` |
+| T6 | earliest_ns with jitter | `nominal=50.0, jitter=5.0` | `45.0` |
+| T7 | earliest_ns clamped to 0 | `nominal=2.0, jitter=5.0` | `0.0` |
+| T8 | latest_ns | `nominal=50.0, jitter=5.0` | `55.0` |
+| T9 | overlaps_with: overlapping | `A(50,j=5), B(53,j=5)` | `True` |
+| T10 | overlaps_with: non-overlapping | `A(50,j=1), B(60,j=1)` | `False` |
+| T11 | is_coincident_with: within tol | `A(50), B(50.5), tol=1.0` | `True` |
+| T12 | is_coincident_with: outside tol | `A(50), B(60), tol=1.0` | `False` |
+| T13 | offset_by positive | `nominal=10.0, delta=5.0` | `nominal=15.0` |
+| T14 | offset_by negative (valid) | `nominal=10.0, delta=-5.0` | `nominal=5.0` |
+| T15 | quantize_to grid | `nominal=15.7, grid=4.0` | `nominal=16.0` |
+
+### 11.2 AWGClockConfig Tests
+
+| # | Test Case | Input | Expected |
+|---|-----------|-------|----------|
+| A1 | Construct valid config | `rate=1.0, min=4, max=65536, align=4` | Success |
+| A2 | Reject zero sample rate | `rate=0.0` | `ValueError` |
+| A3 | Reject negative sample rate | `rate=-1.0` | `ValueError` |
+| A4 | Reject min > max | `min=100, max=10` | `ValueError` |
+| A5 | Reject zero alignment | `align=0` | `ValueError` |
+| A6 | sample_period_ns at 1 GSa/s | `rate=1.0` | `1.0` |
+| A7 | sample_period_ns at 2 GSa/s | `rate=2.0` | `0.5` |
+| A8 | min_duration_ns | `rate=1.0, min=4, align=4` | `4.0` |
+| A9 | max_duration_ns | `rate=1.0, max=65536, align=4` | `65536.0` |
+| A10 | duration_granularity_ns | `rate=2.0, align=8` | `4.0` |
+| A11 | Quantize exact match | `rate=1.0, align=4, req=16.0` | `actual=16.0, delta=0.0` |
+| A12 | Quantize round up | `rate=1.0, align=4, req=15.0` | `actual=16.0, delta=1.0` |
+| A13 | Quantize round down | `rate=1.0, align=4, req=17.5` | `actual=16.0, delta=-1.5` |
+| A14 | Quantize clamp to min | `rate=1.0, min=4, align=4, req=1.0` | `actual=4.0` |
+| A15 | Quantize clamp to max | `rate=1.0, max=100, align=4, req=200.0` | `actual=100.0` |
+| A16 | validate_duration excess error | `req=15.0, max_err=0.001` | `ValueError` (6.7% > 0.1%) |
+
+### 11.3 TemporalConstraint Tests
+
+| # | Test Case | Input | Expected |
+|---|-----------|-------|----------|
+| C1 | Construct valid SIMULTANEOUS | `kind=SIM, a="p1", b="p2", tol=1.0` | Success |
+| C2 | Reject negative tolerance | `tol=-1.0` | `ValueError` |
+| C3 | Reject self-constraint | `a="p1", b="p1"` | `ValueError` |
+| C4 | Reject ALIGNED with tol=0 | `kind=ALIGNED, tol=0.0` | `ValueError` |
+| C5 | SIMULTANEOUS: satisfied | `starts: a=10, b=10.5, tol=1.0` | `satisfied=True, margin=0.5` |
+| C6 | SIMULTANEOUS: violated | `starts: a=10, b=12, tol=1.0` | `satisfied=False` |
+| C7 | SEQUENTIAL: satisfied (tight) | `end_a=10, start_b=10, tol=0` | `satisfied=True` |
+| C8 | SEQUENTIAL: satisfied (gap) | `end_a=10, start_b=12, tol=5.0` | `satisfied=True` |
+| C9 | SEQUENTIAL: violated (overlap) | `end_a=10, start_b=8, tol=0` | `satisfied=False` |
+| C10 | SEQUENTIAL: violated (gap too large) | `end_a=10, start_b=20, tol=5.0` | `satisfied=False` |
+| C11 | ALIGNED: both on grid | `starts: a=8, b=16, grid=4.0` | `satisfied=True` |
+| C12 | ALIGNED: a off grid | `starts: a=9, b=16, grid=4.0` | `satisfied=False` |
+| C13 | ALIGNED: b off grid | `starts: a=8, b=15, grid=4.0` | `satisfied=False` |
+| C14 | MAX_DELAY: satisfied | `end_a=10, start_b=15, tol=10.0` | `satisfied=True` |
+| C15 | MAX_DELAY: violated (too early) | `end_a=10, start_b=8, tol=10.0` | `satisfied=False` |
+| C16 | MAX_DELAY: violated (too late) | `end_a=10, start_b=25, tol=10.0` | `satisfied=False` |
+| C17 | MIN_GAP: satisfied | `end_a=10, start_b=25, tol=10.0` | `satisfied=True, margin=5.0` |
+
+### 11.4 DecoherenceBudget Tests
+
+| # | Test Case | Input | Expected |
+|---|-----------|-------|----------|
+| D1 | Construct with valid T1/T2 | `t1=50000, t2=30000` | Success |
+| D2 | Reject T2 > 2·T1 | `t1=50000, t2=110000` | `ValueError` |
+| D3 | Reject negative T1 | `t1=-1, t2=100` | `ValueError` |
+| D4 | Reject zero T2 | `t1=100, t2=0` | `ValueError` |
+| D5 | Initial consumed is 0 | Fresh budget | `consumed_ns=0` |
+| D6 | Consume 100 ns | `consume(q0, 100)` | `consumed=100` |
+| D7 | Consume cumulative | `consume(q0, 100), consume(q0, 200)` | `consumed=300` |
+| D8 | Fraction consumed | `t2=30000, consumed=15000` | `fraction=0.5` |
+| D9 | Status OK at 0% | Fresh budget, threshold=0.8 | `BudgetStatus.OK` |
+| D10 | Status OK at 50% | `consumed=15000/30000` | `BudgetStatus.OK` |
+| D11 | Status WARNING at 85% | `consumed=25500/30000` | `BudgetStatus.WARNING` |
+| D12 | Status EXCEEDED at 100% | `consumed=30000/30000` | `BudgetStatus.EXCEEDED` |
+| D13 | Status EXCEEDED at 150% | `consumed=45000/30000` | `BudgetStatus.EXCEEDED` |
+| D14 | Custom warning threshold | `warn=0.5, consumed=60%` | `BudgetStatus.WARNING` |
+| D15 | Custom blocking threshold | `block=0.9, consumed=95%` | `BudgetStatus.EXCEEDED` |
+| D16 | Multiple qubits independent | `consume(q0, 100), consume(q1, 200)` | `q0.consumed=100, q1.consumed=200` |
+| D17 | from_calibration | `QubitCalibration(t1=50, t2=30)` | `t1_ns=50000, t2_ns=30000` |
+| D18 | to_error_contribution at 0 | Fresh budget | `0.0` |
+| D19 | to_error_contribution at T2 | `consumed=t2_ns` | `≈ 0.632` (1-1/e) |
+| D20 | Relaxation error formula | `t1=50000, consumed=1000` | `1 - exp(-1000/50000) ≈ 0.0198` |
+| D21 | Dephasing error formula | `t2=30000, consumed=1000` | `1 - exp(-1000/30000) ≈ 0.0328` |
+
+### 11.5 PulseSequence Tests
+
+| # | Test Case | Input | Expected |
+|---|-----------|-------|----------|
+| S1 | Empty sequence | No pulses | `total_duration=0, len=0` |
+| S2 | Single pulse | `p1 at t=0, dur=20` | `total_duration=20` |
+| S3 | Two sequential pulses | `p1(0,20), p2(20,30)` | `total_duration=50` |
+| S4 | Overlapping pulses (different qubits) | `p1(0,20,q0), p2(10,30,q1)` | `total_duration=40` |
+| S5 | Total duration = max(end) | `p1(0,20), p2(5,10)` | `total_duration=20` |
+| S6 | Pulse IDs must be unique | `p1, p1` | `ValueError` |
+| S7 | Constraint references valid pulse | `constraint(p1,p2)` both exist | Success |
+| S8 | Constraint references invalid pulse | `constraint(p1,p3)` p3 missing | `ValueError` |
+| S9 | Builder: add_pulse | `.add_pulse(...)` | Pulse in sequence |
+| S10 | Builder: add_constraint | `.add_constraint(...)` | Constraint in sequence |
+| S11 | Builder: set_awg_config | `.set_awg_config(...)` | AWG config set |
+| S12 | Builder: set_budget | `.set_budget(...)` | Budget set |
+| S13 | Builder: build validates | `.build()` | Validates all constraints |
+| S14 | Builder: build rejects invalid | Invalid constraint | `ValueError` on build |
+| S15 | Validate: all constraints satisfied | Valid sequence | `valid=True` |
+| S16 | Validate: constraint violated | One violated | `valid=False, messages non-empty` |
+| S17 | Validate: budget warning | 85% consumed | `valid=True, warnings non-empty` |
+| S18 | Validate: budget exceeded | 110% consumed | `valid=False` |
+| S19 | Validate: AWG quantization reported | Duration quantized | `awg_quantization populated` |
+| S20 | Validate: multiple violations | 2 constraints + budget | All 3 reported |
+
+### 11.6 Integration Tests
+
+| # | Test Case | Input | Expected |
+|---|-----------|-------|----------|
+| I1 | Python → Proto → Rust round-trip | PulseSequence | Serializes, deserializes, validates |
+| I2 | GRAPE + AWG pre-quantization | `duration=15.7, awg=1gsps/align4` | GRAPE uses 16.0 ns |
+| I3 | Calibration → Budget → Validation | `CalibrationFingerprint` with T1/T2 | Budget correctly initialized |
+| I4 | Sequence with 10 pulses, 5 constraints | Complex sequence | All constraints checked |
+| I5 | Single pulse backward compat | `ExecutePulseRequest` (old API) | Works, no errors |
+| I6 | Batch request backward compat | `ExecutePulseBatchRequest` (old API) | Works, no errors |
+| I7 | gRPC ExecutePulseSequence | Full proto request | Server validates and responds |
+| I8 | Budget exceeded → gRPC error | Sequence exceeding T2 | `FAILED_PRECONDITION` status |
+| I9 | Constraint violated → gRPC error | Violated SIMULTANEOUS | `INVALID_ARGUMENT` status |
+| I10 | AWG quant reported in response | Duration quantized | `QuantizationResult` in response |
+
+### 11.7 Backward Compatibility Tests
+
+| # | Test Case | Input | Expected |
+|---|-----------|-------|----------|
+| B1 | Old client, new server | `ExecutePulseRequest` without sequence fields | Works unchanged |
+| B2 | New client, single pulse | `ExecutePulseSequenceRequest` with 1 pulse, no constraints | Works |
+| B3 | Proto duration_ns=15 (old int) | Re-encoded with new schema as `15.0` | `duration_ns == 15.0` |
+| B4 | No AWG config → no quantization | Sequence without `awg_config` | Raw durations passed through |
+| B5 | No budget config → no budget check | Sequence without `budget_config` | No budget warnings or errors |
+
+### 11.8 Golden File Tests
+
+Golden file tests snapshot the output of validation for known inputs and
+compare against stored expected output. These catch unintended changes to
+validation behavior.
+
+| # | Test Case | Golden File |
+|---|-----------|-------------|
+| G1 | X90 gate sequence with budget | `golden/x90_budget.json` |
+| G2 | Cross-resonance pair with SIMULTANEOUS constraint | `golden/cr_simultaneous.json` |
+| G3 | Dynamical decoupling sequence with ALIGNED constraints | `golden/dd_aligned.json` |
+
+Golden files contain the full `SequenceValidationResult` serialized as JSON,
+including all constraint check results, budget status, and AWG quantization.
+
+### 11.9 Property-Based Tests
+
+Using `hypothesis` (Python) and `proptest` (Rust) to verify invariants
+that must hold for all valid inputs.
+
+| # | Property | Generator | Invariant |
+|---|----------|-----------|-----------|
+| P1 | TimePoint.quantize_to idempotent | Random `nominal_ns`, valid `grid_ns` | `quantize_to(g).quantize_to(g) == quantize_to(g)` |
+| P2 | AWG quantize always aligned | Random `duration_ns`, valid `AWGClockConfig` | `result.num_samples % alignment_samples == 0` |
+| P3 | AWG quantize in bounds | Random `duration_ns` | `min_duration ≤ result.actual_ns ≤ max_duration` |
+| P4 | Budget consume monotonic | Random sequence of `consume()` calls | `consumed` never decreases |
+| P5 | Constraint check deterministic | Random pulse times | `check(t) == check(t)` (same input, same output) |
+
+---
+
+## 12. Future Extensions
+
+### 12.1 v0.3.0 — Multi-Qubit Scheduling
+
+In v0.2.0, users provide explicit `start_time_ns` for each pulse and the
+system validates constraints. In v0.3.0, a scheduler takes the constraint
+graph and computes optimal start times automatically.
+
+**API sketch:**
+
+```python
+from qubitos.temporal import PulseSequenceBuilder, ConstraintKind
+
+builder = PulseSequenceBuilder()
+
+# Add pulses without explicit start times (start_time_ns=None)
+builder.add_pulse("x90_q0", shape=x90_shape, target_qubits=[0])
+builder.add_pulse("x90_q1", shape=x90_shape, target_qubits=[1])
+builder.add_pulse("cr_drive", shape=cr_shape, target_qubits=[0, 1])
+builder.add_pulse("cr_cancel", shape=cancel_shape, target_qubits=[1])
+builder.add_pulse("measure_q0", shape=meas_shape, target_qubits=[0])
+builder.add_pulse("measure_q1", shape=meas_shape, target_qubits=[1])
+
+# Declare constraints
+builder.add_constraint(ConstraintKind.SEQUENTIAL, "x90_q0", "cr_drive", tolerance_ns=0.0)
+builder.add_constraint(ConstraintKind.SEQUENTIAL, "x90_q1", "cr_cancel", tolerance_ns=0.0)
+builder.add_constraint(ConstraintKind.SIMULTANEOUS, "cr_drive", "cr_cancel", tolerance_ns=1.0)
+builder.add_constraint(ConstraintKind.SEQUENTIAL, "cr_drive", "measure_q0", tolerance_ns=50.0)
+builder.add_constraint(ConstraintKind.SEQUENTIAL, "cr_cancel", "measure_q1", tolerance_ns=50.0)
+builder.add_constraint(ConstraintKind.SIMULTANEOUS, "measure_q0", "measure_q1", tolerance_ns=2.0)
+
+# Schedule: solver assigns start times satisfying all constraints
+sequence = builder.schedule()  # v0.3.0 API — not available in v0.2.0
+
+for pulse in sequence.pulses:
+    print(f"{pulse.pulse_id}: start={pulse.start_time.nominal_ns:.1f} ns")
+```
+
+**Scheduler algorithm (planned):** Topological sort of the constraint DAG
+followed by earliest-start-time propagation (list scheduling). For v0.3.0
+workloads (< 100 pulses, < 200 constraints), this is O(V + E) and completes
+in microseconds.
+
+### 12.2 v0.4.0 — Decoherence-Aware GRAPE
+
+Incorporate Lindbladian dynamics into the GRAPE cost function so the
+optimizer actively minimizes decoherence-induced error during pulse shaping.
+
+The Lindblad master equation:
+
+```
+dρ/dt = -i[H(t), ρ] + Σ_k γ_k (L_k ρ L_k† - ½{L_k† L_k, ρ})
+```
+
+For a transmon qubit with T1 and T2:
+
+```
+L_relax = sqrt(1/T1) · |0⟩⟨1|          (amplitude damping)
+L_dephase = sqrt(1/T_phi) · |1⟩⟨1|     (pure dephasing)
+```
+
+where `T_phi = (1/T2 - 1/(2·T1))^(-1)` is the pure dephasing time.
+
+The `DecoherenceBudget` provides T1 and T2 per qubit. In v0.4.0, these
+flow directly into the GRAPE cost function:
+
+```python
+# v0.4.0 sketch — decoherence-aware GRAPE
+class DecoherenceAwareGrapeOptimizer(GrapeOptimizer):
+    """GRAPE with Lindbladian cost term.
+
+    Cost = (1 - process_fidelity) where process_fidelity accounts for
+    both unitary error and decoherence-induced error.
+
+    References:
+        Khaneja et al., JMR 172, 296 (2005) — original GRAPE.
+        Schulte-Herbrüggen et al., JPC A 115, 6 (2011) — open system GRAPE.
+    """
+
+    def _build_lindblad_operators(
+        self, budget: DecoherenceBudget, qubit_ids: list[int]
+    ) -> list[np.ndarray]:
+        operators = []
+        for qid in qubit_ids:
+            qb = budget.budgets[qid]
+            t1, t2 = qb.t1_ns * 1e-9, qb.t2_ns * 1e-9
+
+            # Amplitude damping
+            gamma_relax = 1.0 / t1
+            l_relax = np.sqrt(gamma_relax) * lowering_operator(qid, len(qubit_ids))
+            operators.append(l_relax)
+
+            # Pure dephasing
+            t_phi = 1.0 / (1.0 / t2 - 1.0 / (2 * t1))
+            gamma_dephase = 1.0 / t_phi
+            l_dephase = np.sqrt(gamma_dephase) * z_projector(qid, len(qubit_ids))
+            operators.append(l_dephase)
+
+        return operators
+```
+
+This connects the `include_decoherence` flag in `GRAPEOptions` (currently
+unimplemented) to real functionality.
+
+### 12.3 Dynamical Decoupling Sequences
+
+Dynamical decoupling (Viola & Lloyd, 1998) uses precisely timed π-pulses
+to refocus dephasing. The `ALIGNED` constraint is designed for this use
+case.
+
+**CPMG sequence example:**
+
+```
+       τ/2      τ        τ        τ      τ/2
+    |------|--X--|-----|--X--|-----|--X--|------|
+    idle   π_x  idle  π_x  idle  π_x  idle
+
+    Total time: n·τ + τ = (n+1)·τ
+    All π-pulses on alignment grid of τ
+```
+
+```python
+def build_cpmg_sequence(
+    n_pulses: int,
+    tau_ns: float,
+    pi_pulse_shape: PulseShape,
+    qubit_id: int,
+    awg_config: AWGClockConfig,
+    budget: DecoherenceBudget,
+) -> PulseSequence:
+    """Build a CPMG dynamical decoupling sequence.
+
+    Args:
+        n_pulses: Number of π-pulses. Must be >= 1.
+        tau_ns: Inter-pulse spacing in nanoseconds.
+        pi_pulse_shape: Shape of the π-pulse.
+        qubit_id: Target qubit.
+        awg_config: AWG clock configuration.
+        budget: Decoherence budget for the target qubit.
+
+    Returns:
+        A validated PulseSequence.
+
+    References:
+        Viola & Lloyd, PRA 58, 2733 (1998).
+        Meiboom & Gill, Rev. Sci. Instrum. 29, 688 (1958).
+    """
+    builder = PulseSequenceBuilder()
+    builder.set_awg_config(awg_config)
+    builder.set_budget(budget)
+
+    pi_duration = pi_pulse_shape.duration_ns
+
+    for i in range(n_pulses):
+        pulse_id = f"pi_{i}"
+        start_time = tau_ns / 2 + i * tau_ns
+        builder.add_pulse(
+            pulse_id=pulse_id,
+            shape=pi_pulse_shape,
+            target_qubits=[qubit_id],
+            start_time_ns=start_time,
+        )
+
+        # All pulses must be on the τ alignment grid
+        if i > 0:
+            builder.add_constraint(
+                ConstraintKind.ALIGNED,
+                f"pi_0",
+                pulse_id,
+                tolerance_ns=tau_ns,
+            )
+
+    return builder.build()
+```
+
+### 12.4 QEC Syndrome Extraction
+
+Quantum error correction requires repeated syndrome extraction cycles,
+each consisting of:
+
+1. Ancilla reset (measurement + conditional X gate)
+2. CNOT/CZ entangling gates between data and ancilla qubits
+3. Ancilla measurement
+
+Each cycle must complete within the code distance's coherence window.
+The `DecoherenceBudget` can track per-cycle coherence consumption, and
+`TemporalConstraint` can enforce the cycle structure.
+
+This is a v0.5.0+ extension requiring feedback control (Section 4.5),
+but the time model data structures are designed to accommodate it.
+
+### 12.5 Hardware-Specific AWG Profiles
+
+In v0.2.0, `AWGClockConfig` presets are hardcoded. A future version
+will load AWG profiles from YAML configuration:
+
+```yaml
+# awg_profiles.yaml
+profiles:
+  keysight_m3202a:
+    sample_rate_ghz: 1.0
+    min_samples: 4
+    max_samples: 65536
+    alignment_samples: 4
+    dac_bits: 14
+    output_range_v: [-1.0, 1.0]
+
+  zurich_hdawg:
+    sample_rate_ghz: 2.4
+    min_samples: 16
+    max_samples: 65536
+    alignment_samples: 8
+    dac_bits: 16
+    output_range_v: [-0.75, 0.75]
+
+  keysight_m5300a:
+    sample_rate_ghz: 4.0
+    min_samples: 16
+    max_samples: 131072
+    alignment_samples: 16
+    dac_bits: 16
+    output_range_v: [-0.5, 0.5]
+```
+
+This extends `AWGClockConfig` with DAC resolution and output range, enabling
+amplitude quantization in addition to time quantization.
+
+---
+
+## 13. References
+
+1. **Nielsen, M. A. & Chuang, I. L.** (2010). *Quantum Computation and
+   Quantum Information* (10th Anniversary Edition). Cambridge University
+   Press. ISBN: 978-1-107-00217-3.
+
+2. **Viola, L. & Lloyd, S.** (1998). "Dynamical suppression of decoherence
+   in two-state quantum systems." *Physical Review A*, 58(4), 2733–2744.
+   DOI: [10.1103/PhysRevA.58.2733](https://doi.org/10.1103/PhysRevA.58.2733)
+
+3. **Knill, E.** (2005). "Quantum computing with realistically noisy
+   devices." *Nature*, 434, 39–44.
+   DOI: [10.1038/nature03350](https://doi.org/10.1038/nature03350)
+
+4. **Khaneja, N., Reiss, T., Kehlet, C., Schulte-Herbrüggen, T. &
+   Glaser, S. J.** (2005). "Optimal control of coupled spin dynamics:
+   design of NMR pulse sequences by gradient ascent algorithms." *Journal
+   of Magnetic Resonance*, 172(2), 296–305.
+   DOI: [10.1016/j.jmr.2004.11.004](https://doi.org/10.1016/j.jmr.2004.11.004)
+
+5. **Krantz, P., Kjaergaard, M., Yan, F., Orlando, T. P., Gustavsson, S.
+   & Oliver, W. D.** (2019). "A quantum engineer's guide to superconducting
+   qubits." *Applied Physics Reviews*, 6(2), 021318.
+   DOI: [10.1063/1.5089550](https://doi.org/10.1063/1.5089550)
+
+6. **Wallman, J. J. & Emerson, J.** (2016). "Noise tailoring for scalable
+   quantum computation via randomized compiling." *Physical Review A*,
+   94(5), 052325.
+   DOI: [10.1103/PhysRevA.94.052325](https://doi.org/10.1103/PhysRevA.94.052325)
+
+7. **Aharonov, D. & Ben-Or, M.** (1997). "Fault-tolerant quantum
+   computation with constant error." *Proceedings of the 29th Annual ACM
+   Symposium on Theory of Computing (STOC)*, 176–188.
+   DOI: [10.1145/258533.258579](https://doi.org/10.1145/258533.258579)
+
+8. **Nielsen, M. A.** (2002). "A simple formula for the average gate
+   fidelity of a quantum dynamical operation." *Physics Letters A*,
+   303(4), 249–252.
+   DOI: [10.1016/S0375-9601(02)01272-0](https://doi.org/10.1016/S0375-9601(02)01272-0)
+
+---
+
+## Appendix A: Notation Summary
+
+| Symbol | Meaning | Units | Typical Range |
+|--------|---------|-------|---------------|
+| T1 | Energy relaxation time | μs (stored as ns internally) | 10–200 μs (transmon) |
+| T2 | Dephasing time (total) | μs (stored as ns internally) | 5–100 μs (transmon) |
+| T_phi | Pure dephasing time | μs | Derived: 1/(1/T2 - 1/(2·T1)) |
+| f_T1(t) | T1 budget fraction consumed | dimensionless | t / T1 |
+| f_T2(t) | T2 budget fraction consumed | dimensionless | t / T2 |
+| p_relax(t) | Relaxation error probability | dimensionless | 1 - exp(-t/T1) |
+| p_dephase(t) | Dephasing error probability | dimensionless | 1 - exp(-t/T2) |
+| dt | Time step (GRAPE) | ns (computation in seconds) | 0.1–1.0 ns |
+| GSa/s | Giga-samples per second | samples/ns | 1.0, 2.0, 2.4, 4.0 |
+| τ | Inter-pulse spacing (DD) | ns | 10–1000 ns |
+
+---
+
+## Appendix B: Constraint Kind Quick Reference
+
+```
+SIMULTANEOUS
+    pulse_a: ├──────────┤
+    pulse_b: ├────────────────┤
+             ↑
+             |start_a - start_b| ≤ tolerance
+
+SEQUENTIAL
+    pulse_a: ├──────────┤
+    pulse_b:            ├gap┤├────────────────┤
+                        ↑   ↑
+                      end_a  start_b
+                        gap = start_b - end_a
+                        0 ≤ gap ≤ tolerance
+
+ALIGNED
+    grid:    |    |    |    |    |    |    |    |
+    pulse_a:      ├──────────┤
+    pulse_b:                  ├────────┤
+             ↑                ↑
+             both starts on grid (tolerance = grid spacing)
+
+MAX_DELAY
+    pulse_a: ├──────────┤
+    pulse_b:            ·····├────────────────┤
+                        ↑    ↑
+                      end_a  start_b
+                        0 ≤ delay ≤ tolerance
+
+MIN_GAP
+    pulse_a: ├──────────┤
+    pulse_b:                        ├────────────────┤
+                        ↑           ↑
+                      end_a         start_b
+                        gap = start_b - end_a ≥ tolerance
+```
+
+---
+
+## Appendix C: Complete Example — X90 Gate + Measurement
+
+This example demonstrates the full workflow: constructing a sequence with
+an X90 gate followed by a measurement pulse, with AWG quantization and
+decoherence budget tracking.
+
+```python
+import numpy as np
+from qubitos.temporal import (
+    AWGClockConfig,
+    ConstraintKind,
+    DecoherenceBudget,
+    PulseSequenceBuilder,
+    QubitDecoherenceBudget,
+    TimePoint,
+)
+from qubitos.pulsegen.shapes import gaussian_drag_pulse
+from qubitos.calibrator.fingerprint import CalibrationFingerprint
+
+
+# --- 1. Hardware configuration ---
+
+awg = AWGClockConfig.preset_2gsps()  # 2 GSa/s, 8-sample alignment
+print(f"AWG: {awg.sample_rate_ghz} GSa/s, "
+      f"granularity {awg.duration_granularity_ns} ns")
+# AWG: 2.0 GSa/s, granularity 4.0 ns
+
+
+# --- 2. Load calibration and create budget ---
+
+fingerprint = CalibrationFingerprint.load("lab_device_2026-02-08.json")
+budget = fingerprint.to_decoherence_budget(
+    warning_threshold=0.8,
+    blocking_threshold=1.0,
+)
+print(f"Q0 T1={budget.budgets[0].t1_ns/1000:.1f} μs, "
+      f"T2={budget.budgets[0].t2_ns/1000:.1f} μs")
+# Q0 T1=50.0 μs, T2=30.0 μs
+
+
+# --- 3. Create pulse shapes ---
+
+# X90 gate: DRAG pulse, 20 ns requested
+x90_shape = gaussian_drag_pulse(
+    duration_ns=20.0,
+    sigma_ns=5.0,
+    drag_coefficient=0.2,
+    amplitude_mhz=50.0,
+)
+
+# Measurement pulse: flat-top with ramps, 500 ns requested
+meas_shape = flat_top_pulse(
+    duration_ns=500.0,
+    ramp_ns=20.0,
+    amplitude_mhz=10.0,
+)
+
+
+# --- 4. Pre-quantize durations ---
+
+x90_quant = awg.quantize_duration(x90_shape.duration_ns)
+meas_quant = awg.quantize_duration(meas_shape.duration_ns)
+
+print(f"X90: requested {x90_quant.requested_ns} ns → "
+      f"actual {x90_quant.actual_ns} ns "
+      f"(Δ = {x90_quant.delta_ns:+.1f} ns, "
+      f"{x90_quant.num_samples} samples)")
+# X90: requested 20.0 ns → actual 20.0 ns (Δ = +0.0 ns, 40 samples)
+
+print(f"Meas: requested {meas_quant.requested_ns} ns → "
+      f"actual {meas_quant.actual_ns} ns "
+      f"(Δ = {meas_quant.delta_ns:+.1f} ns, "
+      f"{meas_quant.num_samples} samples)")
+# Meas: requested 500.0 ns → actual 500.0 ns (Δ = +0.0 ns, 1000 samples)
+
+
+# --- 5. Build sequence ---
+
+builder = PulseSequenceBuilder()
+builder.set_awg_config(awg)
+builder.set_budget(budget)
+
+builder.add_pulse(
+    pulse_id="x90_q0",
+    shape=x90_shape,
+    target_qubits=[0],
+    start_time_ns=0.0,
+)
+
+# 20 ns gap between gate and measurement (ring-down time)
+builder.add_pulse(
+    pulse_id="meas_q0",
+    shape=meas_shape,
+    target_qubits=[0],
+    start_time_ns=x90_quant.actual_ns + 20.0,  # 40.0 ns
+)
+
+# Constraint: measurement must follow gate with at most 50 ns gap
+builder.add_constraint(
+    ConstraintKind.SEQUENTIAL,
+    "x90_q0",
+    "meas_q0",
+    tolerance_ns=50.0,
+)
+
+sequence = builder.build()
+
+
+# --- 6. Inspect results ---
+
+print(f"\nSequence: {len(sequence.pulses)} pulses, "
+      f"total duration {sequence.total_duration_ns:.1f} ns")
+# Sequence: 2 pulses, total duration 540.0 ns
+
+for pulse in sequence.pulses:
+    print(f"  {pulse.pulse_id}: "
+          f"start={pulse.start_time.nominal_ns:.1f} ns, "
+          f"duration={pulse.duration_ns:.1f} ns, "
+          f"end={pulse.end_time.nominal_ns:.1f} ns")
+# x90_q0: start=0.0 ns, duration=20.0 ns, end=20.0 ns
+# meas_q0: start=40.0 ns, duration=500.0 ns, end=540.0 ns
+
+
+# --- 7. Check budget ---
+
+status = budget.status(qubit_id=0)
+summary = budget.summary(qubit_id=0)
+print(f"\nBudget: {summary}")
+# Budget: Q0: consumed 520.0 / 30000.0 ns (1.7% of T2), status=OK
+
+# Error contribution for GAP 2 ErrorBudget
+p_err = budget.to_error_contribution(qubit_id=0)
+print(f"Decoherence error probability: {p_err:.6f}")
+# Decoherence error probability: 0.017178
+# (dominated by dephasing: 1 - exp(-520/30000) ≈ 0.0172)
+
+
+# --- 8. Check constraints ---
+
+from qubitos.temporal import validate_pulse_sequence
+
+result = validate_pulse_sequence(sequence)
+print(f"\nValidation: {'PASS' if result.valid else 'FAIL'}")
+for cr in result.constraint_results:
+    sym = "✓" if cr.satisfied else "✗"
+    print(f"  {sym} {cr.constraint}: margin={cr.margin_ns:+.1f} ns")
+# Validation: PASS
+#   ✓ SEQUENTIAL x90_q0 → meas_q0: margin=+20.0 ns
+```
+
+---
+
+*End of specification.*
