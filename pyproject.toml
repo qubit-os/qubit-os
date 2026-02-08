@@ -110,6 +110,7 @@ ignore_errors = true
 target-version = "py311"
 line-length = 100
 src = ["src"]
+exclude = ["src/qubitos/proto"]
 
 [tool.ruff.lint]
 select = [

@@ -1018,3 +1018,370 @@ class TestIntegration:
         seq.append("p1", [0], start_ns=0.0, duration_ns=20.0)
         summary = seq.summary()
         assert "decoherence" in summary.lower() or "T2" in summary
+
+
+# =============================================================================
+# Proto roundtrip tests (§17.6)
+# =============================================================================
+
+
+class TestProtoConvert:
+    """Tests for proto <-> Python conversion (proto_convert.py).
+
+    Each test verifies that Python -> proto -> Python roundtrip preserves
+    all field values within floating-point tolerance.
+    """
+
+    def test_proto_roundtrip_timepoint(self):
+        """TimePoint proto -> Python -> proto preserves all fields."""
+        from qubitos.temporal.proto_convert import (
+            timepoint_from_proto,
+            timepoint_to_proto,
+        )
+
+        original = TimePoint(nominal_ns=20.0, precision_ns=0.5, jitter_bound_ns=0.05)
+        proto = timepoint_to_proto(original)
+        assert proto.nominal_ns == pytest.approx(20.0)
+        assert proto.precision_ns == pytest.approx(0.5)
+        assert proto.jitter_bound_ns == pytest.approx(0.05)
+
+        roundtrip = timepoint_from_proto(proto)
+        assert roundtrip.nominal_ns == pytest.approx(original.nominal_ns)
+        assert roundtrip.precision_ns == pytest.approx(original.precision_ns)
+        assert roundtrip.jitter_bound_ns == pytest.approx(original.jitter_bound_ns)
+        assert roundtrip.quantized_ns == pytest.approx(original.quantized_ns)
+
+    def test_proto_roundtrip_timepoint_defaults(self):
+        """TimePoint with defaults survives roundtrip (proto 0-value handling)."""
+        from qubitos.temporal.proto_convert import (
+            timepoint_from_proto,
+            timepoint_to_proto,
+        )
+
+        original = TimePoint(nominal_ns=20.0)  # precision=1.0, jitter=0.0
+        proto = timepoint_to_proto(original)
+        roundtrip = timepoint_from_proto(proto)
+        assert roundtrip.nominal_ns == pytest.approx(original.nominal_ns)
+        assert roundtrip.precision_ns == pytest.approx(original.precision_ns)
+        assert roundtrip.jitter_bound_ns == pytest.approx(original.jitter_bound_ns)
+
+    def test_proto_roundtrip_timepoint_zero_nominal(self):
+        """TimePoint with nominal_ns=0 (start marker) roundtrips correctly."""
+        from qubitos.temporal.proto_convert import (
+            timepoint_from_proto,
+            timepoint_to_proto,
+        )
+
+        original = TimePoint(nominal_ns=0.0)
+        roundtrip = timepoint_from_proto(timepoint_to_proto(original))
+        assert roundtrip.nominal_ns == 0.0
+        assert roundtrip.quantized_ns == 0.0
+
+    def test_proto_roundtrip_awg_config(self):
+        """AWGClockConfig roundtrip preserves all fields."""
+        from qubitos.temporal.proto_convert import (
+            awg_config_from_proto,
+            awg_config_to_proto,
+        )
+
+        original = AWGClockConfig(
+            sample_rate_ghz=2.4,
+            jitter_bound_ns=0.05,
+            min_samples=8,
+            max_samples=50_000,
+        )
+        proto = awg_config_to_proto(original)
+        roundtrip = awg_config_from_proto(proto)
+        assert roundtrip.sample_rate_ghz == pytest.approx(original.sample_rate_ghz)
+        assert roundtrip.jitter_bound_ns == pytest.approx(original.jitter_bound_ns)
+        assert roundtrip.min_samples == original.min_samples
+        assert roundtrip.max_samples == original.max_samples
+
+    def test_proto_roundtrip_constraint_sequential(self):
+        """TemporalConstraint (SEQUENTIAL) roundtrip."""
+        from qubitos.temporal.proto_convert import (
+            constraint_from_proto,
+            constraint_to_proto,
+        )
+
+        original = TemporalConstraint(
+            kind=ConstraintKind.SEQUENTIAL,
+            pulse_a_id="x90",
+            pulse_b_id="x180",
+            tolerance_ns=2.0,
+        )
+        roundtrip = constraint_from_proto(constraint_to_proto(original))
+        assert roundtrip.kind == original.kind
+        assert roundtrip.pulse_a_id == original.pulse_a_id
+        assert roundtrip.pulse_b_id == original.pulse_b_id
+        assert roundtrip.tolerance_ns == pytest.approx(original.tolerance_ns)
+
+    def test_proto_roundtrip_constraint_aligned(self):
+        """TemporalConstraint (ALIGNED) roundtrip preserves alignment_fraction."""
+        from qubitos.temporal.proto_convert import (
+            constraint_from_proto,
+            constraint_to_proto,
+        )
+
+        original = TemporalConstraint(
+            kind=ConstraintKind.ALIGNED,
+            pulse_a_id="echo",
+            pulse_b_id="refocus",
+            tolerance_ns=1.0,
+            alignment_fraction=0.333,
+        )
+        roundtrip = constraint_from_proto(constraint_to_proto(original))
+        assert roundtrip.kind == ConstraintKind.ALIGNED
+        assert roundtrip.alignment_fraction == pytest.approx(0.333)
+
+    def test_proto_roundtrip_constraint_all_kinds(self):
+        """All 5 ConstraintKind values survive roundtrip."""
+        from qubitos.temporal.proto_convert import (
+            constraint_from_proto,
+            constraint_to_proto,
+        )
+
+        for kind in ConstraintKind:
+            frac = 0.5 if kind == ConstraintKind.ALIGNED else 0.0
+            original = TemporalConstraint(
+                kind=kind,
+                pulse_a_id="a",
+                pulse_b_id="b",
+                tolerance_ns=1.0,
+                alignment_fraction=frac,
+            )
+            roundtrip = constraint_from_proto(constraint_to_proto(original))
+            assert roundtrip.kind == kind, f"Failed for {kind}"
+
+    def test_proto_roundtrip_constraint_unknown_kind(self):
+        """Unknown proto ConstraintKind value raises ValueError."""
+        from qubitos.proto.quantum.pulse.v1 import temporal_pb2
+        from qubitos.temporal.proto_convert import constraint_from_proto
+
+        msg = temporal_pb2.TemporalConstraint(
+            kind=99,  # Not a valid ConstraintKind
+            pulse_a_id="a",
+            pulse_b_id="b",
+        )
+        with pytest.raises(ValueError, match="Unknown ConstraintKind"):
+            constraint_from_proto(msg)
+
+    def test_proto_roundtrip_budget(self):
+        """DecoherenceBudget roundtrip preserves all fields."""
+        from qubitos.temporal.proto_convert import (
+            budget_from_proto,
+            budget_to_proto,
+        )
+
+        original = DecoherenceBudget(
+            t1_us={0: 50.0, 1: 60.0},
+            t2_us={0: 30.0, 1: 40.0},
+            warn_fraction=0.2,
+            block_fraction=0.7,
+        )
+        original.add_time(0, 500.0)
+        original.add_time(1, 1000.0)
+
+        proto = budget_to_proto(original)
+        roundtrip = budget_from_proto(proto)
+        assert roundtrip.t1_us == {0: pytest.approx(50.0), 1: pytest.approx(60.0)}
+        assert roundtrip.t2_us == {0: pytest.approx(30.0), 1: pytest.approx(40.0)}
+        assert roundtrip.warn_fraction == pytest.approx(0.2)
+        assert roundtrip.block_fraction == pytest.approx(0.7)
+        assert roundtrip.qubit_time_ns[0] == pytest.approx(500.0)
+        assert roundtrip.qubit_time_ns[1] == pytest.approx(1000.0)
+
+    def test_proto_roundtrip_budget_zero_defaults(self):
+        """Budget proto with 0-value fields gets sensible defaults."""
+        from qubitos.proto.quantum.pulse.v1 import temporal_pb2
+        from qubitos.temporal.proto_convert import budget_from_proto
+
+        # Proto with all zeros (proto3 default)
+        msg = temporal_pb2.DecoherenceBudget()
+        budget = budget_from_proto(msg)
+        # 0-value fractions should get defaults
+        assert budget.warn_fraction == pytest.approx(0.3)
+        assert budget.block_fraction == pytest.approx(0.8)
+
+    def test_proto_roundtrip_scheduled_pulse(self):
+        """ScheduledPulse roundtrip without pulse_data."""
+        from qubitos.temporal.proto_convert import (
+            scheduled_pulse_from_proto,
+            scheduled_pulse_to_proto,
+        )
+
+        original = ScheduledPulse(
+            pulse_id="x90_q0",
+            qubit_indices=[0, 1],
+            start_time=TimePoint(nominal_ns=10.0, precision_ns=0.5, jitter_bound_ns=0.01),
+            duration=TimePoint(nominal_ns=20.0, precision_ns=0.5),
+        )
+        proto = scheduled_pulse_to_proto(original)
+        roundtrip = scheduled_pulse_from_proto(proto)
+        assert roundtrip.pulse_id == "x90_q0"
+        assert roundtrip.qubit_indices == [0, 1]
+        assert roundtrip.start_time.nominal_ns == pytest.approx(10.0)
+        assert roundtrip.duration.nominal_ns == pytest.approx(20.0)
+        assert roundtrip.pulse_data is None
+
+    def test_proto_roundtrip_scheduled_pulse_with_data(self):
+        """ScheduledPulse roundtrip with PulseShape pulse_data."""
+        from qubitos.proto.quantum.pulse.v1 import pulse_pb2
+        from qubitos.temporal.proto_convert import (
+            scheduled_pulse_from_proto,
+            scheduled_pulse_to_proto,
+        )
+
+        shape = pulse_pb2.PulseShape(
+            pulse_id="test-shape",
+            algorithm="grape",
+            duration_ns=20,
+            num_time_steps=4,
+            i_envelope=[0.1, 0.2, 0.3, 0.4],
+        )
+        original = ScheduledPulse(
+            pulse_id="p1",
+            qubit_indices=[0],
+            start_time=TimePoint(nominal_ns=0.0),
+            duration=TimePoint(nominal_ns=20.0),
+            pulse_data=shape,
+        )
+        proto = scheduled_pulse_to_proto(original)
+        assert proto.pulse_data.pulse_id == "test-shape"
+        assert list(proto.pulse_data.i_envelope) == pytest.approx([0.1, 0.2, 0.3, 0.4])
+
+        roundtrip = scheduled_pulse_from_proto(proto)
+        assert roundtrip.pulse_data is not None
+        assert roundtrip.pulse_data.pulse_id == "test-shape"
+
+    def test_proto_roundtrip_sequence(self):
+        """PulseSequence proto -> Python -> proto preserves full structure."""
+        from qubitos.temporal.proto_convert import (
+            sequence_from_proto,
+            sequence_to_proto,
+        )
+
+        budget = DecoherenceBudget(
+            t1_us={0: 50.0},
+            t2_us={0: 30.0},
+            warn_fraction=0.25,
+            block_fraction=0.75,
+        )
+        awg = AWGClockConfig(sample_rate_ghz=2.0, jitter_bound_ns=0.05)
+        seq = PulseSequence(decoherence_budget=budget, awg_config=awg)
+        seq.append("x90", [0], start_ns=0.0, duration_ns=20.0)
+        seq.append("x180", [0], start_ns=25.0, duration_ns=10.0)
+        seq.add_constraint(
+            TemporalConstraint(
+                kind=ConstraintKind.SEQUENTIAL,
+                pulse_a_id="x90",
+                pulse_b_id="x180",
+            )
+        )
+
+        proto = sequence_to_proto(seq)
+        roundtrip = sequence_from_proto(proto)
+
+        assert len(roundtrip.pulses) == 2
+        assert len(roundtrip.constraints) == 1
+        assert roundtrip.pulses[0].pulse_id == "x90"
+        assert roundtrip.pulses[1].pulse_id == "x180"
+        assert roundtrip.constraints[0].kind == ConstraintKind.SEQUENTIAL
+        assert roundtrip.awg_config is not None
+        assert roundtrip.awg_config.sample_rate_ghz == pytest.approx(2.0)
+        assert roundtrip.decoherence_budget is not None
+        assert roundtrip.decoherence_budget.t1_us[0] == pytest.approx(50.0)
+        # Total duration preserved via proto field
+        assert proto.total_duration_ns == pytest.approx(seq.total_duration_ns)
+
+    def test_proto_roundtrip_sequence_minimal(self):
+        """Minimal PulseSequence (no budget, no AWG, no constraints)."""
+        from qubitos.temporal.proto_convert import (
+            sequence_from_proto,
+            sequence_to_proto,
+        )
+
+        seq = PulseSequence()
+        seq.append("p1", [0], start_ns=0.0, duration_ns=20.0)
+        roundtrip = sequence_from_proto(sequence_to_proto(seq))
+        assert len(roundtrip.pulses) == 1
+        assert roundtrip.awg_config is None
+        assert roundtrip.decoherence_budget is None
+
+    def test_proto_roundtrip_sequence_empty(self):
+        """Empty PulseSequence roundtrip."""
+        from qubitos.temporal.proto_convert import (
+            sequence_from_proto,
+            sequence_to_proto,
+        )
+
+        seq = PulseSequence()
+        roundtrip = sequence_from_proto(sequence_to_proto(seq))
+        assert len(roundtrip.pulses) == 0
+        assert roundtrip.total_duration_ns == 0.0
+
+    def test_proto_roundtrip_spin_echo(self):
+        """Full spin echo roundtrip — the integration scenario from §17.6."""
+        from qubitos.temporal.proto_convert import (
+            sequence_from_proto,
+            sequence_to_proto,
+        )
+
+        budget = DecoherenceBudget(t1_us={0: 50.0}, t2_us={0: 30.0})
+        awg = AWGClockConfig(sample_rate_ghz=1.0, jitter_bound_ns=0.01)
+        seq = PulseSequence(decoherence_budget=budget, awg_config=awg)
+        seq.append("x90_1", [0], start_ns=0.0, duration_ns=20.0)
+        seq.append("x180", [0], start_ns=45.0, duration_ns=10.0)
+        seq.append("x90_2", [0], start_ns=100.0, duration_ns=20.0)
+        seq.add_constraint(
+            TemporalConstraint(
+                kind=ConstraintKind.SEQUENTIAL,
+                pulse_a_id="x90_1",
+                pulse_b_id="x180",
+            )
+        )
+        seq.add_constraint(
+            TemporalConstraint(
+                kind=ConstraintKind.SEQUENTIAL,
+                pulse_a_id="x180",
+                pulse_b_id="x90_2",
+            )
+        )
+
+        proto = sequence_to_proto(seq)
+        roundtrip = sequence_from_proto(proto)
+
+        # Structure preserved
+        assert len(roundtrip.pulses) == 3
+        assert len(roundtrip.constraints) == 2
+        assert [p.pulse_id for p in roundtrip.pulses] == ["x90_1", "x180", "x90_2"]
+
+        # Timing preserved
+        assert roundtrip.pulses[0].start_time.quantized_ns == pytest.approx(0.0)
+        assert roundtrip.pulses[1].start_time.quantized_ns == pytest.approx(45.0)
+        assert roundtrip.pulses[2].start_time.quantized_ns == pytest.approx(100.0)
+
+        # Validation still passes
+        issues = roundtrip.validate()
+        assert not any("ERROR" in i for i in issues)
+        assert not any("OVERLAP" in i for i in issues)
+
+    def test_proto_awg_config_zero_defaults(self):
+        """AWGClockConfig proto with all zeros gets sensible defaults."""
+        from qubitos.proto.quantum.pulse.v1 import pulse_pb2
+        from qubitos.temporal.proto_convert import awg_config_from_proto
+
+        msg = pulse_pb2.AWGClockConfig()  # all zeros
+        cfg = awg_config_from_proto(msg)
+        assert cfg.sample_rate_ghz == 1.0
+        assert cfg.min_samples == 4
+        assert cfg.max_samples == 100_000
+
+    def test_proto_timepoint_zero_precision_default(self):
+        """TimePoint proto with precision=0 gets default 1.0."""
+        from qubitos.proto.quantum.pulse.v1 import pulse_pb2
+        from qubitos.temporal.proto_convert import timepoint_from_proto
+
+        msg = pulse_pb2.TimePoint(nominal_ns=20.0)  # precision_ns=0 (proto default)
+        tp = timepoint_from_proto(msg)
+        assert tp.precision_ns == 1.0
