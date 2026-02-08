@@ -2,18 +2,11 @@
 
 ## Overview
 
-QubitOS is an open-source quantum control kernel providing pulse optimization and hardware abstraction for quantum computing research. This roadmap outlines the development phases from design to production-ready release.
-
-## Current Status
-
-**Phase 1: Core Implementation** - COMPLETE
-**Phase 2: Integration & Testing** - COMPLETE
-**Phase 3: IQM Integration & Calibration** - COMPLETE
-**Phase 4: v0.1.0 Release** - IN PROGRESS
+QubitOS is an open-source quantum control kernel providing Hamiltonian-level pulse optimization, hardware abstraction, and calibration management for quantum computing research. The project spans three repositories: `qubit-os-proto` (Protocol Buffer definitions), `qubit-os-hardware` (Rust HAL server), and `qubit-os-core` (Python client, optimizer, and calibration). **v0.1.0 has been released** — this roadmap now focuses on v0.2.0 foundation hardening informed by a comprehensive architecture review.
 
 ---
 
-## IMPORTANT:CI/CD-First Development Policy
+## CI/CD-First Development Policy
 
 **All development follows a CI/CD-first approach. This is not negotiable.**
 
@@ -22,11 +15,11 @@ QubitOS is an open-source quantum control kernel providing pulse optimization an
 1. **Green CI is a prerequisite for any phase transition**
    - No phase can begin until the previous phase's CI is passing
    - No commits to main branch if CI is red (except CI fixes)
-   
+
 2. **Local validation before push**
    - Run `scripts/ci-check.sh` before every push
    - Pre-commit hooks must be installed and active
-   
+
 3. **No bypassing branch protection**
    - Branch protection rules exist for a reason
    - If you must bypass, you MUST fix CI in the next commit
@@ -38,7 +31,7 @@ QubitOS is an open-source quantum control kernel providing pulse optimization an
 cd qubit-os-hardware
 cargo fmt --check && cargo clippy -- -D warnings && cargo test
 
-# qubit-os-core  
+# qubit-os-core
 cd qubit-os-core
 source .venv/bin/activate
 ruff check src/ && ruff format --check src/ && pytest tests/
@@ -51,273 +44,314 @@ python -m build  # Test Python build works
 
 ---
 
-## Timeline
+## Completed Phases (v0.1.0)
 
-```
-2026 Q1
-├── Phase 0: Design & Foundation (Jan)        COMPLETE
-├── Phase 1: Core Implementation (Jan-Feb)    COMPLETE
-├── Phase 2: Integration & Testing (Feb)      COMPLETE
-│   ├── Documentation (Quickstart, API, Guides)
-│   ├── Test Coverage (Python 93%, Rust 85%+)
-│   └── Reproducibility & Golden Tests
-├── Phase 3: IQM Integration (Feb)            COMPLETE
-│   ├── IQM Rust backend (149 tests)
-│   ├── Sim-to-real validation (Hellinger, crosscheck)
-│   └── Hardware calibration (T1/T2, RB, protocols)
-│
-└── Phase 4: v0.1.0 Release (Feb)            IN PROGRESS
-    ├── Version bump, changelog, release notes
-    ├── PyPI publish, Docker images
-    └── Documentation site
-```
+### Phase 0: Design & Foundation ✅
 
----
+Established project structure and governance: design document v0.5.0 defining the Hamiltonian-first architecture, 3-repo structure (proto, hardware, core), Protocol Buffer API definitions, CI/CD workflows for all repos, default calibration data, README files, Apache 2.0 licensing, pre-commit hooks, issue templates, and Dependabot configuration.
 
-## Phase 0: Design & Foundation [x] COMPLETE
+### Phase 1: Core Implementation ✅
 
-**Duration:** 4 weeks  
-**Status:** [x] Complete  
-**Goal:** Rock-solid foundation before writing implementation code
+Built the working single-qubit control stack: Rust HAL server (tonic gRPC + axum REST), QuTiP simulation backend via PyO3, GRAPE optimizer achieving 99.9% fidelity on X-gate, full `qubit-os` CLI, Python client library, and completed a 12-item security audit. End-to-end test passing: X-gate optimization through pulse execution to measurement results.
 
-### Deliverables - All Complete
+### Phase 2: Integration & Testing ✅
 
-| Item | Status |
-|------|--------|
-| Design document v0.5.0 | [x] Done |
-| Repository structure (3 repos) | [x] Done |
-| Proto definitions | [x] Done |
-| CI/CD workflows | [x] Done |
-| Default calibration | [x] Done |
-| README files | [x] Done |
-| License (Apache 2.0) | [x] Done |
-| Pre-commit hooks | [x] Done |
-| Issue templates & Dependabot | [x] Done |
+Achieved production-quality test coverage and documentation: 93% Python coverage (464 tests), 85%+ Rust coverage (149 tests), MkDocs documentation site, 3 tutorial notebooks (quickstart, GRAPE deep dive, custom Hamiltonians), 5 golden file test suites for reproducibility validation, mypy clean, troubleshooting guide, and API reference (Sphinx, rustdoc, OpenAPI, buf).
+
+### Phase 3: IQM Integration ✅
+
+Connected to real quantum hardware: IQM Resonance API client in Rust with exponential backoff retry and SecretString credential handling, Hellinger distance crosscheck validation between simulation and hardware, T1/T2 fitting from hardware measurements, randomized benchmarking with 24 single-qubit Cliffords (BFS over generators), and automated calibration runner with drift detection via fingerprinting.
+
+### Phase 4: v0.1.0 Release ✅
+
+Published the first release: v0.1.0 tagged across all three repositories, CHANGELOGs finalized, Python package published to PyPI, Docker images pushed to GHCR, documentation site deployed, and release notes written.
 
 ---
 
-## Phase 1: Core Implementation [x] COMPLETE
+## v0.2.0 — Foundation Hardening
 
-**Duration:** 6 weeks  
-**Status:** [x] Complete  
-**Goal:** Working single-qubit pulse optimization and execution
+**Theme:** Address structural gaps before scaling to multi-qubit.
 
-### Achievements
+The [architecture review](../../ARCHITECTURE-REVIEW.md) identified five structural gaps in QubitOS. While the current single-qubit stack is solid, multi-qubit expansion (v0.3.0) will amplify these gaps into serious problems: temporal constraints between qubits require a time model (GAP 1), sequence-level fidelity requires cumulative error tracking (GAP 2), and gate-model thinking in the API will confuse the Hamiltonian-first design intent (GAP 5). This phase hardens the foundations before building the next floor.
 
-| Milestone | Status | Notes |
-|-----------|--------|-------|
-| HAL server (gRPC + REST) | [x] Done | Rust + tonic + axum |
-| QuTiP backend | [x] Done | PyO3 integration, mesolve |
-| GRAPE optimizer | [x] Done | 99.9% fidelity on X-gate |
-| CLI and Python client | [x] Done | Full `qubit-os` CLI |
-| Security audit (12 items) | [x] Done | All issues resolved |
-| E2E test passing | [x] Done | X-gate optimization → execution |
+### Design Specifications
 
-### Exit Criteria - All Met
-
-- [x] Generate X-gate pulse with GRAPE (99.9% fidelity)
-- [x] Execute pulse on QuTiP backend
-- [x] Get measurement results
-- [x] Fidelity >= 99% on single-qubit gates
-- [x] Full CLI workflow works
-- [x] All tests pass (Python: 65, Rust: 21)
+| Spec File | Title | GAP |
+|-----------|-------|-----|
+| `specs/time-model.md` | Time Model & Temporal Constraints | GAP 1 |
+| `specs/error-budget.md` | Error Budget System | GAP 2 |
+| `specs/target-unitary.md` | Hamiltonian-First API Restructure | GAP 5 |
+| `specs/provenance-tree.md` | Experiment Provenance Merkle Tree | GAP 4 |
+| `specs/proto-consistency.md` | Proto/Python Consistency Fixes | — |
 
 ---
 
-## Phase 2: Integration & Testing -- COMPLETE
+### 0.2.1 Time Model & Temporal Constraints
 
-**Duration:** 4 weeks
-**Status:** Complete
-**Goal:** Production-quality code with full test coverage and documentation
+**Priority:** HIGH | **Estimate:** 4–6 weeks | **Addresses:** GAP 1
 
-### IMPORTANT:Phase 2 Entry Gate (Must Pass Before Starting)
+#### Deliverables
 
-| Requirement | Status |
-|-------------|--------|
-| Phase 1 complete | [x] |
-| All 3 repos CI green | [x] (fixed 2026-02-03) |
-| Security audit complete | [x] |
-| E2E test passing | [x] |
+- [ ] `TimePoint` type with `nominal_ns`, `precision_ns`, and `jitter_bound_ns` fields
+- [ ] `TemporalConstraint` system supporting `Simultaneous`, `Sequential`, `Aligned`, and `MaxDelay` constraint kinds
+- [ ] `PulseSequence` data structure with constraint validation at construction time
+- [ ] `DecoherenceBudget` tracking cumulative T1/T2 consumption across a pulse sequence
+- [ ] AWG clock alignment: pulse durations quantized to AWG sample period (integer multiples)
+- [ ] Proto extensions: `TimePoint`, `TemporalConstraint`, `PulseSequence`, and `DecoherenceBudget` messages in `quantum.pulse.v1`
+- [ ] Rust-side temporal constraint validation in HAL server (reject invalid sequences before execution)
+- [ ] Python `PulseSequence` builder with decoherence budget warnings at construction time
+- [ ] Fix `duration_ns` type mismatch: proto defines `int32`, Python uses `float` — unify via `TimePoint`
+- [ ] Integration tests: constraint violation detection, AWG alignment enforcement, decoherence budget warnings, round-trip proto serialization
 
-### 2.0 CI/CD Hardening (Prerequisite - Complete First)
+#### Exit Criteria
 
-- [x] Fix all CI failures from Phase 1 commits
-- [x] Update pyproject.toml license format (PEP 639)
-- [x] Fix proto build configuration
-- [ ] Add `scripts/ci-check.sh` to all repos
-- [ ] Update CONTRIBUTING.md with CI/CD workflow
-- [ ] Verify all CI passes after fixes
-
-### 2.1 Documentation (Weeks 1-2)
-
-**Priority: HIGH** - User-facing documentation first
-
-- [ ] **Quickstart Guide** - 15-minute walkthrough
-  - Installation (pip, cargo)
-  - Start HAL server
-  - Generate and execute X-gate pulse
-  - Interpret results
-  
-- [ ] **API Reference** - Auto-generated
-  - Python docstrings (Sphinx)
-  - Rust docs (rustdoc)
-  - OpenAPI spec (REST)
-  - Proto documentation (buf)
-
-- [ ] **Example Notebooks** (minimum 3)
-  - `01-quickstart.ipynb` - Basic usage
-  - `02-grape-optimization.ipynb` - GRAPE deep dive
-  - `03-custom-hamiltonians.ipynb` - Advanced usage
-
-- [ ] **Troubleshooting Guide**
-  - Common errors and solutions
-  - Environment setup issues
-  - Backend connectivity
-
-### 2.2 Test Coverage (Weeks 3-4)
-
-**Current State:**
-| Module | Current | Target | Gap |
-|--------|---------|--------|-----|
-| Python (qubitos) | 27% | 75% | -48% |
-| Rust (HAL) | ~60%* | 85% | -25% |
-
-*Estimated - need tarpaulin measurement
-
-**Priority Files for Python Coverage:**
-1. `cli/main.py` - 0% → 70%
-2. `client/hal.py` - 0% → 80%
-3. `calibrator/loader.py` - 0% → 80%
-4. `calibrator/fingerprint.py` - 0% → 80%
-5. `pulsegen/shapes.py` - 16% → 80%
-
-**Test Categories:**
-- [ ] Unit tests for all modules
-- [ ] Integration tests (client ↔ HAL)
-- [ ] Error handling tests
-- [ ] Edge case coverage
-
-### 2.3 Reproducibility Validation (Weeks 5-6)
-
-- [ ] **Tier 1: Deterministic** - Same seed = identical results
-  - Create `tests/golden/` directory
-  - `grape_x_gate_seed42.json` - Golden pulse output
-  - `qutip_counts_seed42.json` - Golden measurement counts
-
-- [ ] **Golden File Tests**
-  - Automated comparison against committed golden files
-  - CI job to verify reproducibility
-
-- [ ] **Cross-Platform Consistency**
-  - Test on Linux, macOS
-  - Document any platform-specific differences
-
-- [ ] **Version Pinning Validation**
-  - Lock file verification
-  - Dependency version documentation
-
-### Phase 2 Exit Criteria -- All Met
-
-| Criterion | Target | Actual |
-|-----------|--------|--------|
-| Python test coverage | >=75% | 93% (464 tests) |
-| Rust test coverage | >=85% | 85%+ (149 tests) |
-| Documentation complete | 100% | Done (11 guides/tutorials/API docs) |
-| Golden file tests | Passing | 5 golden files, all passing |
-| All CI green | Yes | Yes (all 3 repos) |
-| No critical bugs | 0 | 0 |
+- [ ] Timing relationships between pulses are expressible in the API (simultaneous, sequential, aligned, max-delay)
+- [ ] Construction-time warning when cumulative sequence duration exceeds configurable fraction of T2
+- [ ] AWG clock alignment validated and enforced (non-aligned durations rejected or rounded with warning)
+- [ ] All existing tests pass (backward compatible — `PulseShape` without constraints still works)
 
 ---
 
-## Phase 3: IQM Integration & Calibration -- COMPLETE
+### 0.2.2 Error Budget System
 
-**Duration:** 3 weeks
-**Status:** Complete
-**Goal:** Working hardware backend with calibration infrastructure
+**Priority:** HIGH | **Estimate:** 3–4 weeks | **Addresses:** GAP 2
 
-### 3.1 IQM Backend (Rust) -- Complete
+#### Deliverables
 
-- [x] IQM Resonance API client with exponential backoff retry
-- [x] Authentication handling (SecretString, secrecy crate)
-- [x] Job submission and polling
-- [x] Result retrieval with ZXZ Euler decomposition
-- [x] Error handling and retries (149 tests)
+- [ ] `ErrorBudget` dataclass tracking cumulative infidelity, decoherence cost, leakage estimate, and crosstalk penalty
+- [ ] `projected_fidelity()` method estimating total sequence fidelity from accumulated errors
+- [ ] `can_append()` check: returns whether appending a gate/pulse stays within the remaining error budget
+- [ ] Configurable warning thresholds (default: warn at 50% budget consumed, reject at 90%)
+- [ ] Integration with `PulseSequence`: error budget updated automatically as pulses are appended
+- [ ] Integration with calibration T1/T2 data: decoherence cost computed from measured coherence times
+- [ ] CLI output showing error budget status after optimization and before execution
+- [ ] Proto extensions: `ErrorBudget` message, `projected_fidelity` field on `MeasurementResult`
+- [ ] Unit tests validating error accumulation math (multiplicative fidelity, additive infidelity bounds, decoherence decay)
 
-### 3.2 Sim-to-Real Validation -- Complete
+#### Exit Criteria
 
-- [x] Hellinger distance comparison (batch support)
-- [x] Crosscheck framework (configurable thresholds)
-- [x] Hardware calibration adapter
-- [x] Validation status integration
-
-### 3.3 Hardware Calibration -- Complete
-
-- [x] T1/T2 exponential decay fitting (scipy curve_fit)
-- [x] Calibration protocols (T1, T2 Ramsey, T2 Echo)
-- [x] Randomized benchmarking (24 single-qubit Cliffords)
-- [x] Calibration runner with HAL client integration
-- [x] 45 new tests
-
-### Phase 3 Exit Criteria -- All Met
-
-- [x] IQM backend implemented and tested (149 Rust tests)
-- [x] Sim-to-real validation framework (Hellinger + crosscheck)
-- [x] Hardware calibration workflow (fitting, protocols, RB, runner)
+- [ ] Cumulative error tracked across pulse sequences (not just per-gate pass/fail)
+- [ ] Projected fidelity shown to user before execution (CLI and Python API)
+- [ ] Decoherence cost computed from calibrated T1/T2 values (not hardcoded)
+- [ ] Warning thresholds configurable and documented
 
 ---
 
-## Phase 4: v0.1.0 Release
+### 0.2.3 Hamiltonian-First API Restructure
 
-**Duration:** 4 weeks  
-**Goal:** Public release
+**Priority:** MEDIUM | **Estimate:** 2–3 weeks | **Addresses:** GAP 5
 
-### 4.1 Release Preparation (Weeks 1-2)
+#### Deliverables
 
-- [ ] Version bump to 0.1.0
-- [ ] CHANGELOG finalization
-- [ ] Release notes
-- [ ] Final testing
-- [ ] Security audit (final pass)
+- [ ] Rename `GateType` → `TargetUnitary` across all three repos (proto enum, Python enum, Rust enum)
+- [ ] Deprecation alias: `GateType = TargetUnitary` with `DeprecationWarning` in Python, maintained for one release cycle (removed in v0.3.0)
+- [ ] Sync enum values: add `S`, `T`, `SQISWAP`, `SWAP`, `CX` to Python `TargetUnitary` to match proto definition
+- [ ] Restructure documentation: Hamiltonian/pulse examples are the primary path, gate convenience is secondary
+- [ ] Update quickstart guide: lead with `HamiltonianSpec` + Pauli string, show `TargetUnitary` as shortcut
+- [ ] Update all 3 tutorial notebooks to use Hamiltonian-first examples
+- [ ] Reconcile duplicate v0.5.0 design docs (root copy vs `core/docs/specs/` copy) — single source of truth
+- [ ] Reconcile generated code policy (committed vs build-time) — document the decision
 
-### 4.2 Publication (Week 3)
+#### Exit Criteria
 
-- [ ] Tag releases
-- [ ] Publish Python package (PyPI)
-- [ ] Publish Docker images (GHCR)
-- [ ] Documentation site live
-
-### 4.3 Announcement (Week 4)
-
-- [ ] GitHub release announcement
-- [ ] Social media / community posts
-- [ ] Gather initial feedback
+- [ ] Single `TargetUnitary` enum used everywhere (proto, Python, Rust)
+- [ ] Documentation and tutorials lead with Hamiltonian/pulse-level thinking
+- [ ] `GateType` still works but emits deprecation warning
+- [ ] No duplicate design specifications — single source of truth established
 
 ---
 
-## Future Phases (Post v0.1.0)
+### 0.2.4 Experiment Provenance / Merkle Tree
 
-### v0.2.0 - Multi-Qubit Expansion
-- 3+ qubit support
-- Advanced 2Q gates (parametric)
-- Pulse scheduling
-- Parallel optimization
+**Priority:** MEDIUM | **Estimate:** 2–3 weeks | **Addresses:** GAP 4
 
-### v0.3.0 - Active Calibration
-- Online drift detection
-- Automatic recalibration
-- Feedback control loop
-- Adaptive pulse updates
+#### Deliverables
 
-### v0.4.0 - Additional Backends
-- IBM Quantum backend
-- AWS Braket backend
-- Custom backend SDK
+- [ ] Merkle tree node types: `CalibrationNode`, `PulseSequenceNode`, `GRAPEConfigNode`, `SoftwareVersionNode`
+- [ ] Root hash computed from tree and attached to every `MeasurementResult`
+- [ ] `diff(hash_a, hash_b)` function identifying which tree nodes changed between two experiment runs
+- [ ] Integration with existing `FingerprintStore`: calibration fingerprint becomes a subtree
+- [ ] Proto extensions: `ProvenanceTree` message, `provenance_hash` field on `MeasurementResult`
+- [ ] Storage format: JSON-serializable tree structure for archival and comparison
+- [ ] Python API: `experiment.provenance()` returns the full tree; `experiment.diff(other)` returns changed nodes
+- [ ] Unit tests: tree construction, hash stability, diff correctness, subtree isolation
 
-### v1.0.0 - Production Ready
-- Stable API
-- Full documentation
-- Enterprise features
-- Community governance
+#### Exit Criteria
+
+- [ ] Provenance hash present on all `MeasurementResult` objects
+- [ ] `diff()` correctly identifies which parameters changed between two experiments
+- [ ] Tree covers calibration, pulse sequence, GRAPE config, and software versions
+- [ ] Backward compatible: results without provenance hash still work (hash field is optional)
+
+---
+
+### 0.2.5 Proto/Python Consistency Fixes
+
+**Priority:** LOW | **Estimate:** 1 week
+
+#### Deliverables
+
+- [ ] `duration_ns` type alignment between proto (`int32`) and Python (`float`) — resolved by time model `TimePoint` adoption
+- [ ] Populate `PulseShape` provenance fields (`calibration_hash`, `optimizer_version`) from `GrapeResult` metadata
+- [ ] `GrapeResult` → `PulseShape` serialization layer: clean conversion with all fields populated
+- [ ] Sparse COO matrix format support in Python Hamiltonian parser (for large multi-qubit Hamiltonians)
+- [ ] Round-trip proto serialization tests: Python → proto → Python for all message types
+
+---
+
+### 0.2.6 Technical Debt Cleanup
+
+**Priority:** LOW | **Estimate:** 1–2 weeks
+
+#### Deliverables
+
+- [ ] Fix 3 missing file I/O error handlers in `calibrator/loader.py` (identified in QUALITY_GATES.md)
+- [ ] Empty list guard in `hamiltonians.py:tensor_product` (currently undefined behavior on empty input)
+- [ ] `NoisyMockBackend` for statistical validation testing (returns slightly different results each call, simulating shot noise)
+- [ ] Symplectic Clifford representation research (Aaronson & Gottesman 2004) — research note only, no implementation (needed for multi-qubit RB in v0.3.0)
+- [ ] Physics-aware validation warnings: pulse durations shorter than a single Rabi cycle, drive amplitudes that would excite higher transmon levels
+- [ ] Ensure broad `except Exception` handlers in CLI code do not leak into library or HAL layers
+- [ ] Update QUALITY_GATES.md to reflect resolved items and new quality standards
+
+---
+
+### v0.2.0 Exit Criteria
+
+| Criterion | Target | Measurement |
+|-----------|--------|-------------|
+| Time model implemented | `TimePoint`, `TemporalConstraint`, `PulseSequence`, `DecoherenceBudget` all functional | Unit + integration tests pass |
+| Error budget system | Cumulative error tracking with `projected_fidelity()` and `can_append()` | Unit tests validate accumulation math |
+| `TargetUnitary` rename | Single enum everywhere, `GateType` deprecated with warning | Grep for `GateType` returns only alias |
+| Experiment provenance | Root hash on all `MeasurementResult`, `diff()` works | Provenance tests pass |
+| Proto/Python consistency | `duration_ns` unified, round-trip serialization verified | Serialization tests pass |
+| Backward compatibility | All v0.1.0 API calls still work (with deprecation warnings where applicable) | v0.1.0 test suite passes |
+| New test count | ≥80 new tests across all repos | `pytest --co -q | wc -l` |
+| Documentation updated | All new features documented, tutorials updated | Docs build clean |
+| CI green | All 3 repos passing | GitHub Actions |
+| Quality debt resolved | QUALITY_GATES.md items addressed | Manual review |
+| Design specs published | All spec files in `specs/` directory | Files exist and are complete |
+
+---
+
+## v0.3.0 — Multi-Qubit Expansion
+
+**Theme:** Scale up with confidence, building on the v0.2.0 foundation of time model, error budgets, and experiment provenance.
+
+### 0.3.1 Multi-Qubit Support
+
+- [ ] 3+ qubit Hamiltonian construction and validation (tensor products, interaction terms)
+- [ ] Multi-qubit GRAPE optimization (joint pulse sequences for entangling operations)
+- [ ] Performance profiling for n=3, 4, 5 qubits (Hilbert space scales as 2^n)
+- [ ] Memory management strategy for large state vectors and propagators
+- [ ] Sparse matrix support in optimizer hot path
+
+### 0.3.2 Pulse Scheduling
+
+- [ ] Pulse scheduler using `PulseSequence` + `TemporalConstraint` from v0.2.0
+- [ ] Parallel execution of independent pulses on different qubits
+- [ ] Crosstalk-aware scheduling (avoid simultaneous operations on coupled qubits)
+- [ ] Schedule visualization (timeline diagram output)
+- [ ] Integration with error budget: scheduling decisions informed by error accumulation
+
+### 0.3.3 Advanced Two-Qubit Gates
+
+- [ ] Parametric two-qubit gates (variable entangling angle)
+- [ ] fSim gate family optimization (Google-style)
+- [ ] Cross-resonance gate optimization (IBM-style)
+- [ ] Error budget integration: two-qubit gates consume more budget than single-qubit
+- [ ] Golden file tests for all two-qubit gate types
+
+### 0.3.4 Multi-Qubit Benchmarking
+
+- [ ] Symplectic Clifford group representation (Aaronson & Gottesman 2004) — efficient n-qubit Clifford sampling
+- [ ] Interleaved randomized benchmarking for individual gate error rates
+- [ ] Process tomography for full channel characterization
+- [ ] Benchmarking results integrated with provenance tree
+
+### v0.3.0 Exit Criteria
+
+| Criterion | Target |
+|-----------|--------|
+| Multi-qubit GRAPE | n≤5 qubits optimized successfully |
+| Pulse scheduling | Constraints respected, parallel execution verified |
+| Error budget (multi-qubit) | Cumulative tracking across multi-qubit sequences |
+| Symplectic RB | n-qubit Clifford sampling, interleaved RB working |
+| Performance | 3-qubit GRAPE completes in <60s |
+| CI green | All 3 repos passing |
+
+---
+
+## v0.4.0 — Active Calibration & GRAPE-in-Rust
+
+### 0.4.1 Active Calibration
+
+- [ ] Online drift detection: continuous monitoring of calibration parameters during experiment runs
+- [ ] Automatic recalibration triggers: thresholds on drift magnitude or fidelity degradation
+- [ ] Feedback control loop: measure → detect drift → recalibrate → resume
+- [ ] Adaptive pulse updates: re-optimize pulses when calibration changes significantly
+- [ ] Provenance integration: recalibration events recorded in Merkle tree with timestamps
+
+### 0.4.2 GRAPE in Rust (GAP 3 — Phase 1)
+
+- [ ] Rust GRAPE optimizer using `ndarray` + `nalgebra` for linear algebra
+- [ ] Matrix exponentiation (Padé approximation or scaling-and-squaring)
+- [ ] Gradient computation (exact or finite-difference, matching Python implementation)
+- [ ] PyO3 binding: Rust GRAPE callable from Python as drop-in replacement
+- [ ] Benchmarks: ≥5x speedup over Python GRAPE on single-qubit gates
+- [ ] Validation: Rust GRAPE output matches Python golden files to machine precision
+- [ ] Python GRAPE kept as validation oracle (not removed)
+
+### v0.4.0 Exit Criteria
+
+| Criterion | Target |
+|-----------|--------|
+| Recalibration loop | Drift detected → recalibration triggered → pulses updated automatically |
+| Rust GRAPE correctness | Matches Python golden files to machine precision |
+| Rust GRAPE performance | ≥5x speedup over Python on equivalent problems |
+| Drift triggers recalibration | Configurable thresholds, logged in provenance tree |
+| CI green | All 3 repos passing |
+
+---
+
+## v0.5.0 — Additional Backends & Rust-Native Solver
+
+### 0.5.1 Additional Backends
+
+- [ ] IBM Quantum backend (Qiskit Runtime integration)
+- [ ] AWS Braket backend
+- [ ] Custom backend SDK: documented trait/interface for third-party backend authors
+- [ ] Common "pulse to native gate" compilation trait with backend-specific implementations
+
+### 0.5.2 Rust-Native Solver (GAP 3 — Phase 2)
+
+- [ ] Lindblad master equation solver in Rust (core decoherence dynamics)
+- [ ] T1/T2 decoherence models (amplitude damping, phase damping channels)
+- [ ] Hamiltonian exponentiation with decoherence (combined unitary + dissipative evolution)
+- [ ] Validation against QuTiP `mesolve()` results (Hellinger distance < 0.01)
+- [ ] Decoherence-aware GRAPE: optimizer accounts for T1/T2 decay during pulse
+
+### v0.5.0 Exit Criteria
+
+| Criterion | Target |
+|-----------|--------|
+| IBM backend | Job submission and result retrieval working |
+| AWS Braket backend | Job submission and result retrieval working |
+| Backend SDK | Documented, with example custom backend |
+| Rust Lindblad solver | Matches QuTiP mesolve to Hellinger < 0.01 |
+| CI green | All 3 repos passing |
+
+---
+
+## v1.0.0 — Production Ready
+
+- **Stable API:** Semantic versioning enforced, no breaking changes without major version bump
+- **Full Rust-native production path:** HAL → Rust GRAPE → Rust solver → backend (Python optional, used for notebooks and exploration)
+- **Comprehensive documentation:** Architecture guide, API reference, tutorials, contribution guide, backend author guide
+- **Published benchmarks:** Single-qubit, multi-qubit, and backend comparison benchmarks with reproducible scripts
+- **External security audit:** Independent review of authentication, credential handling, and input validation
+- **Community governance:** RFC process for major changes, maintainer guidelines, code of conduct
+- **Backend author contributing guide:** Step-by-step instructions for adding a new hardware backend
+- **Plugin/extension architecture:** Hooks for custom optimizers, custom validators, custom backends without forking
 
 ---
 
@@ -333,31 +367,31 @@ python -m build  # Test Python build works
 
 | Job | Command | Must Pass |
 |-----|---------|-----------|
-| Lint | `buf lint` | [x] |
-| Format | `buf format -d --exit-code` | [x] |
-| Build Rust | `cargo build` | [x] |
-| Build Python | `python -m build` | [x] |
-| Test Import | `python -c "from quantum..."` | [x] |
+| Lint | `buf lint` | ✅ |
+| Format | `buf format -d --exit-code` | ✅ |
+| Build Rust | `cargo build` | ✅ |
+| Build Python | `python -m build` | ✅ |
+| Test Import | `python -c "from quantum..."` | ✅ |
 
 #### qubit-os-hardware
 
 | Job | Command | Must Pass |
 |-----|---------|-----------|
-| Format | `cargo fmt --check` | [x] |
-| Clippy | `cargo clippy -- -D warnings` | [x] |
-| Build | `cargo build --release` | [x] |
-| Test | `cargo test` | [x] |
-| Docker | `docker build .` | [x] |
+| Format | `cargo fmt --check` | ✅ |
+| Clippy | `cargo clippy -- -D warnings` | ✅ |
+| Build | `cargo build --release` | ✅ |
+| Test | `cargo test` | ✅ |
+| Docker | `docker build .` | ✅ |
 
 #### qubit-os-core
 
 | Job | Command | Must Pass |
 |-----|---------|-----------|
-| Lint | `ruff check src/` | [x] |
-| Format | `ruff format --check src/` | [x] |
-| Test | `pytest tests/` | [x] |
-| Type Check | `mypy src/qubitos/` | Phase 2+ |
-| Coverage | `pytest --cov` | Phase 2+ |
+| Lint | `ruff check src/` | ✅ |
+| Format | `ruff format --check src/` | ✅ |
+| Test | `pytest tests/` | ✅ |
+| Type Check | `mypy src/qubitos/` | ✅ |
+| Coverage | `pytest --cov` | ✅ |
 
 ### Pre-Push Checklist
 
@@ -377,13 +411,6 @@ git log -1 --oneline  # Should be descriptive
 git push
 ```
 
-### Handling CI Failures
-
-1. **Don't panic** - CI failures are normal during development
-2. **Don't bypass** - Fix the issue, don't work around it
-3. **Fix forward** - Create a new commit with the fix
-4. **Learn** - Update pre-commit hooks to catch similar issues
-
 ### Minimum Version Specifications
 
 | Tool/Dependency | Minimum Version | Notes |
@@ -399,78 +426,110 @@ git push
 
 ---
 
+## Risk Mitigation
+
+| Risk | Impact | Mitigation |
+|------|--------|------------|
+| CI drift | High | Mandatory local checks, pre-commit hooks, golden rule enforcement |
+| QuTiP version incompatibility | High | Pin version, test on updates, long-term migrate to Rust solver |
+| IQM API changes | Medium | Abstract behind backend trait, version client, integration tests |
+| Numerical instability in GRAPE | High | Extensive testing, gradient clipping, golden file regression tests |
+| Performance bottlenecks (multi-qubit) | Medium | Profile early, sparse matrices, benchmark at each qubit count |
+| Scope creep | High | Strict phase boundaries, defer features to later versions, design specs before code |
+| Time model complexity | Medium | Start with minimal constraints (Sequential, Simultaneous), extend incrementally |
+| Rust ecosystem gaps (ndarray/nalgebra) | Medium | Evaluate libraries early, prototype matrix exp before committing to Rust GRAPE |
+| Backward compatibility breaks | High | Deprecation aliases for one release cycle, semver discipline, migration guides |
+
+---
+
+## Success Metrics
+
+### v0.1.0 ✅
+
+- Clean install works on Linux/macOS
+- Quickstart completable in 15 minutes
+- 464 Python tests passing at 93% coverage
+- 149 Rust tests passing
+- IQM hardware execution demonstrated
+- Golden file reproducibility validated
+
+### v0.2.0
+
+- Time model expressible: temporal constraints between pulses work in API and are validated
+- Error budget: `projected_fidelity()` shown before execution, warnings at configurable thresholds
+- `TargetUnitary` adopted everywhere, `GateType` deprecated
+- Provenance hash on all measurement results, `diff()` identifies parameter changes
+- ≥80 new tests, all CI green, backward compatibility maintained
+- Design specs published and reviewed
+
+### v0.3.0
+
+- 5-qubit GRAPE optimization completing successfully
+- Pulse scheduling with temporal constraints demonstrated
+- Multi-qubit RB with symplectic Cliffords operational
+- 3-qubit GRAPE completes in <60 seconds
+
+### v0.4.0
+
+- Drift-triggered recalibration demonstrated end-to-end
+- Rust GRAPE ≥5x faster than Python, matching golden files
+- Active calibration loop running without manual intervention
+
+### v0.5.0
+
+- IBM and AWS backends submitting and retrieving jobs
+- Rust Lindblad solver matching QuTiP to Hellinger < 0.01
+- Backend SDK documented with example custom backend
+
+### v1.0.0
+
+- Stable API with semver guarantees
+- Full Rust-native production path operational
+- External security audit passed
+- Community contributions received and merged
+
+---
+
 ## Development Principles
 
 ### Code Quality
 
 - All code reviewed before merge
 - CI must pass (all enabled jobs green)
-- Test coverage targets enforced
-- Documentation required for new features
+- Test coverage targets enforced per phase
+- Documentation required for all new features
+- Functions ≤50 lines (Python), ≤60 lines (C++/Rust), single responsibility
 
 ### Reproducibility
 
-- Every result traceable to code + seed + calibration
-- Golden file tests for numerical code
-- Pinned dependencies
+- Every result traceable to code + seed + calibration via provenance hash
+- Golden file tests for all numerical code (GRAPE outputs, simulation results)
+- Pinned dependencies in lock files
+- Provenance Merkle tree covering calibration, pulse sequence, optimizer config, and software versions
 
-### Communication
+### Physics Correctness
 
-- Weekly progress updates (if team grows)
-- Issues for all tracked work
-- PRs reference issues
-- Changelog updated with each release
-
----
-
-## Risk Mitigation
-
-| Risk | Impact | Mitigation |
-|------|--------|------------|
-| CI drift | High | Mandatory local checks, pre-commit hooks |
-| QuTiP version incompatibility | High | Pin version, test on updates |
-| IQM API changes | Medium | Abstract behind interface, version client |
-| Numerical instability in GRAPE | High | Extensive testing, gradient clipping |
-| Performance bottlenecks | Medium | Profile early, benchmark regularly |
-| Scope creep | High | Strict phase boundaries, defer features |
-
----
-
-## Success Metrics
-
-### Phase 2
-
-- Test coverage meets targets (Python 75%, Rust 85%)
-- Documentation complete (4 guides + 3 notebooks)
-- Golden file tests passing
-- CI green for 7 consecutive days
-
-### Phase 3
-
-- IQM execution success rate >= 95%
-- Sim-to-real correlation established
-- Hardware calibration automated
-
-### v0.1.0
-
-- Clean install works on Linux/macOS
-- Quickstart completable in 15 minutes
-- Community engagement (stars, issues, discussions)
+- Cite papers for all non-trivial physics (DOI or arXiv ID in code comments and docs)
+- Validate unitarity of all gate/unitary constructions
+- Validate normalization of all quantum states
+- Validate physical bounds (amplitudes, frequencies, durations)
+- Decoherence budget tracked and reported — never silently exceeded
+- Error accumulation modeled across pulse sequences, not just per-gate
 
 ---
 
 ## Contributing
 
-See the project contributing guidelines for contribution guidelines.
+See [CONTRIBUTING.md](CONTRIBUTING.md) for contribution guidelines, including:
 
-Key points:
-1. Fork the repo
-2. Create a feature branch
-3. **Run `./scripts/ci-check.sh` before pushing**
-4. Open a PR
-5. Wait for CI to pass
-6. Request review
+- Repository setup and development environment
+- Branch naming and commit message conventions
+- CI/CD requirements and pre-push checklist
+- Code review process
+- How to add a new backend or optimizer
 
 ---
 
-*Last Updated: February 7, 2026*
+*Last Updated: February 8, 2026*
+
+*References: [ARCHITECTURE-REVIEW.md](../../ARCHITECTURE-REVIEW.md) for the gap analysis motivating v0.2.0. Design specifications for v0.2.0 sub-phases will be published in the `specs/` directory before implementation begins.*

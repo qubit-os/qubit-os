@@ -1,0 +1,2868 @@
+# Experiment Provenance -- Design Specification
+
+**Version:** 0.1.0-draft
+**Status:** Proposed
+**GAP Reference:** ARCHITECTURE-REVIEW.md, GAP 4
+**Target Release:** v0.2.0
+**Author:** QubitOS Team
+**Date:** February 8, 2026
+**Related Specs:** TIME-MODEL-SPEC.md, ERROR-BUDGET-SPEC.md
+
+---
+
+## 1. Problem Statement
+
+Quantum experiment results are products of an entire context: the hardware calibration,
+the pulse waveform, the optimization parameters that produced the waveform, and the
+software stack that ran the computation. When a result changes -- fidelity drops,
+measurement statistics shift, a gate that "worked yesterday" fails today -- the
+fundamental question is: *what changed?*
+
+Currently, QubitOS fingerprints only calibration data. This means:
+
+- **Reproducibility is partial.** Two experiments with the same calibration fingerprint
+  can produce different results if the GRAPE configuration, pulse duration, software
+  version, or random seed differed. There is no way to verify that two experiments
+  shared the same complete context.
+
+- **Debugging is manual.** "The fidelity dropped" requires manually diffing calibration
+  YAML files, checking whether someone changed the GRAPE learning rate, and hoping the
+  software version was recorded somewhere. The fingerprint system only tells you "the
+  calibration was different" -- not *what specifically* in the calibration changed, and
+  nothing about changes outside calibration.
+
+- **Scientific rigor requires full traceability.** Any published result should be
+  traceable to a complete set of inputs. A measurement result without its full provenance
+  is an anecdote, not data. The existing `PulseShape` proto has `calibration_fingerprint`,
+  `code_version`, `created_at`, and `random_seed` fields, but `GrapeResult` does not
+  populate them. `MeasurementResult` has a `calibration_fingerprint` field but no broader
+  provenance.
+
+- **The git-for-experiments pattern.** Version control works because every commit is a
+  content-addressed snapshot, and `git diff` tells you exactly what changed. Quantum
+  experiments need the same pattern: every result tagged with a root hash, and
+  `provenance diff` identifies exactly which parameter changed between two runs.
+
+The existing `CalibrationFingerprint` and `FingerprintStore` are approximately 60% of
+the solution. This spec extends the fingerprint into a full Merkle tree covering all
+dimensions of experiment context.
+
+---
+
+## 2. Current State Analysis
+
+### 2.1 What Exists
+
+**CalibrationFingerprint** (`src/qubitos/calibrator/fingerprint.py`):
+
+| Field                 | Type                     | Hashed | Notes                                    |
+|-----------------------|--------------------------|--------|------------------------------------------|
+| `backend_name`        | `str`                    | Yes    | Identifies the quantum backend           |
+| `timestamp`           | `str`                    | No     | ISO format, not included in hash         |
+| `num_qubits`          | `int`                    | Yes    | Included in hash via `"num_qubits"` key  |
+| `qubit_fingerprints`  | `list[dict[str, float]]` | Yes    | Per-qubit: index, freq, T1, T2, readout/gate fidelity |
+| `coupler_fingerprints`| `list[dict[str, float]]` | Yes    | Per-coupler: qubit_a, qubit_b, coupling_mhz, cz_fidelity |
+| `hash`                | `str`                    | --     | SHA-256, truncated to 16 hex characters  |
+
+Hash computation: `json.dumps(data, sort_keys=True)` → SHA-256 → `[:16]`.
+
+**FingerprintStore** (`src/qubitos/calibrator/fingerprint.py`):
+- In-memory dict keyed by `backend_name`
+- `max_history=100` fingerprints per backend
+- Methods: `add()`, `get_latest()`, `get_history()`, `compute_drift_trend()`
+- Drift trend compares consecutive fingerprints over a sliding window
+
+**PulseShape proto** (`quantum/pulse/v1/pulse.proto`):
+
+| Provenance Field            | Field Number | Status           |
+|-----------------------------|--------------|------------------|
+| `proto_version`             | 16           | Exists, unused   |
+| `created_at`                | 17           | Exists, unused   |
+| `calibration_fingerprint`   | 18           | Exists, unused   |
+| `code_version`              | 19           | Exists, unused   |
+| `random_seed`               | 20           | Exists, unused   |
+
+These fields are defined in the proto but **not populated** by `GrapeOptimizer` or
+`generate_pulse()`. The `GrapeResult` dataclass has no provenance fields.
+
+**MeasurementResult proto** (`quantum/backend/v1/execution.proto`):
+- Has `calibration_fingerprint` (field 9) and `backend_name` (field 7)
+- No broader provenance hash
+- No pulse sequence or GRAPE config reference
+
+**GrapeConfig** (`src/qubitos/pulsegen/grape.py`):
+- 10 parameters: `num_time_steps`, `duration_ns`, `target_fidelity`, `max_iterations`,
+  `learning_rate`, `convergence_threshold`, `max_amplitude`, `use_second_order`,
+  `regularization`, `random_seed`
+- Not fingerprinted
+
+**GrapeResult** (`src/qubitos/pulsegen/grape.py`):
+- Contains: `i_envelope`, `q_envelope`, `fidelity`, `iterations`, `converged`,
+  `fidelity_history`, `final_unitary`
+- No provenance hash, no reference to the config that produced it
+
+### 2.2 What's Missing
+
+1. **Pulse sequence parameters are not fingerprinted.** Duration, time steps, envelope
+   amplitudes, target gate -- none of these contribute to any hash.
+2. **GRAPE optimization settings are not fingerprinted.** Learning rate, regularization,
+   max_amplitude, convergence thresholds are invisible to the provenance system.
+3. **Software/runtime versions are not captured.** Python version, NumPy/SciPy/QuTiP
+   versions, QubitOS version, HAL server version -- none tracked systematically.
+4. **No way to diff two experiments.** Given two measurement results, there is no
+   mechanism to determine what differed in their complete context.
+5. **PulseShape proto provenance fields exist but are dead code.** Five provenance
+   fields on `PulseShape` are never populated.
+6. **GrapeResult carries no provenance.** The optimization result has no link back to
+   the configuration or calibration that produced it.
+
+---
+
+## 3. Design Goals
+
+1. **Root hash on every result.** Every `MeasurementResult` is tagged with a single
+   provenance root hash that uniquely identifies the complete experiment context.
+
+2. **Merkle tree coverage.** The tree covers four dimensions: calibration state, pulse
+   sequence definition, GRAPE/optimizer configuration, and software versions. A change
+   in any leaf produces a different root hash.
+
+3. **Efficient diffing.** `diff(hash_a, hash_b)` walks both trees and identifies exactly
+   which nodes changed, with human-readable descriptions (e.g., "T1 on qubit 3 changed
+   from 50.0 to 45.2 μs").
+
+4. **Extend, don't replace.** The existing `CalibrationFingerprint` becomes a subtree
+   of the provenance tree. `FingerprintStore` continues to work unchanged. No existing
+   APIs break.
+
+5. **Deterministic hashing.** Identical inputs always produce identical hashes, across
+   platforms, Python versions, and byte orderings. Floating-point values are canonicalized
+   before hashing.
+
+6. **Low overhead.** SHA-256 hashing is cheap (microseconds for typical inputs). Envelope
+   hashing uses raw byte representation, not JSON serialization. Provenance construction
+   adds negligible latency to the GRAPE→execute pipeline.
+
+7. **Human-readable summaries.** `provenance summary <hash>` prints a readable tree
+   showing each node type, its hash prefix, and key parameters.
+
+8. **Storage-efficient.** Store the tree structure (node types + hashes + metadata),
+   not full copies of calibration data or pulse envelopes. Leaf content is reconstructable
+   from the original data sources.
+
+---
+
+## 4. Non-Goals
+
+- **Environmental conditions.** Temperature, EM interference, vibration, and other
+  environmental factors affect results but are not available through software APIs.
+  The provenance tree has an `annotations` field for recording environmental notes
+  but does not hash them into the tree.
+
+- **Hardware firmware version querying.** Querying firmware versions requires
+  backend-specific APIs that do not yet exist. The `SoftwareVersionNode` has a
+  placeholder `hal_firmware_version` field for future use.
+
+- **Provenance-based result caching.** "Same provenance hash → skip re-execution and
+  return cached result" is a natural extension but introduces cache invalidation
+  complexity. Deferred to a future spec.
+
+- **Distributed provenance.** Provenance trees from multiple machines or labs
+  (federated experiments) require a synchronization protocol. Out of scope.
+
+- **Full version control for experiments.** This spec provides content-addressed
+  snapshots and pairwise diffing. Branching, merging, and history traversal (a full
+  "git for experiments") are future work.
+
+- **Automatic provenance-based regression detection.** Alerting when provenance
+  changes correlate with fidelity drops requires a statistical analysis layer.
+  Future work building on this spec.
+
+---
+
+## 5. Merkle Tree Architecture
+
+### 5.1 Tree Structure
+
+```
+                        [Root Hash]
+                       /           \
+              [Calibration]     [Experiment]
+              /          \       /         \
+        [Qubit Cal]  [Coupler] [Pulse Seq] [Config]
+         / | \          |       / | \        /    \
+       Q0  Q1 ...     C01    P0  P1 ...  [GRAPE] [Software]
+```
+
+Each internal node's hash is computed from its children's hashes. Each leaf node's
+hash is computed from its content. The root hash uniquely identifies the complete
+experiment context.
+
+**Properties:**
+
+- **Collision resistance:** SHA-256 provides 128-bit collision resistance. Two distinct
+  experiment contexts will have different root hashes with overwhelming probability.
+
+- **Efficient verification:** To verify that a specific leaf (e.g., qubit 3 calibration)
+  is part of a provenance tree, only the hashes along the path from leaf to root are
+  needed -- O(log n) where n is the number of leaves.
+
+- **Incremental updates:** When only calibration changes between experiments, only the
+  calibration subtree hashes change. The experiment subtree hashes remain identical,
+  making diffing efficient.
+
+### 5.2 Node Types
+
+#### CalibrationNode (internal)
+
+Represents the complete calibration state of the backend. Its hash is computed from
+its child nodes (QubitCalibration and CouplerCalibration), maintaining structural
+consistency with the rest of the tree.
+
+**Children:**
+- `QubitCalibrationNode[]` -- one per qubit
+- `CouplerCalibrationNode[]` -- one per coupler pair
+
+**Hashable content (for standalone use when children unavailable):**
+- `backend_name: str`
+- `num_qubits: int`
+- `qubit_fingerprints: list[dict]`
+- `coupler_fingerprints: list[dict]`
+
+**Compatibility:** When a `CalibrationFingerprint` already exists, its 16-char hash
+is preserved in tree metadata as `legacy_calibration_hash` for backward-compatible
+lookups. The tree hash is computed from children per Section 6.3.
+
+#### QubitCalibrationNode (leaf)
+
+Represents calibration data for a single qubit.
+
+**Hashable content:**
+
+| Field              | Type    | Units | Precision    |
+|--------------------|---------|-------|--------------|
+| `qubit_index`      | `int`   | --    | exact        |
+| `frequency_ghz`    | `float` | GHz   | 12 sig. digits |
+| `t1_us`            | `float` | μs    | 12 sig. digits |
+| `t2_us`            | `float` | μs    | 12 sig. digits |
+| `readout_fidelity` | `float` | --    | 12 sig. digits |
+| `gate_fidelity`    | `float` | --    | 12 sig. digits |
+
+#### CouplerCalibrationNode (leaf)
+
+Represents calibration data for a qubit-qubit coupler.
+
+**Hashable content:**
+
+| Field           | Type    | Units | Precision    |
+|-----------------|---------|-------|--------------|
+| `qubit_a`       | `int`   | --    | exact        |
+| `qubit_b`       | `int`   | --    | exact        |
+| `coupling_mhz`  | `float` | MHz   | 12 sig. digits |
+| `cz_fidelity`   | `float` | --    | 12 sig. digits |
+
+#### PulseSequenceNode (internal)
+
+Represents the complete pulse sequence submitted for execution.
+
+**Children:**
+- `ScheduledPulseNode[]` -- one per pulse in the sequence, ordered by schedule time
+
+**Hashable metadata (in addition to children):**
+- `num_pulses: int`
+- `total_duration_ns: float`
+- `temporal_constraints_hash: str` -- hash of any temporal constraints (see TIME-MODEL-SPEC.md)
+
+#### ScheduledPulseNode (leaf)
+
+Represents a single pulse in a sequence.
+
+**Hashable content:**
+
+| Field               | Type       | Units | Precision        |
+|---------------------|------------|-------|------------------|
+| `pulse_id`          | `str`      | --    | exact            |
+| `gate_type`         | `str`      | --    | exact (enum name)|
+| `custom_unitary_hash` | `str`    | --    | hash of JSON if CUSTOM gate, else empty |
+| `target_qubit_indices` | `list[int]` | -- | exact         |
+| `duration_ns`       | `int`      | ns    | exact            |
+| `num_time_steps`    | `int`      | --    | exact            |
+| `target_fidelity`   | `float`    | --    | 12 sig. digits   |
+| `max_amplitude_mhz` | `float`   | MHz   | 12 sig. digits   |
+| `i_envelope_hash`   | `str`     | --    | SHA-256 of raw bytes |
+| `q_envelope_hash`   | `str`     | --    | SHA-256 of raw bytes |
+| `coupling_envelope_hash` | `str` | --   | SHA-256 of raw bytes, empty if absent |
+| `rotation_angle`    | `float`   | rad   | 12 sig. digits, 0.0 if not rotation gate |
+
+#### GRAPEConfigNode (leaf)
+
+Represents the optimizer configuration that produced the pulse.
+
+**Hashable content:**
+
+| Field                    | Type    | Units | Precision        |
+|--------------------------|---------|-------|------------------|
+| `num_time_steps`         | `int`   | --    | exact            |
+| `duration_ns`            | `float` | ns    | 12 sig. digits   |
+| `target_fidelity`        | `float` | --    | 12 sig. digits   |
+| `max_iterations`         | `int`   | --    | exact            |
+| `learning_rate`          | `float` | --    | 12 sig. digits   |
+| `convergence_threshold`  | `float` | --    | 12 sig. digits   |
+| `max_amplitude`          | `float` | MHz   | 12 sig. digits   |
+| `use_second_order`       | `bool`  | --    | exact            |
+| `regularization`         | `float` | --    | 12 sig. digits   |
+| `random_seed`            | `int or null` | -- | exact (null hashed as string "null") |
+| `optimizer`              | `str`   | --    | exact (from GRAPEOptions, default "adam") |
+| `l2_amplitude_penalty`   | `float` | --    | 12 sig. digits   |
+| `smoothness_penalty`     | `float` | --    | 12 sig. digits   |
+| `bandwidth_limit_mhz`    | `float` | MHz   | 12 sig. digits   |
+| `include_decoherence`    | `bool`  | --    | exact            |
+| `include_leakage`        | `bool`  | --    | exact            |
+
+#### SoftwareVersionNode (leaf)
+
+Captures the software stack versions at experiment time.
+
+**Hashable content:**
+
+| Field                   | Type  | Source                                  |
+|-------------------------|-------|-----------------------------------------|
+| `qubitos_core_version`  | `str` | `qubitos.__version__`                   |
+| `qubitos_hal_version`   | `str` | HAL server `VERSION` constant           |
+| `qubitos_proto_version` | `str` | Proto package version                   |
+| `python_version`        | `str` | `sys.version` (major.minor.micro only)  |
+| `numpy_version`         | `str` | `numpy.__version__`                     |
+| `scipy_version`         | `str` | `scipy.__version__`                     |
+| `qutip_version`         | `str` | `qutip.__version__` or `"not_installed"`|
+| `core_git_sha`          | `str` | Git HEAD SHA of qubit-os-core, or `"unknown"` |
+| `hal_git_sha`           | `str` | Git HEAD SHA of qubit-os-hardware, or `"unknown"` |
+| `proto_git_sha`         | `str` | Git HEAD SHA of qubit-os-proto, or `"unknown"` |
+
+Git SHAs are best-effort: if the code is running from an installed package rather than
+a git checkout, the field is `"unknown"`.
+
+---
+
+## 6. Hashing Strategy
+
+### 6.1 Algorithm
+
+SHA-256, consistent with the existing `CalibrationFingerprint`. The full 64 hex-character
+hash is stored internally. For display, hashes are truncated to 32 hex characters (128 bits)
+at the root level and 16 hex characters at the node level, to balance readability with
+collision resistance.
+
+### 6.2 Leaf Node Hashing
+
+Leaf nodes are hashed from a **canonical JSON representation** of their content:
+
+```python
+def hash_leaf(node_type: str, content: dict[str, Any]) -> str:
+    """Hash a leaf node's content.
+
+    Args:
+        node_type: Node type identifier (e.g., "qubit_calibration")
+        content: Dictionary of hashable fields
+
+    Returns:
+        64-character hex SHA-256 digest
+    """
+    # Prefix with node type to prevent cross-type collisions
+    # (a QubitCalibrationNode and CouplerCalibrationNode with
+    #  numerically identical fields must produce different hashes)
+    canonical = {
+        "__node_type__": node_type,
+        **content,
+    }
+    json_bytes = json.dumps(
+        canonical,
+        sort_keys=True,
+        separators=(",", ":"),  # No whitespace
+    ).encode("utf-8")
+    return hashlib.sha256(json_bytes).hexdigest()
+```
+
+### 6.3 Internal Node Hashing
+
+Internal nodes are hashed from their children's hashes, sorted lexicographically:
+
+```python
+def hash_internal(node_type: str, child_hashes: list[str]) -> str:
+    """Hash an internal node from its children's hashes.
+
+    Args:
+        node_type: Node type identifier
+        child_hashes: List of child node hashes
+
+    Returns:
+        64-character hex SHA-256 digest
+    """
+    # Sort to ensure determinism regardless of child insertion order
+    sorted_hashes = sorted(child_hashes)
+    payload = f"{node_type}:{'|'.join(sorted_hashes)}"
+    return hashlib.sha256(payload.encode("utf-8")).hexdigest()
+```
+
+### 6.4 Root Hash
+
+The root hash combines the CalibrationNode hash and ExperimentNode hash:
+
+```python
+root_hash = hash_internal("root", [calibration_node.hash, experiment_node.hash])
+```
+
+Display format: first 32 hex characters. Full hash available via `.full_hash`.
+
+### 6.5 Floating-Point Canonicalization
+
+Floating-point values are rounded to 12 significant digits before hashing to prevent
+spurious hash differences from platform-specific floating-point representations:
+
+```python
+def canonicalize_float(value: float) -> float:
+    """Round float to 12 significant digits for deterministic hashing.
+
+    12 significant digits is well beyond the precision of any quantum
+    hardware parameter (frequencies are measured to ~6 digits, coherence
+    times to ~4 digits) while being safely within float64's 15-16 digit
+    precision.
+    """
+    if value == 0.0 or not math.isfinite(value):
+        return 0.0
+    magnitude = 10 ** (11 - int(math.floor(math.log10(abs(value)))))
+    return round(value * magnitude) / magnitude
+```
+
+In JSON serialization, canonicalized floats are formatted with `f"{value:.12g}"` to
+produce consistent string representations.
+
+### 6.6 Envelope Hashing
+
+Pulse envelopes (I, Q, coupling) are large arrays (typically 50-10,000 float64 values).
+Serializing them to JSON for hashing would be slow and waste memory. Instead, envelopes
+are hashed directly from their raw byte representation:
+
+```python
+def hash_envelope(envelope: np.ndarray) -> str:
+    """Hash a pulse envelope from its raw bytes.
+
+    The array is converted to C-contiguous float64 (IEEE 754 double)
+    before hashing, ensuring cross-platform consistency.
+
+    Args:
+        envelope: 1D numpy array of float64 values
+
+    Returns:
+        64-character hex SHA-256 digest
+    """
+    arr = np.ascontiguousarray(envelope, dtype=np.float64)
+    return hashlib.sha256(arr.tobytes()).hexdigest()
+```
+
+**Platform consistency note:** IEEE 754 double-precision is used universally on all
+platforms QubitOS targets (x86-64 Linux, Apple Silicon macOS). The byte representation
+of identical float64 values is identical across these platforms. The `C_CONTIGUOUS`
+memory layout ensures byte ordering is consistent.
+
+### 6.7 CalibrationFingerprint Compatibility
+
+The existing `CalibrationFingerprint._compute_hash()` produces a 16-character truncated
+SHA-256. For backward compatibility:
+
+- The `CalibrationNode` stores both the legacy 16-char hash and the full 64-char hash.
+- When constructing a provenance tree from an existing `CalibrationFingerprint`, the
+  legacy hash is preserved as `legacy_calibration_hash` in metadata.
+- The CalibrationNode's tree hash is computed from its children (per Section 6.3),
+  which may differ from the legacy hash because the legacy hash includes `backend_name`
+  in the hash data while the tree hash derives structure from individual child nodes.
+
+---
+
+## 7. Data Structures
+
+### 7.1 ProvenanceNode
+
+```python
+# src/qubitos/provenance/nodes.py
+
+from __future__ import annotations
+
+import hashlib
+import json
+import math
+from dataclasses import dataclass, field
+from enum import Enum
+from typing import Any
+
+
+class NodeType(Enum):
+    """Types of nodes in the provenance tree."""
+    ROOT = "root"
+    CALIBRATION = "calibration"
+    QUBIT_CALIBRATION = "qubit_calibration"
+    COUPLER_CALIBRATION = "coupler_calibration"
+    EXPERIMENT = "experiment"
+    PULSE_SEQUENCE = "pulse_sequence"
+    SCHEDULED_PULSE = "scheduled_pulse"
+    CONFIG = "config"
+    GRAPE_CONFIG = "grape_config"
+    SOFTWARE_VERSION = "software_version"
+
+
+@dataclass(frozen=True)
+class ProvenanceNode:
+    """A node in the provenance Merkle tree.
+
+    Leaf nodes have content and no children.
+    Internal nodes have children and no content.
+
+    Attributes:
+        node_type: Type of this node
+        hash: SHA-256 hash (64 hex characters)
+        children: Child nodes (empty for leaf nodes)
+        content: Hashable content (empty dict for internal nodes)
+        label: Human-readable label (e.g., "qubit_0", "cnot_q0_q1")
+    """
+    node_type: NodeType
+    hash: str
+    children: tuple[ProvenanceNode, ...] = ()
+    content: dict[str, Any] = field(default_factory=dict)
+    label: str = ""
+
+    @property
+    def is_leaf(self) -> bool:
+        return len(self.children) == 0
+
+    @property
+    def short_hash(self) -> str:
+        """First 16 hex characters for display."""
+        return self.hash[:16]
+```
+
+### 7.2 ProvenanceTree
+
+```python
+# src/qubitos/provenance/tree.py
+
+from __future__ import annotations
+
+import json
+from dataclasses import dataclass, field
+from datetime import datetime, timezone
+from typing import Any
+
+from .nodes import NodeType, ProvenanceNode
+
+
+@dataclass
+class ProvenanceTree:
+    """Complete provenance tree for an experiment.
+
+    The tree is immutable after construction. All hashes are computed
+    during build and cannot be modified.
+
+    Attributes:
+        root: Root node of the Merkle tree
+        timestamp: When this tree was constructed (ISO 8601)
+        metadata: Additional context not included in the hash
+    """
+    root: ProvenanceNode
+    timestamp: str = field(
+        default_factory=lambda: datetime.now(timezone.utc).isoformat()
+    )
+    metadata: dict[str, Any] = field(default_factory=dict)
+
+    @property
+    def root_hash(self) -> str:
+        """The root hash of the provenance tree."""
+        return self.root.hash
+
+    @property
+    def short_hash(self) -> str:
+        """First 32 hex characters of the root hash for display."""
+        return self.root.hash[:32]
+
+    def find_node(
+        self, node_type: NodeType, label: str = ""
+    ) -> ProvenanceNode | None:
+        """Find a node by type and optional label.
+
+        Args:
+            node_type: Type of node to find
+            label: Optional label to match
+
+        Returns:
+            First matching node, or None
+        """
+        return self._find_recursive(self.root, node_type, label)
+
+    def _find_recursive(
+        self, node: ProvenanceNode, target_type: NodeType, label: str
+    ) -> ProvenanceNode | None:
+        if node.node_type == target_type:
+            if not label or node.label == label:
+                return node
+        for child in node.children:
+            result = self._find_recursive(child, target_type, label)
+            if result is not None:
+                return result
+        return None
+
+    def all_leaves(self) -> list[ProvenanceNode]:
+        """Return all leaf nodes in the tree."""
+        leaves: list[ProvenanceNode] = []
+        self._collect_leaves(self.root, leaves)
+        return leaves
+
+    def _collect_leaves(
+        self, node: ProvenanceNode, acc: list[ProvenanceNode]
+    ) -> None:
+        if node.is_leaf:
+            acc.append(node)
+        else:
+            for child in node.children:
+                self._collect_leaves(child, acc)
+
+    def diff(self, other: ProvenanceTree) -> ProvenanceDiff:
+        """Compute the difference between this tree and another.
+
+        Args:
+            other: Tree to compare against
+
+        Returns:
+            ProvenanceDiff describing all changes
+        """
+        from .diff import NodeChange, ProvenanceDiff
+
+        if self.root_hash == other.root_hash:
+            return ProvenanceDiff(
+                hash_a=self.root_hash,
+                hash_b=other.root_hash,
+                changed_nodes=[],
+                unchanged_nodes=[
+                    n.node_type.value for n in self.all_leaves()
+                ],
+            )
+
+        changed: list[NodeChange] = []
+        unchanged: list[str] = []
+        self._diff_recursive(
+            self.root, other.root, "", changed, unchanged
+        )
+        return ProvenanceDiff(
+            hash_a=self.root_hash,
+            hash_b=other.root_hash,
+            changed_nodes=changed,
+            unchanged_nodes=unchanged,
+        )
+
+    def _diff_recursive(
+        self,
+        node_a: ProvenanceNode,
+        node_b: ProvenanceNode,
+        path: str,
+        changed: list,
+        unchanged: list[str],
+    ) -> None:
+        from .diff import NodeChange
+
+        current_path = f"{path}/{node_a.label}" if node_a.label else path
+        if not current_path:
+            current_path = node_a.node_type.value
+
+        if node_a.hash == node_b.hash:
+            for leaf in self._subtree_leaf_types(node_a):
+                unchanged.append(leaf)
+            return
+
+        if node_a.is_leaf and node_b.is_leaf:
+            description = self._describe_change(node_a, node_b)
+            changed.append(NodeChange(
+                node_type=node_a.node_type.value,
+                path=current_path,
+                old_hash=node_a.short_hash,
+                new_hash=node_b.short_hash,
+                old_content=node_a.content,
+                new_content=node_b.content,
+                description=description,
+            ))
+            return
+
+        # Internal node changed -- recurse into children
+        a_children = {
+            (c.node_type, c.label): c for c in node_a.children
+        }
+        b_children = {
+            (c.node_type, c.label): c for c in node_b.children
+        }
+
+        all_keys = set(a_children.keys()) | set(b_children.keys())
+        for key in sorted(all_keys, key=lambda k: (k[0].value, k[1])):
+            if key in a_children and key in b_children:
+                self._diff_recursive(
+                    a_children[key], b_children[key],
+                    current_path, changed, unchanged,
+                )
+            elif key in a_children:
+                changed.append(NodeChange(
+                    node_type=key[0].value,
+                    path=f"{current_path}/{key[1]}",
+                    old_hash=a_children[key].short_hash,
+                    new_hash="(removed)",
+                    old_content=a_children[key].content,
+                    new_content={},
+                    description=f"Node removed: {key[0].value} '{key[1]}'",
+                ))
+            else:
+                changed.append(NodeChange(
+                    node_type=key[0].value,
+                    path=f"{current_path}/{key[1]}",
+                    old_hash="(added)",
+                    new_hash=b_children[key].short_hash,
+                    old_content={},
+                    new_content=b_children[key].content,
+                    description=f"Node added: {key[0].value} '{key[1]}'",
+                ))
+
+    def _subtree_leaf_types(self, node: ProvenanceNode) -> list[str]:
+        if node.is_leaf:
+            label = f"{node.node_type.value}"
+            if node.label:
+                label += f"/{node.label}"
+            return [label]
+        result: list[str] = []
+        for child in node.children:
+            result.extend(self._subtree_leaf_types(child))
+        return result
+
+    @staticmethod
+    def _describe_change(a: ProvenanceNode, b: ProvenanceNode) -> str:
+        """Generate a human-readable description of a leaf change."""
+        diffs: list[str] = []
+        all_keys = set(a.content.keys()) | set(b.content.keys())
+        for key in sorted(all_keys):
+            if key.startswith("__"):
+                continue
+            old_val = a.content.get(key)
+            new_val = b.content.get(key)
+            if old_val != new_val:
+                if isinstance(old_val, float) and isinstance(new_val, float):
+                    diffs.append(f"{key}: {old_val:.6g} -> {new_val:.6g}")
+                else:
+                    diffs.append(f"{key}: {old_val} -> {new_val}")
+        return "; ".join(diffs) if diffs else "content changed"
+
+    def to_dict(self) -> dict[str, Any]:
+        """Serialize the tree to a dictionary for storage/transport."""
+        return {
+            "version": "1.0",
+            "root_hash": self.root_hash,
+            "timestamp": self.timestamp,
+            "metadata": self.metadata,
+            "tree": self._node_to_dict(self.root),
+        }
+
+    @staticmethod
+    def _node_to_dict(node: ProvenanceNode) -> dict[str, Any]:
+        result: dict[str, Any] = {
+            "node_type": node.node_type.value,
+            "hash": node.hash,
+            "label": node.label,
+        }
+        if node.is_leaf:
+            result["content"] = node.content
+        else:
+            result["children"] = [
+                ProvenanceTree._node_to_dict(c) for c in node.children
+            ]
+        return result
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> ProvenanceTree:
+        """Deserialize a tree from a dictionary."""
+        tree_data = data["tree"]
+        root = cls._node_from_dict(tree_data)
+        return cls(
+            root=root,
+            timestamp=data.get("timestamp", ""),
+            metadata=data.get("metadata", {}),
+        )
+
+    @classmethod
+    def _node_from_dict(cls, data: dict[str, Any]) -> ProvenanceNode:
+        node_type = NodeType(data["node_type"])
+        if "children" in data:
+            children = tuple(
+                cls._node_from_dict(c) for c in data["children"]
+            )
+            return ProvenanceNode(
+                node_type=node_type,
+                hash=data["hash"],
+                children=children,
+                label=data.get("label", ""),
+            )
+        else:
+            return ProvenanceNode(
+                node_type=node_type,
+                hash=data["hash"],
+                content=data.get("content", {}),
+                label=data.get("label", ""),
+            )
+
+    def summary(self) -> str:
+        """Generate a human-readable summary of the provenance tree."""
+        lines: list[str] = []
+        lines.append(f"Provenance Tree [{self.short_hash}]")
+        lines.append(f"  Timestamp: {self.timestamp}")
+        if self.metadata:
+            for k, v in sorted(self.metadata.items()):
+                lines.append(f"  {k}: {v}")
+        lines.append("")
+        self._summary_recursive(self.root, lines, indent=0)
+        return "\n".join(lines)
+
+    def _summary_recursive(
+        self,
+        node: ProvenanceNode,
+        lines: list[str],
+        indent: int,
+    ) -> None:
+        prefix = "  " * indent
+        label = f" '{node.label}'" if node.label else ""
+        lines.append(
+            f"{prefix}[{node.short_hash}] "
+            f"{node.node_type.value}{label}"
+        )
+        if node.is_leaf and node.content:
+            for key, value in sorted(node.content.items()):
+                if key.startswith("__"):
+                    continue
+                if isinstance(value, str) and len(value) > 40:
+                    value = value[:37] + "..."
+                lines.append(f"{prefix}  {key}: {value}")
+        for child in node.children:
+            self._summary_recursive(child, lines, indent + 1)
+```
+
+### 7.3 ProvenanceDiff
+
+```python
+# src/qubitos/provenance/diff.py
+
+from __future__ import annotations
+
+from dataclasses import dataclass, field
+from typing import Any
+
+
+@dataclass
+class NodeChange:
+    """A single change between two provenance trees.
+
+    Attributes:
+        node_type: Type of the changed node
+        path: Path from root (e.g., "calibration/qubit_0")
+        old_hash: Hash in tree A (short form)
+        new_hash: Hash in tree B (short form)
+        old_content: Content in tree A (leaf nodes only)
+        new_content: Content in tree B (leaf nodes only)
+        description: Human-readable change description
+    """
+    node_type: str
+    path: str
+    old_hash: str
+    new_hash: str
+    old_content: dict[str, Any] = field(default_factory=dict)
+    new_content: dict[str, Any] = field(default_factory=dict)
+    description: str = ""
+
+
+@dataclass
+class ProvenanceDiff:
+    """Difference between two provenance trees.
+
+    Attributes:
+        hash_a: Root hash of tree A
+        hash_b: Root hash of tree B
+        changed_nodes: List of nodes that differ
+        unchanged_nodes: List of node type paths that are identical
+    """
+    hash_a: str
+    hash_b: str
+    changed_nodes: list[NodeChange] = field(default_factory=list)
+    unchanged_nodes: list[str] = field(default_factory=list)
+
+    @property
+    def is_identical(self) -> bool:
+        return len(self.changed_nodes) == 0
+
+    @property
+    def num_changes(self) -> int:
+        return len(self.changed_nodes)
+
+    def summary(self) -> str:
+        """Human-readable diff summary."""
+        lines: list[str] = []
+        lines.append(
+            f"Provenance Diff: {self.hash_a[:16]} <-> {self.hash_b[:16]}"
+        )
+
+        if self.is_identical:
+            lines.append("  Trees are identical.")
+            return "\n".join(lines)
+
+        lines.append(f"  {self.num_changes} change(s):")
+        for change in self.changed_nodes:
+            lines.append("")
+            lines.append(f"  [{change.node_type}] {change.path}")
+            lines.append(
+                f"    {change.old_hash} -> {change.new_hash}"
+            )
+            if change.description:
+                lines.append(f"    {change.description}")
+
+        if self.unchanged_nodes:
+            lines.append("")
+            lines.append(
+                f"  {len(self.unchanged_nodes)} unchanged node(s):"
+            )
+            for node_path in self.unchanged_nodes:
+                lines.append(f"    = {node_path}")
+
+        return "\n".join(lines)
+
+    def to_dict(self) -> dict[str, Any]:
+        """Serialize diff to dictionary."""
+        return {
+            "hash_a": self.hash_a,
+            "hash_b": self.hash_b,
+            "num_changes": self.num_changes,
+            "changed_nodes": [
+                {
+                    "node_type": c.node_type,
+                    "path": c.path,
+                    "old_hash": c.old_hash,
+                    "new_hash": c.new_hash,
+                    "description": c.description,
+                }
+                for c in self.changed_nodes
+            ],
+            "unchanged_nodes": self.unchanged_nodes,
+        }
+```
+
+### 7.4 ProvenanceStore
+
+```python
+# src/qubitos/provenance/store.py
+
+from __future__ import annotations
+
+import json
+import logging
+from collections import OrderedDict
+from pathlib import Path
+from typing import Any
+
+from .diff import ProvenanceDiff
+from .tree import ProvenanceTree
+
+logger = logging.getLogger(__name__)
+
+
+class ProvenanceStore:
+    """Persistent store for provenance trees.
+
+    Stores trees indexed by root hash. Provides retrieval and diffing.
+    Can operate in-memory or backed by a JSON file for persistence.
+
+    This complements (not replaces) FingerprintStore. FingerprintStore
+    tracks calibration drift over time for a specific backend.
+    ProvenanceStore indexes complete experiment provenance trees by hash
+    for retrieval and comparison.
+
+    Attributes:
+        max_entries: Maximum number of trees to store
+    """
+
+    def __init__(
+        self,
+        max_entries: int = 1000,
+        persist_path: Path | None = None,
+    ):
+        """Initialize the provenance store.
+
+        Args:
+            max_entries: Maximum trees to keep (LRU eviction)
+            persist_path: Optional file path for JSON persistence.
+                         If None, store is in-memory only.
+        """
+        self.max_entries = max_entries
+        self._persist_path = persist_path
+        self._trees: OrderedDict[str, ProvenanceTree] = OrderedDict()
+
+        if persist_path and persist_path.exists():
+            self._load_from_disk()
+
+    def store(self, tree: ProvenanceTree) -> str:
+        """Store a provenance tree.
+
+        Args:
+            tree: Tree to store
+
+        Returns:
+            The root hash of the stored tree
+        """
+        root_hash = tree.root_hash
+        self._trees[root_hash] = tree
+        self._trees.move_to_end(root_hash)
+
+        # Evict oldest entries if over limit
+        while len(self._trees) > self.max_entries:
+            evicted_hash, _ = self._trees.popitem(last=False)
+            logger.debug(
+                f"Evicted provenance tree {evicted_hash[:16]}"
+            )
+
+        if self._persist_path:
+            self._save_to_disk()
+
+        return root_hash
+
+    def get(self, root_hash: str) -> ProvenanceTree | None:
+        """Retrieve a tree by root hash.
+
+        Supports prefix matching: if root_hash is shorter than 64
+        characters, matches the first tree whose hash starts with
+        the given prefix.
+
+        Args:
+            root_hash: Full or prefix of root hash
+
+        Returns:
+            The tree, or None if not found
+        """
+        # Exact match
+        if root_hash in self._trees:
+            return self._trees[root_hash]
+
+        # Prefix match
+        for stored_hash, tree in self._trees.items():
+            if stored_hash.startswith(root_hash):
+                return tree
+
+        return None
+
+    def diff(
+        self, hash_a: str, hash_b: str
+    ) -> ProvenanceDiff | None:
+        """Compute diff between two stored trees.
+
+        Args:
+            hash_a: Root hash (or prefix) of first tree
+            hash_b: Root hash (or prefix) of second tree
+
+        Returns:
+            ProvenanceDiff, or None if either tree not found
+        """
+        tree_a = self.get(hash_a)
+        tree_b = self.get(hash_b)
+        if tree_a is None or tree_b is None:
+            return None
+        return tree_a.diff(tree_b)
+
+    def history(
+        self, limit: int | None = None
+    ) -> list[ProvenanceTree]:
+        """Return stored trees in insertion order (oldest first).
+
+        Args:
+            limit: Maximum number of trees to return
+
+        Returns:
+            List of trees
+        """
+        trees = list(self._trees.values())
+        if limit:
+            trees = trees[-limit:]
+        return trees
+
+    def contains(self, root_hash: str) -> bool:
+        """Check if a tree with the given hash exists."""
+        return self.get(root_hash) is not None
+
+    def __len__(self) -> int:
+        return len(self._trees)
+
+    def _save_to_disk(self) -> None:
+        """Persist store to JSON file."""
+        assert self._persist_path is not None
+        data = {
+            "version": "1.0",
+            "trees": {
+                h: t.to_dict() for h, t in self._trees.items()
+            },
+        }
+        self._persist_path.parent.mkdir(parents=True, exist_ok=True)
+        with open(self._persist_path, "w") as f:
+            json.dump(data, f, indent=2)
+
+    def _load_from_disk(self) -> None:
+        """Load store from JSON file."""
+        assert self._persist_path is not None
+        try:
+            with open(self._persist_path) as f:
+                data = json.load(f)
+            for _hash, tree_data in data.get("trees", {}).items():
+                tree = ProvenanceTree.from_dict(tree_data)
+                self._trees[tree.root_hash] = tree
+            logger.info(
+                f"Loaded {len(self._trees)} provenance trees "
+                f"from {self._persist_path}"
+            )
+        except (json.JSONDecodeError, KeyError) as e:
+            logger.warning(
+                f"Failed to load provenance store "
+                f"from {self._persist_path}: {e}"
+            )
+```
+
+### 7.5 ProvenanceBuilder
+
+```python
+# src/qubitos/provenance/builder.py
+
+from __future__ import annotations
+
+import hashlib
+import json
+import math
+import sys
+from typing import Any
+
+import numpy as np
+
+from .nodes import NodeType, ProvenanceNode
+from .tree import ProvenanceTree
+
+
+def canonicalize_float(value: float) -> float:
+    """Round float to 12 significant digits for deterministic hashing."""
+    if value == 0.0 or not math.isfinite(value):
+        return 0.0
+    magnitude = 10 ** (11 - int(math.floor(math.log10(abs(value)))))
+    return round(value * magnitude) / magnitude
+
+
+def _hash_leaf(node_type: str, content: dict[str, Any]) -> str:
+    """Compute SHA-256 of canonical JSON for a leaf node."""
+    canonical = {"__node_type__": node_type, **content}
+    json_bytes = json.dumps(
+        canonical, sort_keys=True, separators=(",", ":")
+    ).encode("utf-8")
+    return hashlib.sha256(json_bytes).hexdigest()
+
+
+def _hash_internal(node_type: str, child_hashes: list[str]) -> str:
+    """Compute SHA-256 of sorted child hashes for an internal node."""
+    sorted_hashes = sorted(child_hashes)
+    payload = f"{node_type}:{'|'.join(sorted_hashes)}"
+    return hashlib.sha256(payload.encode("utf-8")).hexdigest()
+
+
+def hash_envelope(envelope: np.ndarray) -> str:
+    """Hash a pulse envelope from its raw float64 bytes."""
+    arr = np.ascontiguousarray(envelope, dtype=np.float64)
+    return hashlib.sha256(arr.tobytes()).hexdigest()
+
+
+class ProvenanceBuilder:
+    """Builds provenance trees from experiment components.
+
+    Usage:
+        builder = ProvenanceBuilder()
+        builder.set_calibration_from_fingerprint(fingerprint)
+        builder.set_grape_config(config)
+        builder.add_pulse(result, gate_type, target_qubits, ...)
+        builder.set_software_versions()
+        tree = builder.build()
+    """
+
+    def __init__(self) -> None:
+        self._calibration_node: ProvenanceNode | None = None
+        self._pulse_nodes: list[ProvenanceNode] = []
+        self._grape_config_node: ProvenanceNode | None = None
+        self._software_node: ProvenanceNode | None = None
+        self._metadata: dict[str, Any] = {}
+
+    def set_metadata(
+        self, key: str, value: Any
+    ) -> ProvenanceBuilder:
+        """Add metadata (not hashed, for human context)."""
+        self._metadata[key] = value
+        return self
+
+    def set_calibration_from_fingerprint(
+        self, fingerprint: Any  # CalibrationFingerprint
+    ) -> ProvenanceBuilder:
+        """Build calibration subtree from a CalibrationFingerprint.
+
+        Decomposes the fingerprint into individual QubitCalibrationNode
+        and CouplerCalibrationNode children, then assembles the
+        CalibrationNode as their parent.
+        """
+        qubit_nodes: list[ProvenanceNode] = []
+        for qfp in fingerprint.qubit_fingerprints:
+            content = {
+                "qubit_index": int(qfp["index"]),
+                "frequency_ghz": canonicalize_float(
+                    qfp["frequency_ghz"]
+                ),
+                "t1_us": canonicalize_float(qfp["t1_us"]),
+                "t2_us": canonicalize_float(qfp["t2_us"]),
+                "readout_fidelity": canonicalize_float(
+                    qfp["readout_fidelity"]
+                ),
+                "gate_fidelity": canonicalize_float(
+                    qfp["gate_fidelity"]
+                ),
+            }
+            node_hash = _hash_leaf("qubit_calibration", content)
+            qubit_nodes.append(ProvenanceNode(
+                node_type=NodeType.QUBIT_CALIBRATION,
+                hash=node_hash,
+                content=content,
+                label=f"qubit_{int(qfp['index'])}",
+            ))
+
+        coupler_nodes: list[ProvenanceNode] = []
+        for cfp in fingerprint.coupler_fingerprints:
+            content = {
+                "qubit_a": int(cfp["qubit_a"]),
+                "qubit_b": int(cfp["qubit_b"]),
+                "coupling_mhz": canonicalize_float(
+                    cfp["coupling_mhz"]
+                ),
+                "cz_fidelity": canonicalize_float(
+                    cfp["cz_fidelity"]
+                ),
+            }
+            node_hash = _hash_leaf("coupler_calibration", content)
+            qa = int(cfp["qubit_a"])
+            qb = int(cfp["qubit_b"])
+            coupler_nodes.append(ProvenanceNode(
+                node_type=NodeType.COUPLER_CALIBRATION,
+                hash=node_hash,
+                content=content,
+                label=f"coupler_{qa}_{qb}",
+            ))
+
+        all_children = qubit_nodes + coupler_nodes
+        cal_hash = _hash_internal(
+            "calibration", [c.hash for c in all_children]
+        )
+        self._calibration_node = ProvenanceNode(
+            node_type=NodeType.CALIBRATION,
+            hash=cal_hash,
+            children=tuple(all_children),
+            label="calibration",
+        )
+        self._metadata["legacy_calibration_hash"] = fingerprint.hash
+        return self
+
+    def set_grape_config(
+        self, config: Any  # GrapeConfig
+    ) -> ProvenanceBuilder:
+        """Build GRAPEConfigNode from a GrapeConfig instance."""
+        content = {
+            "num_time_steps": config.num_time_steps,
+            "duration_ns": canonicalize_float(config.duration_ns),
+            "target_fidelity": canonicalize_float(
+                config.target_fidelity
+            ),
+            "max_iterations": config.max_iterations,
+            "learning_rate": canonicalize_float(config.learning_rate),
+            "convergence_threshold": canonicalize_float(
+                config.convergence_threshold
+            ),
+            "max_amplitude": canonicalize_float(config.max_amplitude),
+            "use_second_order": config.use_second_order,
+            "regularization": canonicalize_float(
+                config.regularization
+            ),
+            "random_seed": config.random_seed
+            if config.random_seed is not None
+            else "null",
+        }
+        node_hash = _hash_leaf("grape_config", content)
+        self._grape_config_node = ProvenanceNode(
+            node_type=NodeType.GRAPE_CONFIG,
+            hash=node_hash,
+            content=content,
+            label="grape_config",
+        )
+        return self
+
+    def add_pulse(
+        self,
+        pulse_id: str,
+        gate_type: str,
+        target_qubit_indices: list[int],
+        duration_ns: int,
+        num_time_steps: int,
+        target_fidelity: float,
+        max_amplitude_mhz: float,
+        i_envelope: np.ndarray,
+        q_envelope: np.ndarray,
+        coupling_envelope: np.ndarray | None = None,
+        rotation_angle: float = 0.0,
+        custom_unitary_json: str = "",
+    ) -> ProvenanceBuilder:
+        """Add a pulse to the sequence."""
+        content = {
+            "pulse_id": pulse_id,
+            "gate_type": gate_type,
+            "custom_unitary_hash": hashlib.sha256(
+                custom_unitary_json.encode()
+            ).hexdigest()
+            if custom_unitary_json
+            else "",
+            "target_qubit_indices": sorted(target_qubit_indices),
+            "duration_ns": duration_ns,
+            "num_time_steps": num_time_steps,
+            "target_fidelity": canonicalize_float(target_fidelity),
+            "max_amplitude_mhz": canonicalize_float(
+                max_amplitude_mhz
+            ),
+            "i_envelope_hash": hash_envelope(i_envelope),
+            "q_envelope_hash": hash_envelope(q_envelope),
+            "coupling_envelope_hash": hash_envelope(coupling_envelope)
+            if coupling_envelope is not None
+            else "",
+            "rotation_angle": canonicalize_float(rotation_angle),
+        }
+        node_hash = _hash_leaf("scheduled_pulse", content)
+        qubits_str = "_".join(
+            str(q) for q in target_qubit_indices
+        )
+        self._pulse_nodes.append(ProvenanceNode(
+            node_type=NodeType.SCHEDULED_PULSE,
+            hash=node_hash,
+            content=content,
+            label=f"{gate_type.lower()}_q{qubits_str}",
+        ))
+        return self
+
+    def set_software_versions(
+        self,
+        hal_version: str = "unknown",
+        proto_version: str = "unknown",
+        core_git_sha: str = "unknown",
+        hal_git_sha: str = "unknown",
+        proto_git_sha: str = "unknown",
+    ) -> ProvenanceBuilder:
+        """Build SoftwareVersionNode from runtime information."""
+        import numpy
+
+        try:
+            import scipy
+            scipy_ver = scipy.__version__
+        except ImportError:
+            scipy_ver = "not_installed"
+
+        try:
+            import qutip
+            qutip_ver = qutip.__version__
+        except ImportError:
+            qutip_ver = "not_installed"
+
+        import qubitos
+
+        content = {
+            "qubitos_core_version": qubitos.__version__,
+            "qubitos_hal_version": hal_version,
+            "qubitos_proto_version": proto_version,
+            "python_version": (
+                f"{sys.version_info.major}."
+                f"{sys.version_info.minor}."
+                f"{sys.version_info.micro}"
+            ),
+            "numpy_version": numpy.__version__,
+            "scipy_version": scipy_ver,
+            "qutip_version": qutip_ver,
+            "core_git_sha": core_git_sha,
+            "hal_git_sha": hal_git_sha,
+            "proto_git_sha": proto_git_sha,
+        }
+        node_hash = _hash_leaf("software_version", content)
+        self._software_node = ProvenanceNode(
+            node_type=NodeType.SOFTWARE_VERSION,
+            hash=node_hash,
+            content=content,
+            label="software",
+        )
+        return self
+
+    def build(self) -> ProvenanceTree:
+        """Construct the complete provenance tree.
+
+        Raises:
+            ValueError: If required components are missing
+        """
+        if self._calibration_node is None:
+            raise ValueError(
+                "Calibration not set. "
+                "Call set_calibration_from_fingerprint()."
+            )
+
+        # Build PulseSequenceNode
+        if self._pulse_nodes:
+            pulse_seq_hash = _hash_internal(
+                "pulse_sequence",
+                [p.hash for p in self._pulse_nodes],
+            )
+            pulse_seq_node = ProvenanceNode(
+                node_type=NodeType.PULSE_SEQUENCE,
+                hash=pulse_seq_hash,
+                children=tuple(self._pulse_nodes),
+                label="pulse_sequence",
+            )
+        else:
+            pulse_seq_hash = _hash_leaf(
+                "pulse_sequence", {"empty": True}
+            )
+            pulse_seq_node = ProvenanceNode(
+                node_type=NodeType.PULSE_SEQUENCE,
+                hash=pulse_seq_hash,
+                content={"empty": True},
+                label="pulse_sequence",
+            )
+
+        # Build ConfigNode
+        config_children: list[ProvenanceNode] = []
+        if self._grape_config_node:
+            config_children.append(self._grape_config_node)
+        if self._software_node:
+            config_children.append(self._software_node)
+
+        if config_children:
+            config_hash = _hash_internal(
+                "config", [c.hash for c in config_children]
+            )
+            config_node = ProvenanceNode(
+                node_type=NodeType.CONFIG,
+                hash=config_hash,
+                children=tuple(config_children),
+                label="config",
+            )
+        else:
+            config_hash = _hash_leaf("config", {"empty": True})
+            config_node = ProvenanceNode(
+                node_type=NodeType.CONFIG,
+                hash=config_hash,
+                content={"empty": True},
+                label="config",
+            )
+
+        # Build ExperimentNode
+        experiment_children = (pulse_seq_node, config_node)
+        experiment_hash = _hash_internal(
+            "experiment",
+            [c.hash for c in experiment_children],
+        )
+        experiment_node = ProvenanceNode(
+            node_type=NodeType.EXPERIMENT,
+            hash=experiment_hash,
+            children=experiment_children,
+            label="experiment",
+        )
+
+        # Build Root
+        root_children = (self._calibration_node, experiment_node)
+        root_hash = _hash_internal(
+            "root", [c.hash for c in root_children]
+        )
+        root_node = ProvenanceNode(
+            node_type=NodeType.ROOT,
+            hash=root_hash,
+            children=root_children,
+        )
+
+        return ProvenanceTree(
+            root=root_node,
+            metadata=self._metadata,
+        )
+```
+
+---
+
+## 8. Protocol Buffer Changes
+
+### 8.1 New Proto File: `quantum/common/v1/provenance.proto`
+
+```protobuf
+// QubitOS Experiment Provenance
+// Copyright 2026 QubitOS Contributors
+// SPDX-License-Identifier: Apache-2.0
+
+syntax = "proto3";
+
+package quantum.common.v1;
+
+import "quantum/common/v1/common.proto";
+
+option java_multiple_files = true;
+option java_package = "io.qubitos.common.v1";
+
+// ProvenanceNodeType enumerates node types in the Merkle tree.
+enum ProvenanceNodeType {
+  PROVENANCE_NODE_TYPE_UNSPECIFIED = 0;
+  PROVENANCE_NODE_TYPE_ROOT = 1;
+  PROVENANCE_NODE_TYPE_CALIBRATION = 2;
+  PROVENANCE_NODE_TYPE_QUBIT_CALIBRATION = 3;
+  PROVENANCE_NODE_TYPE_COUPLER_CALIBRATION = 4;
+  PROVENANCE_NODE_TYPE_EXPERIMENT = 5;
+  PROVENANCE_NODE_TYPE_PULSE_SEQUENCE = 6;
+  PROVENANCE_NODE_TYPE_SCHEDULED_PULSE = 7;
+  PROVENANCE_NODE_TYPE_CONFIG = 8;
+  PROVENANCE_NODE_TYPE_GRAPE_CONFIG = 9;
+  PROVENANCE_NODE_TYPE_SOFTWARE_VERSION = 10;
+}
+
+// ProvenanceNode is a single node in the provenance Merkle tree.
+message ProvenanceNode {
+  // Type of this node.
+  ProvenanceNodeType node_type = 1;
+
+  // SHA-256 hash of this node (64 hex characters).
+  // Leaf: hash of canonical JSON content.
+  // Internal: hash of sorted child hashes.
+  string hash = 2;
+
+  // Human-readable label (e.g., "qubit_0", "grape_config").
+  string label = 3;
+
+  // Child nodes (for internal nodes only).
+  repeated ProvenanceNode children = 4;
+
+  // Leaf content as JSON string (for leaf nodes only).
+  // Empty for internal nodes.
+  string content_json = 5;
+
+  // Reserved for future use.
+  reserved 50 to 100;
+}
+
+// ProvenanceTree is the complete Merkle tree for an experiment.
+message ProvenanceTree {
+  // Root node of the tree.
+  ProvenanceNode root = 1;
+
+  // Root hash (convenience, equals root.hash).
+  string root_hash = 2;
+
+  // When this tree was constructed.
+  quantum.common.v1.Timestamp created_at = 3;
+
+  // Human-readable metadata (not included in hash).
+  // Keys: "legacy_calibration_hash", "error_budget_*", etc.
+  map<string, string> metadata = 4;
+
+  // Reserved for future use.
+  reserved 50 to 100;
+}
+
+// ProvenanceDiff describes the difference between two trees.
+message ProvenanceDiff {
+  // Root hash of the first tree.
+  string hash_a = 1;
+
+  // Root hash of the second tree.
+  string hash_b = 2;
+
+  // Nodes that changed between the two trees.
+  repeated NodeChange changed_nodes = 3;
+
+  // Node type paths that are identical between trees.
+  repeated string unchanged_nodes = 4;
+
+  // Reserved for future use.
+  reserved 50 to 100;
+}
+
+// NodeChange describes a single changed node in a diff.
+message NodeChange {
+  // Type of the changed node (e.g., "qubit_calibration").
+  string node_type = 1;
+
+  // Path from root (e.g., "calibration/qubit_0").
+  string path = 2;
+
+  // Hash in tree A (16-char prefix).
+  string old_hash = 3;
+
+  // Hash in tree B (16-char prefix).
+  string new_hash = 4;
+
+  // Human-readable description of the change.
+  // Example: "t1_us: 50 -> 45.2"
+  string description = 5;
+
+  // Reserved for future use.
+  reserved 50 to 100;
+}
+```
+
+### 8.2 Changes to Existing Protos
+
+**`quantum/backend/v1/execution.proto` -- MeasurementResult:**
+
+Add field 13:
+
+```protobuf
+message MeasurementResult {
+  // ... existing fields 1-12 unchanged ...
+
+  // Provenance root hash for this measurement result.
+  // Links to the complete provenance tree covering calibration,
+  // pulse sequence, optimizer config, and software versions.
+  // Format: 64-character hex SHA-256 digest.
+  // Empty if provenance tracking was not enabled for this execution.
+  string provenance_hash = 13;
+
+  // Reserved for future use.
+  reserved 50 to 100;
+}
+```
+
+**`quantum/pulse/v1/pulse.proto` -- PulseShape:**
+
+Add field 22:
+
+```protobuf
+message PulseShape {
+  // ... existing fields 1-21 unchanged ...
+
+  // Complete provenance tree for this pulse.
+  // Includes calibration state, GRAPE config, and software versions
+  // at the time the pulse was generated.
+  // Optional: not present for pulses created before provenance was added.
+  quantum.common.v1.ProvenanceTree provenance = 22;
+
+  // Reserved for future use.
+  reserved 50 to 100;
+}
+```
+
+**`quantum/pulse/v1/grape.proto` -- OptimizeResponse:**
+
+Add field 13:
+
+```protobuf
+message OptimizeResponse {
+  // ... existing fields 1-12 unchanged ...
+
+  // Provenance root hash for this optimization run.
+  // Covers: calibration + GRAPE config + software versions.
+  // Does not include execution context (that comes from MeasurementResult).
+  string provenance_hash = 13;
+
+  // Reserved for future use.
+  reserved 50 to 100;
+}
+```
+
+### 8.3 Proto Versioning Note
+
+All additions are backward-compatible per protobuf wire format guarantees:
+- New fields use previously unreserved field numbers
+- Old clients silently ignore unrecognized fields
+- New clients treat missing fields as their default values (empty string for
+  `provenance_hash`, unset message for `provenance`)
+- No existing field semantics change
+
+The `quantum/common/v1/provenance.proto` import must be added to the `build.rs`
+proto compilation list in `qubit-os-hardware` and to the `protoc` invocation in
+`qubit-os-proto`.
+
+---
+
+## 9. Rust Implementation
+
+### 9.1 Module Structure
+
+```
+qubit-os-hardware/src/
+├── provenance/
+│   ├── mod.rs          // Module re-exports
+│   ├── tree.rs         // ProvenanceTree, ProvenanceNode structs
+│   ├── hash.rs         // SHA-256 hashing functions
+│   ├── diff.rs         // ProvenanceDiff computation
+│   └── store.rs        // In-memory ProvenanceStore
+├── backend/
+│   ├── mod.rs          // (existing) add provenance_hash to execution
+│   └── ...
+└── server/
+    ├── grpc.rs         // (existing) populate provenance on responses
+    └── ...
+```
+
+Add `pub mod provenance;` to `src/lib.rs`.
+
+### 9.2 Core Types (`tree.rs`)
+
+```rust
+use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
+
+/// Types of nodes in the provenance Merkle tree.
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum NodeType {
+    Root,
+    Calibration,
+    QubitCalibration,
+    CouplerCalibration,
+    Experiment,
+    PulseSequence,
+    ScheduledPulse,
+    Config,
+    GrapeConfig,
+    SoftwareVersion,
+}
+
+impl NodeType {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            Self::Root => "root",
+            Self::Calibration => "calibration",
+            Self::QubitCalibration => "qubit_calibration",
+            Self::CouplerCalibration => "coupler_calibration",
+            Self::Experiment => "experiment",
+            Self::PulseSequence => "pulse_sequence",
+            Self::ScheduledPulse => "scheduled_pulse",
+            Self::Config => "config",
+            Self::GrapeConfig => "grape_config",
+            Self::SoftwareVersion => "software_version",
+        }
+    }
+}
+
+/// A single node in the provenance Merkle tree.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ProvenanceNode {
+    pub node_type: NodeType,
+    /// SHA-256 hash, 64 hex characters.
+    pub hash: String,
+    /// Human-readable label.
+    pub label: String,
+    /// Child nodes (empty for leaf nodes).
+    pub children: Vec<ProvenanceNode>,
+    /// Leaf content as key-value pairs (empty for internal nodes).
+    #[serde(default)]
+    pub content: HashMap<String, serde_json::Value>,
+}
+
+impl ProvenanceNode {
+    pub fn is_leaf(&self) -> bool {
+        self.children.is_empty()
+    }
+
+    pub fn short_hash(&self) -> &str {
+        let end = self.hash.len().min(16);
+        &self.hash[..end]
+    }
+}
+
+/// Complete provenance tree for an experiment.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ProvenanceTree {
+    pub root: ProvenanceNode,
+    pub root_hash: String,
+    pub timestamp: String,
+    #[serde(default)]
+    pub metadata: HashMap<String, String>,
+}
+```
+
+### 9.3 Hashing (`hash.rs`)
+
+```rust
+use sha2::{Digest, Sha256};
+use serde_json::Value;
+use std::collections::BTreeMap;
+
+/// Hash leaf node content using canonical JSON.
+///
+/// The node_type is included as a "__node_type__" key to prevent
+/// cross-type hash collisions.
+pub fn hash_leaf(
+    node_type: &str,
+    content: &BTreeMap<String, Value>,
+) -> String {
+    let mut canonical = BTreeMap::new();
+    canonical.insert(
+        "__node_type__".to_string(),
+        Value::String(node_type.to_string()),
+    );
+    for (k, v) in content {
+        canonical.insert(k.clone(), v.clone());
+    }
+    // BTreeMap serializes with sorted keys (guaranteed by BTreeMap)
+    // serde_json with no pretty-printing produces compact JSON
+    let json_str = serde_json::to_string(&canonical)
+        .expect("BTreeMap serialization should not fail");
+    let hash = Sha256::digest(json_str.as_bytes());
+    hex::encode(hash)
+}
+
+/// Hash internal node from sorted child hashes.
+///
+/// Format: "{node_type}:{hash1}|{hash2}|..."
+/// Child hashes are sorted lexicographically before joining.
+pub fn hash_internal(
+    node_type: &str,
+    child_hashes: &[String],
+) -> String {
+    let mut sorted = child_hashes.to_vec();
+    sorted.sort();
+    let payload = format!(
+        "{}:{}",
+        node_type,
+        sorted.join("|")
+    );
+    let hash = Sha256::digest(payload.as_bytes());
+    hex::encode(hash)
+}
+
+/// Hash a pulse envelope from raw f64 bytes (little-endian).
+pub fn hash_envelope(envelope: &[f64]) -> String {
+    let bytes: Vec<u8> = envelope
+        .iter()
+        .flat_map(|v| v.to_le_bytes())
+        .collect();
+    let hash = Sha256::digest(&bytes);
+    hex::encode(hash)
+}
+
+/// Canonicalize a float to 12 significant digits.
+///
+/// Returns 0.0 for zero, NaN, or infinity inputs.
+pub fn canonicalize_float(value: f64) -> f64 {
+    if value == 0.0 || !value.is_finite() {
+        return 0.0;
+    }
+    let exp = 11 - value.abs().log10().floor() as i32;
+    let magnitude = 10f64.powi(exp);
+    (value * magnitude).round() / magnitude
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_canonicalize_float_zero() {
+        assert_eq!(canonicalize_float(0.0), 0.0);
+        assert_eq!(canonicalize_float(-0.0), 0.0);
+    }
+
+    #[test]
+    fn test_canonicalize_float_nan() {
+        assert_eq!(canonicalize_float(f64::NAN), 0.0);
+    }
+
+    #[test]
+    fn test_hash_internal_sorted() {
+        let h1 = hash_internal("test", &[
+            "bbb".to_string(),
+            "aaa".to_string(),
+        ]);
+        let h2 = hash_internal("test", &[
+            "aaa".to_string(),
+            "bbb".to_string(),
+        ]);
+        assert_eq!(h1, h2);
+    }
+}
+```
+
+**Important note on cross-language consistency:** The Rust `hash_envelope` uses
+`to_le_bytes()` (little-endian). The Python `hash_envelope` uses
+`np.ascontiguousarray(..., dtype=np.float64).tobytes()`, which produces native byte
+order. On all QubitOS target platforms (x86-64, aarch64 Linux), native byte order is
+little-endian, so the hashes match. If big-endian platforms are ever needed, both
+implementations must agree on byte order.
+
+For `hash_leaf` and `hash_internal`, cross-language consistency requires that both
+Python's `json.dumps(sort_keys=True, separators=(",", ":"))` and Rust's
+`serde_json::to_string()` with `BTreeMap` produce identical JSON strings. This holds
+for the data types used (strings, integers, booleans, floats formatted identically).
+Integration tests in Section 13.6 verify this.
+
+### 9.4 Integration with Execution Path
+
+In `server/grpc.rs`, the `execute_pulse` handler is extended:
+
+```rust
+// In the execute_pulse handler:
+
+// 1. Extract provenance hash from incoming PulseShape (if present)
+let provenance_hash = request
+    .pulse
+    .as_ref()
+    .and_then(|p| p.provenance.as_ref())
+    .map(|t| t.root_hash.clone())
+    .unwrap_or_default();
+
+// 2. Execute the pulse (existing code unchanged)
+let result = backend.execute(/* ... */)?;
+
+// 3. Attach provenance_hash to MeasurementResult
+let mut measurement = result.measurement;
+measurement.provenance_hash = provenance_hash;
+```
+
+The HAL server does not construct or modify provenance trees. It passes through the
+root hash from the `PulseShape` to the `MeasurementResult`. This is correct because
+the HAL server does not have access to GRAPE config or Python-side software versions.
+
+### 9.5 Diff Implementation (`diff.rs`)
+
+The Rust diff mirrors the Python implementation:
+
+```rust
+use super::tree::{NodeType, ProvenanceNode};
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct NodeChange {
+    pub node_type: String,
+    pub path: String,
+    pub old_hash: String,
+    pub new_hash: String,
+    pub description: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ProvenanceDiff {
+    pub hash_a: String,
+    pub hash_b: String,
+    pub changed_nodes: Vec<NodeChange>,
+    pub unchanged_nodes: Vec<String>,
+}
+
+impl ProvenanceDiff {
+    pub fn compute(
+        tree_a: &ProvenanceNode,
+        tree_b: &ProvenanceNode,
+    ) -> Self {
+        if tree_a.hash == tree_b.hash {
+            let unchanged = collect_leaf_types(tree_a);
+            return Self {
+                hash_a: tree_a.hash.clone(),
+                hash_b: tree_b.hash.clone(),
+                changed_nodes: vec![],
+                unchanged_nodes: unchanged,
+            };
+        }
+
+        let mut changed = vec![];
+        let mut unchanged = vec![];
+        diff_recursive(
+            tree_a, tree_b, "",
+            &mut changed, &mut unchanged,
+        );
+
+        Self {
+            hash_a: tree_a.hash.clone(),
+            hash_b: tree_b.hash.clone(),
+            changed_nodes: changed,
+            unchanged_nodes: unchanged,
+        }
+    }
+
+    pub fn is_identical(&self) -> bool {
+        self.changed_nodes.is_empty()
+    }
+}
+```
+
+The recursive diff walks both trees, matching children by `(node_type, label)`.
+For leaf nodes with differing hashes, it generates a `NodeChange` with a
+human-readable description of field-level differences.
+
+---
+
+## 10. Python Implementation
+
+### 10.1 Module Structure
+
+```
+qubit-os-core/src/qubitos/
+├── provenance/
+│   ├── __init__.py     // Public API re-exports
+│   ├── nodes.py        // NodeType, ProvenanceNode (Section 7.1)
+│   ├── tree.py         // ProvenanceTree (Section 7.2)
+│   ├── diff.py         // ProvenanceDiff, NodeChange (Section 7.3)
+│   ├── store.py        // ProvenanceStore (Section 7.4)
+│   └── builder.py      // ProvenanceBuilder (Section 7.5)
+├── pulsegen/
+│   ├── grape.py        // (modified) GrapeResult gets provenance_hash
+│   └── ...
+├── calibrator/
+│   ├── fingerprint.py  // (unchanged) CalibrationFingerprint as-is
+│   └── ...
+└── cli/
+    └── main.py         // (modified) new experiment commands
+```
+
+### 10.2 `__init__.py` Public API
+
+```python
+# src/qubitos/provenance/__init__.py
+
+from .builder import ProvenanceBuilder, canonicalize_float, hash_envelope
+from .diff import NodeChange, ProvenanceDiff
+from .nodes import NodeType, ProvenanceNode
+from .store import ProvenanceStore
+from .tree import ProvenanceTree
+
+__all__ = [
+    "NodeType",
+    "ProvenanceNode",
+    "ProvenanceTree",
+    "ProvenanceDiff",
+    "NodeChange",
+    "ProvenanceStore",
+    "ProvenanceBuilder",
+    "canonicalize_float",
+    "hash_envelope",
+]
+```
+
+### 10.3 Integration with GRAPE
+
+`GrapeResult` is extended with an optional provenance hash:
+
+```python
+# In src/qubitos/pulsegen/grape.py
+
+@dataclass
+class GrapeResult:
+    """Result of GRAPE optimization."""
+    i_envelope: NDArray[np.float64]
+    q_envelope: NDArray[np.float64]
+    fidelity: float
+    iterations: int
+    converged: bool
+    fidelity_history: list[float] = field(default_factory=list)
+    final_unitary: NDArray[np.complex128] | None = None
+    provenance_hash: str = ""  # NEW: root hash of provenance tree
+```
+
+The `generate_pulse()` function is extended to optionally build provenance:
+
+```python
+def generate_pulse(
+    gate: str | GateType,
+    num_qubits: int = 1,
+    duration_ns: float = 20.0,
+    target_fidelity: float = 0.999,
+    qubit_indices: list[int] | None = None,
+    config: GrapeConfig | None = None,
+    calibration: CalibrationFingerprint | None = None,  # NEW
+    build_provenance: bool = True,                       # NEW
+) -> GrapeResult:
+    """Generate an optimized pulse for a quantum gate.
+
+    If build_provenance=True and calibration is provided, a provenance
+    tree is constructed and its root hash attached to the result.
+    """
+    # ... existing optimization code ...
+
+    if build_provenance and calibration is not None:
+        from ..provenance import ProvenanceBuilder
+
+        builder = ProvenanceBuilder()
+        builder.set_calibration_from_fingerprint(calibration)
+        builder.set_grape_config(config)
+        builder.add_pulse(
+            pulse_id="",  # assigned later when stored
+            gate_type=gate.value if isinstance(gate, GateType) else gate,
+            target_qubit_indices=qubit_indices or [0],
+            duration_ns=int(config.duration_ns),
+            num_time_steps=config.num_time_steps,
+            target_fidelity=config.target_fidelity,
+            max_amplitude_mhz=config.max_amplitude,
+            i_envelope=result.i_envelope,
+            q_envelope=result.q_envelope,
+        )
+        builder.set_software_versions()
+        tree = builder.build()
+        result.provenance_hash = tree.root_hash
+
+    return result
+```
+
+### 10.4 CLI Commands
+
+New `experiment` command group added to `cli/main.py`:
+
+```python
+@cli.group()
+def experiment() -> None:
+    """Experiment provenance commands."""
+    pass
+
+
+@experiment.command("provenance")
+@click.argument("hash_prefix")
+@click.option(
+    "--store", "-s", default=None, type=click.Path(),
+    help="Path to provenance store file",
+)
+@click.option(
+    "--format", "-f", "output_format", default="text",
+    type=click.Choice(["text", "json", "yaml"]),
+    help="Output format",
+)
+def experiment_provenance(
+    hash_prefix: str,
+    store: str | None,
+    output_format: str,
+) -> None:
+    """Show the provenance tree for an experiment.
+
+    HASH_PREFIX is the full or partial root hash.
+
+    Examples:
+
+        qubit-os experiment provenance a1b2c3d4
+        qubit-os experiment provenance a1b2c3d4 --format json
+    """
+    try:
+        from ..provenance import ProvenanceStore
+
+        store_path = Path(store) if store else _default_store_path()
+        pstore = ProvenanceStore(persist_path=store_path)
+        tree = pstore.get(hash_prefix)
+
+        if tree is None:
+            click.echo(
+                f"No provenance tree found for: {hash_prefix}",
+                err=True,
+            )
+            sys.exit(1)
+
+        if output_format == "text":
+            click.echo(tree.summary())
+        else:
+            _output(tree.to_dict(), output_format)
+
+    except Exception as e:
+        click.echo(f"Error ({type(e).__name__}): {e}", err=True)
+        sys.exit(1)
+
+
+@experiment.command("diff")
+@click.argument("hash_a")
+@click.argument("hash_b")
+@click.option(
+    "--store", "-s", default=None, type=click.Path(),
+    help="Path to provenance store file",
+)
+@click.option(
+    "--format", "-f", "output_format", default="text",
+    type=click.Choice(["text", "json", "yaml"]),
+    help="Output format",
+)
+def experiment_diff(
+    hash_a: str,
+    hash_b: str,
+    store: str | None,
+    output_format: str,
+) -> None:
+    """Diff two experiment provenance trees.
+
+    Shows exactly what changed between two experiments.
+
+    Examples:
+
+        qubit-os experiment diff a1b2c3d4 e5f6a7b8
+    """
+    try:
+        from ..provenance import ProvenanceStore
+
+        store_path = Path(store) if store else _default_store_path()
+        pstore = ProvenanceStore(persist_path=store_path)
+        diff_result = pstore.diff(hash_a, hash_b)
+
+        if diff_result is None:
+            click.echo(
+                "Could not find one or both trees. "
+                "Check hash prefixes.",
+                err=True,
+            )
+            sys.exit(1)
+
+        if output_format == "text":
+            click.echo(diff_result.summary())
+        else:
+            _output(diff_result.to_dict(), output_format)
+
+    except Exception as e:
+        click.echo(f"Error ({type(e).__name__}): {e}", err=True)
+        sys.exit(1)
+
+
+def _default_store_path() -> Path:
+    """Default location for the provenance store."""
+    return Path.home() / ".qubitos" / "provenance.json"
+```
+
+### 10.5 Populating PulseShape Proto Fields
+
+The existing PulseShape proto fields (`calibration_fingerprint`, `code_version`,
+`created_at`, `random_seed`) should be populated when constructing PulseShape messages.
+A utility function handles the conversion:
+
+```python
+def grape_result_to_pulse_shape(
+    result: GrapeResult,
+    config: GrapeConfig,
+    gate_type: str,
+    target_qubits: list[int],
+    calibration: CalibrationFingerprint | None = None,
+    provenance_tree: ProvenanceTree | None = None,
+) -> PulseShape:
+    """Convert a GrapeResult to a PulseShape proto message.
+
+    Populates all provenance fields that were previously left empty.
+    """
+    import time
+    import qubitos
+
+    pulse = PulseShape()
+    pulse.algorithm = "grape"
+    pulse.gate_type = _gate_type_to_proto(gate_type)
+    pulse.target_qubit_indices.extend(target_qubits)
+    pulse.target_fidelity = result.fidelity
+    pulse.duration_ns = int(config.duration_ns)
+    pulse.num_time_steps = config.num_time_steps
+    pulse.time_step_ns = config.duration_ns / config.num_time_steps
+    pulse.i_envelope.extend(result.i_envelope.tolist())
+    pulse.q_envelope.extend(result.q_envelope.tolist())
+    pulse.max_amplitude_mhz = config.max_amplitude
+
+    # Provenance fields (previously unpopulated)
+    pulse.proto_version = 1
+    pulse.created_at.seconds = int(time.time())
+    pulse.created_at.nanos = 0
+    pulse.code_version = qubitos.__version__
+    if config.random_seed is not None:
+        pulse.random_seed = config.random_seed
+    if calibration is not None:
+        pulse.calibration_fingerprint = f"sha256:{calibration.hash}"
+
+    # New provenance tree field
+    if provenance_tree is not None:
+        _populate_proto_provenance(pulse.provenance, provenance_tree)
+
+    return pulse
+```
+
+---
+
+## 11. Integration Points
+
+### 11.1 CalibrationFingerprint -> CalibrationNode
+
+The existing `CalibrationFingerprint` is reused directly.
+`ProvenanceBuilder.set_calibration_from_fingerprint()` accepts a
+`CalibrationFingerprint` and decomposes it into `QubitCalibrationNode` and
+`CouplerCalibrationNode` children. The legacy 16-char fingerprint hash is preserved
+in tree metadata for backward-compatible lookups.
+
+No changes to `CalibrationFingerprint` or `FingerprintStore` are required.
+
+### 11.2 FingerprintStore and ProvenanceStore
+
+These stores serve different purposes and coexist:
+
+| Aspect          | FingerprintStore                   | ProvenanceStore                  |
+|-----------------|------------------------------------|----------------------------------|
+| **Indexes**     | By backend name (temporal history) | By root hash (content-addressed) |
+| **Tracks**      | Calibration drift over time        | Complete experiment context       |
+| **Query**       | "What was the latest calibration?" | "What context produced result X?" |
+| **Stores**      | CalibrationFingerprint objects     | ProvenanceTree objects           |
+
+They are complementary. A provenance tree *contains* a calibration subtree, but
+FingerprintStore provides temporal drift analysis that ProvenanceStore does not.
+
+### 11.3 PulseSequence (TIME-MODEL-SPEC)
+
+When the time model and `PulseSequence` type are implemented, the provenance tree
+auto-builds from the sequence:
+
+```python
+class PulseSequence:
+    def build_provenance(
+        self,
+        calibration: CalibrationFingerprint,
+        config: GrapeConfig,
+    ) -> ProvenanceTree:
+        builder = ProvenanceBuilder()
+        builder.set_calibration_from_fingerprint(calibration)
+        builder.set_grape_config(config)
+        for scheduled_pulse in self.pulses:
+            builder.add_pulse(
+                pulse_id=scheduled_pulse.pulse_id,
+                gate_type=scheduled_pulse.gate_type,
+                target_qubit_indices=scheduled_pulse.target_qubits,
+                duration_ns=scheduled_pulse.duration_ns,
+                num_time_steps=scheduled_pulse.num_time_steps,
+                target_fidelity=scheduled_pulse.target_fidelity,
+                max_amplitude_mhz=scheduled_pulse.max_amplitude_mhz,
+                i_envelope=scheduled_pulse.i_envelope,
+                q_envelope=scheduled_pulse.q_envelope,
+            )
+        builder.set_software_versions()
+        return builder.build()
+```
+
+### 11.4 GRAPE Optimizer
+
+`GrapeOptimizer.optimize()` is not modified. Provenance is built *after* optimization
+in `generate_pulse()` or at the caller's discretion. This keeps the optimizer focused
+on physics and math, with provenance as an opt-in wrapping layer.
+
+### 11.5 HAL Server
+
+The Rust HAL server participates in provenance by:
+
+1. Receiving `PulseShape` with an attached `ProvenanceTree` from the Python client
+2. Extracting the `root_hash` from the tree
+3. Attaching `root_hash` to `MeasurementResult.provenance_hash` before returning
+4. Optionally storing the tree in a Rust-side `ProvenanceStore` for server-side queries
+
+The HAL server does not construct or recompute provenance trees. It is a pass-through
+for the hash. This is intentional: the HAL server does not have access to GRAPE config
+or Python software versions.
+
+### 11.6 Error Budget (ERROR-BUDGET-SPEC)
+
+When error budgets are implemented, the budget snapshot is included in metadata:
+
+```python
+builder.set_metadata(
+    "error_budget_total_infidelity",
+    str(budget.total_infidelity),
+)
+builder.set_metadata(
+    "error_budget_decoherence_cost",
+    str(budget.decoherence_cost),
+)
+builder.set_metadata(
+    "error_budget_remaining",
+    str(budget.remaining_budget),
+)
+```
+
+Metadata is not hashed because the error budget is a *derived* quantity, not an input.
+
+### 11.7 CLI Summary
+
+| Command                                       | Description                        |
+|-----------------------------------------------|------------------------------------|
+| `qubit-os experiment provenance <hash>`       | Display provenance tree for a hash |
+| `qubit-os experiment diff <hash_a> <hash_b>`  | Diff two experiment provenances    |
+
+These follow the existing CLI patterns: Click groups, `--format` option supporting
+text/json/yaml, error messages to stderr, `sys.exit(1)` on failure.
+
+---
+
+## 12. Migration Path
+
+### 12.1 Backward Compatibility
+
+All provenance additions are **optional**:
+
+- `MeasurementResult.provenance_hash` defaults to empty string
+- `PulseShape.provenance` defaults to unset (proto3 default)
+- `OptimizeResponse.provenance_hash` defaults to empty string
+- `GrapeResult.provenance_hash` defaults to empty string
+
+Existing code that does not set provenance fields continues to work unchanged.
+Results without provenance are still valid and processable.
+
+### 12.2 Incremental Adoption
+
+**Phase 1 (v0.2.0):** Python provenance module ships.
+- `ProvenanceBuilder`, `ProvenanceTree`, `ProvenanceStore` available as library
+- `generate_pulse()` accepts optional `calibration` parameter to build provenance
+- CLI `experiment provenance` and `experiment diff` commands available
+- Proto definitions for provenance messages deployed but not yet populated by HAL
+
+**Phase 2 (v0.2.x):** Wire up proto fields.
+- Populate `PulseShape` proto fields that were previously dead code
+  (`calibration_fingerprint`, `code_version`, `created_at`, `random_seed`)
+- HAL server passes through `provenance_hash` on `MeasurementResult`
+- Rust `provenance` module implemented with hash computation and diff
+
+**Phase 3 (v0.3.0):** Default-on.
+- Provenance built automatically in `generate_pulse()` when calibration is available
+- ProvenanceStore persistence enabled by default (~/.qubitos/provenance.json)
+- CLI workflows include provenance in output by default
+
+### 12.3 CalibrationFingerprint Stability
+
+The existing `CalibrationFingerprint` hash algorithm (JSON -> SHA-256 -> 16 chars) is
+**not changed**. The provenance tree computes its own calibration subtree hash from
+individual qubit/coupler nodes, which will differ from the legacy hash. Both are
+stored: the legacy hash in metadata, the tree hash in the node. This avoids breaking
+any code that depends on the existing fingerprint format.
+
+---
+
+## 13. Test Plan
+
+### 13.1 Hash Determinism
+
+```
+test_hash_determinism_same_inputs:
+    Given: Two ProvenanceBuilder instances with identical inputs
+    When: Both build provenance trees
+    Then: root_hash values are byte-for-byte identical
+
+test_hash_determinism_across_runs:
+    Given: A provenance tree serialized to JSON
+    When: Deserialized and re-hashed
+    Then: Root hash matches the stored root hash
+
+test_hash_determinism_float_canonicalization:
+    Given: Two floats differing only in least-significant bits
+           (e.g., 5.123456789012345 vs 5.123456789012346)
+    When: Both canonicalized to 12 significant digits
+    Then: Both produce the same canonical value
+    And: Both produce the same hash
+
+test_hash_determinism_dict_key_order:
+    Given: Two dicts with identical keys/values but different insertion order
+    When: Hashed via hash_leaf
+    Then: Both produce the same hash (sort_keys=True guarantees this)
+```
+
+### 13.2 Hash Sensitivity
+
+```
+test_sensitivity_single_float_change:
+    Given: Two trees identical except qubit_0 T1 differs by 0.001 us
+    When: Both built and hashed
+    Then: Root hashes differ
+    And: CalibrationNode hashes differ
+    And: QubitCalibrationNode[0] hashes differ
+    And: QubitCalibrationNode[1] hash is unchanged
+
+test_sensitivity_grape_config_change:
+    Given: Two trees identical except learning_rate differs
+    When: Both built and hashed
+    Then: Root hashes differ
+    And: CalibrationNode hash is unchanged
+    And: GRAPEConfigNode hashes differ
+
+test_sensitivity_software_version_change:
+    Given: Two trees identical except numpy_version differs
+    When: Both built and hashed
+    Then: Root hashes differ
+    And: SoftwareVersionNode hashes differ
+    And: CalibrationNode and PulseSequenceNode hashes unchanged
+
+test_sensitivity_envelope_single_sample:
+    Given: Two I-envelopes differing by one sample (1e-10 amplitude change)
+    When: Hashed via hash_envelope
+    Then: Hashes differ (raw byte comparison, no rounding)
+
+test_sensitivity_node_type_prefix:
+    Given: A QubitCalibrationNode and CouplerCalibrationNode with
+           numerically identical content fields
+    When: Both hashed
+    Then: Hashes differ (due to __node_type__ prefix in canonical JSON)
+```
+
+### 13.3 Tree Construction
+
+```
+test_tree_structure_single_qubit_single_pulse:
+    Given: 1 qubit, 0 couplers, 1 pulse, GRAPE config, software versions
+    When: Tree built via ProvenanceBuilder
+    Then: Root has 2 children (Calibration, Experiment)
+    And: Calibration has 1 child (QubitCalibration)
+    And: Experiment has 2 children (PulseSequence, Config)
+    And: PulseSequence has 1 child (ScheduledPulse)
+    And: Config has 2 children (GRAPEConfig, SoftwareVersion)
+
+test_tree_structure_two_qubit_with_coupler:
+    Given: 2 qubits, 1 coupler, 1 CZ pulse
+    When: Tree built
+    Then: Calibration has 3 children (2 QubitCal + 1 CouplerCal)
+
+test_tree_structure_multi_pulse_sequence:
+    Given: 3 pulses in sequence (X on q0, X on q1, CZ on q0-q1)
+    When: Tree built
+    Then: PulseSequence has 3 ScheduledPulse children
+
+test_tree_builder_missing_calibration:
+    Given: ProvenanceBuilder without set_calibration_from_fingerprint()
+    When: build() called
+    Then: Raises ValueError with descriptive message
+
+test_tree_builder_no_pulses:
+    Given: Builder with calibration but no add_pulse() calls
+    When: build() called
+    Then: Succeeds with empty PulseSequenceNode (content: {"empty": True})
+
+test_tree_find_node:
+    Given: A fully-built provenance tree
+    When: find_node(NodeType.QUBIT_CALIBRATION, "qubit_0") called
+    Then: Returns the correct QubitCalibrationNode
+
+test_tree_all_leaves:
+    Given: Tree with 2 qubits, 1 coupler, 1 pulse, GRAPE config, software
+    When: all_leaves() called
+    Then: Returns 6 leaf nodes (2 qubit + 1 coupler + 1 pulse + 1 grape + 1 sw)
+```
+
+### 13.4 Diff
+
+```
+test_diff_identical_trees:
+    Given: Two trees built from identical inputs
+    When: diff() called
+    Then: is_identical == True
+    And: changed_nodes is empty
+    And: unchanged_nodes lists all leaf types
+
+test_diff_calibration_change:
+    Given: Tree A and Tree B differing only in qubit_0 T1
+    When: diff() called
+    Then: changed_nodes has exactly 1 entry
+    And: entry.node_type == "qubit_calibration"
+    And: entry.path contains "qubit_0"
+    And: entry.description contains "t1_us"
+    And: unchanged_nodes includes grape_config, software_version, etc.
+
+test_diff_multiple_changes:
+    Given: Trees differing in T1 on qubit_0 AND learning_rate
+    When: diff() called
+    Then: changed_nodes has exactly 2 entries
+    And: one is qubit_calibration, other is grape_config
+
+test_diff_added_qubit:
+    Given: Tree A with 2 qubits, Tree B with 3 qubits
+    When: diff() called
+    Then: changed_nodes includes an "added" entry for qubit_2
+
+test_diff_removed_coupler:
+    Given: Tree A with 1 coupler, Tree B with 0 couplers
+    When: diff() called
+    Then: changed_nodes includes a "removed" entry for the coupler
+
+test_diff_human_readable_description:
+    Given: Trees differing in qubit_0 frequency: 5.0 GHz -> 5.001 GHz
+    When: diff() called
+    Then: description contains "frequency_ghz: 5 -> 5.001" (or similar)
+
+test_diff_summary_format:
+    Given: A ProvenanceDiff with 2 changes and 4 unchanged
+    When: summary() called
+    Then: Output contains "2 change(s):" and "4 unchanged node(s):"
+    And: Each change shows node_type, path, old_hash, new_hash, description
+```
+
+### 13.5 Serialization Round-Trip
+
+```
+test_roundtrip_to_dict_from_dict:
+    Given: A fully constructed provenance tree
+    When: Serialized via to_dict() then deserialized via from_dict()
+    Then: root_hash of reconstructed tree equals original
+    And: All node hashes match
+    And: All leaf content matches
+    And: metadata matches
+    And: timestamp matches
+
+test_roundtrip_json_file:
+    Given: A provenance tree
+    When: to_dict() -> json.dumps() -> json.loads() -> from_dict()
+    Then: Reconstructed tree root_hash is identical
+
+test_roundtrip_preserves_labels:
+    Given: A tree with various labeled nodes
+    When: Round-tripped through to_dict/from_dict
+    Then: All labels are preserved
+
+test_diff_roundtrip:
+    Given: A ProvenanceDiff
+    When: Serialized via to_dict()
+    Then: Contains hash_a, hash_b, num_changes, changed_nodes, unchanged_nodes
+    And: Each changed_node has node_type, path, old_hash, new_hash, description
+```
+
+### 13.6 Integration Tests
+
+```
+test_integration_grape_to_provenance:
+    Given: A CalibrationFingerprint and GrapeConfig
+    When: generate_pulse() called with build_provenance=True
+    Then: GrapeResult.provenance_hash is non-empty (64 hex chars)
+    And: Hash is deterministic (same config + calibration = same hash)
+
+test_integration_grape_to_pulseshape_proto:
+    Given: A GrapeResult with provenance_hash
+    When: Converted to PulseShape proto via grape_result_to_pulse_shape()
+    Then: PulseShape.calibration_fingerprint is populated ("sha256:...")
+    And: PulseShape.code_version is populated (matches qubitos.__version__)
+    And: PulseShape.created_at is populated (non-zero timestamp)
+    And: PulseShape.random_seed is populated (if config.random_seed was set)
+    And: PulseShape.provenance.root_hash matches GrapeResult.provenance_hash
+
+test_integration_execute_carries_provenance:
+    Given: A PulseShape with provenance tree
+    When: Executed through HAL (simulator backend)
+    Then: MeasurementResult.provenance_hash matches PulseShape root hash
+    And: MeasurementResult.calibration_fingerprint is still populated (backward compat)
+
+test_integration_store_and_retrieve:
+    Given: A provenance tree stored in ProvenanceStore
+    When: Retrieved by full hash
+    Then: Retrieved tree root_hash matches stored tree root_hash
+    When: Retrieved by 8-char prefix
+    Then: Same tree returned
+    When: Diff with itself
+    Then: is_identical == True
+
+test_integration_cross_language_hash_leaf:
+    Given: Identical leaf content in Python and Rust
+    When: hash_leaf() called in both languages
+    Then: Hashes match (validates JSON serialization consistency)
+
+test_integration_cross_language_hash_envelope:
+    Given: Identical float64 array in Python (numpy) and Rust (Vec<f64>)
+    When: hash_envelope() called in both languages
+    Then: Hashes match (validates byte order consistency)
+
+test_integration_cli_provenance:
+    Given: A provenance tree stored in the default store
+    When: `qubit-os experiment provenance <hash>` executed
+    Then: Exit code 0
+    And: Output shows tree summary with correct structure
+
+test_integration_cli_diff:
+    Given: Two provenance trees stored in the default store
+    When: `qubit-os experiment diff <hash_a> <hash_b>` executed
+    Then: Exit code 0
+    And: Output shows diff with changed and unchanged nodes
+```
+
+### 13.7 Floating-Point Edge Cases
+
+```
+test_canonicalize_float_zero:
+    assert canonicalize_float(0.0) == 0.0
+    assert canonicalize_float(-0.0) == 0.0
+
+test_canonicalize_float_nan:
+    assert canonicalize_float(float('nan')) == 0.0
+
+test_canonicalize_float_inf:
+    assert canonicalize_float(float('inf')) == 0.0
+    assert canonicalize_float(float('-inf')) == 0.0
+
+test_canonicalize_float_very_small:
+    result = canonicalize_float(1.23456789012e-15)
+    assert result == 1.23456789012e-15
+
+test_canonicalize_float_very_large:
+    result = canonicalize_float(1.23456789012e+15)
+    assert result == 1.23456789012e+15
+
+test_canonicalize_float_precision_boundary:
+    a = 5.123456789012345
+    b = 5.123456789012999
+    assert canonicalize_float(a) == canonicalize_float(b)
+
+test_canonicalize_float_different_values:
+    a = 5.12345678901
+    b = 5.12345678902
+    assert canonicalize_float(a) != canonicalize_float(b)
+```
+
+### 13.8 Envelope Hashing Performance
+
+```
+test_envelope_hash_performance:
+    Given: Envelope with 10,000 float64 samples (80 KB)
+    When: hash_envelope() called 100 times
+    Then: Total time < 100ms (< 1ms per hash)
+    Note: SHA-256 throughput is ~500 MB/s on modern CPUs; 80KB takes ~0.16ms
+
+test_envelope_hash_empty:
+    Given: Empty numpy array (np.array([], dtype=np.float64))
+    When: hash_envelope() called
+    Then: Returns valid 64-character hex hash
+
+test_envelope_hash_dtype_conversion:
+    Given: Array as float32
+    When: hash_envelope() called (converts to float64 internally)
+    Then: Returns valid hash
+    Note: float32->float64 conversion changes values, so hash differs
+          from a native float64 array with "same" values. This is correct.
+```
+
+### 13.9 Store Tests
+
+```
+test_store_basic:
+    Given: An empty ProvenanceStore
+    When: A tree is stored
+    Then: get(root_hash) returns the tree
+    And: len(store) == 1
+
+test_store_prefix_lookup:
+    Given: A tree with hash "abcdef1234567890..."
+    When: get("abcdef") called
+    Then: Returns the tree
+
+test_store_prefix_ambiguous:
+    Given: Two trees whose hashes share a 4-char prefix
+    When: get(4_char_prefix) called
+    Then: Returns the first match (insertion order)
+
+test_store_eviction:
+    Given: ProvenanceStore(max_entries=3)
+    When: 4 trees stored
+    Then: len(store) == 3
+    And: Oldest tree is no longer retrievable
+    And: Three newest trees are retrievable
+
+test_store_persistence_write:
+    Given: ProvenanceStore with persist_path to a temp file
+    When: Tree stored
+    Then: File exists on disk
+    And: File contains valid JSON with "trees" key
+
+test_store_persistence_read:
+    Given: ProvenanceStore saved to disk with 2 trees
+    When: New ProvenanceStore created with same persist_path
+    Then: len(store) == 2
+    And: Both trees retrievable by hash
+
+test_store_diff:
+    Given: Two trees stored
+    When: store.diff(hash_a, hash_b) called
+    Then: Returns correct ProvenanceDiff
+
+test_store_diff_missing_tree:
+    Given: One tree stored
+    When: store.diff(stored_hash, "nonexistent") called
+    Then: Returns None
+
+test_store_contains:
+    Given: A tree stored with hash H
+    When: contains(H) called
+    Then: Returns True
+    When: contains("nonexistent") called
+    Then: Returns False
+
+test_store_history:
+    Given: 5 trees stored in order
+    When: history(limit=3) called
+    Then: Returns last 3 trees in insertion order
+```
+
+---
+
+## 14. Future Extensions
+
+This spec establishes the foundation for several follow-on capabilities:
+
+### 14.1 Provenance-Based Result Caching
+
+If two experiments have identical provenance root hashes, they will produce
+statistically identical results (modulo shot noise). A cache layer could:
+
+- Before execution: check if a result with the same provenance hash exists
+- If yes: return cached result (or merge shot counts for more statistics)
+- If no: execute and cache the result
+
+This requires careful treatment of shot noise: cached results from N shots are
+not statistically equivalent to fresh results from N shots.
+
+### 14.2 Experiment Comparison Dashboards
+
+With provenance-tagged results stored over time, a dashboard could:
+
+- Plot fidelity vs. time, colored by which provenance subtree changed
+- Show "this fidelity drop correlates with T1 drift on qubit 3"
+- Compare software version upgrades: "v0.2.0 achieves 0.3% higher fidelity on
+  CZ gates vs. v0.1.0 with identical calibration"
+
+### 14.3 Automated Regression Detection
+
+Define baseline provenance hashes for known-good experiments. On each CI run:
+
+- Re-run baseline experiments
+- Compare fidelity against historical results with the same provenance
+- If fidelity degrades without provenance changes: hardware drift detected
+- If fidelity degrades with provenance changes: investigate the specific change
+
+### 14.4 Hardware Firmware Version Tracking
+
+When backends expose firmware version APIs:
+
+- Add `firmware_version` to `SoftwareVersionNode`
+- Track firmware updates as provenance changes
+- Correlate firmware updates with performance changes
+
+### 14.5 Environmental Condition Logging
+
+With temperature sensors, EM monitors, or vibration sensors:
+
+- Log readings as provenance metadata (not hashed, since not controlled inputs)
+- Correlate environmental conditions with result quality
+- Eventually: include environmental hash in a separate "environment" subtree
+  once sensors provide reliable, repeatable readings
+
+---
+
+## 15. References
+
+1. Merkle, R. C. (1988). "A Digital Signature Based on a Conventional Encryption
+   Function." *Advances in Cryptology -- CRYPTO '87*, Lecture Notes in Computer
+   Science, vol 293. Springer. doi:10.1007/3-540-48184-2_32
+
+2. Khaneja, N., Reiss, T., Kehlet, C., Schulte-Herbruggen, T., & Glaser, S. J.
+   (2005). "Optimal control of coupled spin dynamics: design of NMR pulse sequences
+   by gradient ascent algorithms." *Journal of Magnetic Resonance*, 172(2), 296-305.
+   doi:10.1016/j.jmr.2004.11.004
+
+3. Nielsen, M. A., & Chuang, I. L. (2010). *Quantum Computation and Quantum
+   Information* (10th Anniversary Edition). Cambridge University Press.
+   Chapter 7: Quantum computers: physical realization.
+
+4. DVC (Data Version Control). https://dvc.org -- The "git for data" pattern applied
+   to ML pipelines. Similar content-addressing and diffing principles.
+
+5. Git. Torvalds, L. (2005). Content-addressable storage using SHA-1 Merkle trees
+   for source code version control. https://git-scm.com
+
+6. NIST SP 800-185. SHA-3 Derived Functions. SHA-256 security properties and
+   collision resistance guarantees.
+
+---
+
+*This document should be reviewed alongside ARCHITECTURE-REVIEW.md (GAP 4),
+QubitOS-Design-v0.5.0.md, and the future TIME-MODEL-SPEC.md and ERROR-BUDGET-SPEC.md.
+Implementation should begin with the Python module (Phase 1) as it provides immediate
+value for experiment tracking without requiring proto or Rust changes.*
