@@ -67,6 +67,11 @@ class GateType(Enum):
     CZ = "CZ"
     CNOT = "CNOT"
     ISWAP = "iSWAP"
+    S = "S"
+    T = "T"
+    CX = "CX"
+    SQISWAP = "SQISWAP"
+    SWAP = "SWAP"
     # Custom
     CUSTOM = "CUSTOM"
 
@@ -89,7 +94,7 @@ class GrapeConfig:
     """
 
     num_time_steps: int = 100
-    duration_ns: float = 20.0
+    duration_ns: int = 20
     target_fidelity: float = 0.999
     max_iterations: int = 1000
     learning_rate: float = 1.0  # Increased from 0.1
@@ -505,7 +510,7 @@ class GrapeOptimizer:
 def generate_pulse(
     gate: str | GateType,
     num_qubits: int = 1,
-    duration_ns: float = 20.0,
+    duration_ns: int = 20,
     target_fidelity: float = 0.999,
     qubit_indices: list[int] | None = None,
     config: GrapeConfig | None = None,

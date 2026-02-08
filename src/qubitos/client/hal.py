@@ -475,6 +475,11 @@ def _parse_gate_type(gate_type: str) -> GateType:
         "CZ": GateType.GATE_TYPE_CZ,
         "CNOT": GateType.GATE_TYPE_CNOT,
         "ISWAP": GateType.GATE_TYPE_ISWAP,
+        "S": GateType.GATE_TYPE_S,
+        "T": GateType.GATE_TYPE_T,
+        "CX": GateType.GATE_TYPE_CX,
+        "SQISWAP": GateType.GATE_TYPE_SQISWAP,
+        "SWAP": GateType.GATE_TYPE_SWAP,
         "CUSTOM": GateType.GATE_TYPE_CUSTOM,
     }
     return gate_map.get(gate_type.upper(), GateType.GATE_TYPE_CUSTOM)

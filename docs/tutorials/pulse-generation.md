@@ -42,16 +42,9 @@ In QubitOS, you work with the I and Q envelopes directly.
 
 ```python
 from qubitos.pulsegen import GrapeOptimizer, GrapeConfig
-from qubitos.pulsegen.hamiltonians import TransmonHamiltonian
+from qubitos.pulsegen.hamiltonians import get_target_unitary
 
-# Step 1: Define the system Hamiltonian
-hamiltonian = TransmonHamiltonian(
-    omega_qubit=5.0,      # Qubit frequency (GHz)
-    anharmonicity=-0.3,   # Anharmonicity (GHz)
-    omega_drive=5.0,      # Drive frequency (GHz)
-)
-
-# Step 2: Configure the optimizer
+# Step 1: Configure the optimizer
 config = GrapeConfig(
     num_time_steps=100,    # Pulse discretization
     duration_ns=50,        # Total pulse length
@@ -59,9 +52,12 @@ config = GrapeConfig(
     target_fidelity=0.999, # Fidelity threshold
 )
 
+# Step 2: Get the target gate unitary
+target = get_target_unitary("X", num_qubits=1)
+
 # Step 3: Create optimizer and generate pulse
-optimizer = GrapeOptimizer(config, hamiltonian)
-result = optimizer.optimize(gate_type="X", qubit=0)
+optimizer = GrapeOptimizer(config)
+result = optimizer.optimize(target, num_qubits=1)
 
 # Step 4: Inspect the result
 print(f"Converged: {result.converged}")
@@ -81,8 +77,8 @@ The `GrapeResult` object contains:
 | `fidelity` | `float` | Achieved gate fidelity |
 | `converged` | `bool` | Whether target fidelity was reached |
 | `iterations` | `int` | Number of optimization steps |
-| `target_unitary` | `np.ndarray` | Target gate matrix |
-| `achieved_unitary` | `np.ndarray` | Actual gate matrix |
+| `fidelity_history` | `list[float]` | Fidelity at each iteration |
+| `final_unitary` | `np.ndarray \| None` | Unitary implemented by optimized pulse |
 
 ---
 
@@ -167,8 +163,7 @@ Limit pulse amplitudes to hardware-safe values:
 
 ```python
 config = GrapeConfig(
-    max_amplitude=1.0,  # Maximum |Ω| value
-    amp_scale=0.1,      # Scale factor for gradients
+    max_amplitude=1.0,  # Maximum |Ω| value (MHz)
 )
 ```
 
@@ -190,10 +185,13 @@ QubitOS supports these single-qubit gates:
 ### Generating Different Gates
 
 ```python
+from qubitos.pulsegen.hamiltonians import get_target_unitary
+
 # Generate various gates
-for gate in ["X", "Y", "Z", "H"]:
-    result = optimizer.optimize(gate_type=gate, qubit=0)
-    print(f"{gate} gate: fidelity = {result.fidelity:.4f}")
+for gate_name in ["X", "Y", "Z", "H"]:
+    target = get_target_unitary(gate_name, num_qubits=1)
+    result = optimizer.optimize(target, num_qubits=1)
+    print(f"{gate_name} gate: fidelity = {result.fidelity:.4f}")
 ```
 
 ---
@@ -207,7 +205,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 def plot_pulse(result, title="Pulse Envelope"):
-    t = np.linspace(0, result.duration_ns, len(result.i_envelope))
+    t = np.linspace(0, config.duration_ns, len(result.i_envelope))
     
     fig, axes = plt.subplots(2, 1, figsize=(10, 6), sharex=True)
     
@@ -232,17 +230,20 @@ plt.show()
 ### Comparing Multiple Gates
 
 ```python
+from qubitos.pulsegen.hamiltonians import get_target_unitary
+
 fig, axes = plt.subplots(2, 4, figsize=(15, 6))
 
 gates = ["X", "Y", "Z", "H"]
-for i, gate in enumerate(gates):
-    result = optimizer.optimize(gate_type=gate, qubit=0)
+for i, gate_name in enumerate(gates):
+    target = get_target_unitary(gate_name, num_qubits=1)
+    result = optimizer.optimize(target, num_qubits=1)
     t = np.linspace(0, 50, len(result.i_envelope))
     
     axes[0, i].plot(t, result.i_envelope, 'b-')
-    axes[0, i].set_title(f"{gate} gate (I)")
+    axes[0, i].set_title(f"{gate_name} gate (I)")
     axes[1, i].plot(t, result.q_envelope, 'r-')
-    axes[1, i].set_title(f"{gate} gate (Q)")
+    axes[1, i].set_title(f"{gate_name} gate (Q)")
 
 plt.tight_layout()
 plt.show()
@@ -259,12 +260,11 @@ import json
 
 def save_pulse(result, filename):
     data = {
-        "gate_type": result.gate_type,
         "i_envelope": result.i_envelope.tolist(),
         "q_envelope": result.q_envelope.tolist(),
-        "duration_ns": result.duration_ns,
         "fidelity": result.fidelity,
         "converged": result.converged,
+        "iterations": result.iterations,
     }
     with open(filename, 'w') as f:
         json.dump(data, f, indent=2)
@@ -301,16 +301,19 @@ qubit-os pulse execute x_gate.json --shots 1024
 Generate multiple pulses efficiently:
 
 ```python
+from qubitos.pulsegen.hamiltonians import get_target_unitary
+
 gates = ["X", "Y", "Z", "H", "S", "T"]
 pulses = {}
 
-for gate in gates:
-    result = optimizer.optimize(gate_type=gate, qubit=0)
+for gate_name in gates:
+    target = get_target_unitary(gate_name, num_qubits=1)
+    result = optimizer.optimize(target, num_qubits=1)
     if result.converged:
-        pulses[gate] = result
-        print(f"[PASS] {gate}: fidelity = {result.fidelity:.4f}")
+        pulses[gate_name] = result
+        print(f"[PASS] {gate_name}: fidelity = {result.fidelity:.4f}")
     else:
-        print(f"[FAIL] {gate}: did not converge")
+        print(f"[FAIL] {gate_name}: did not converge")
 ```
 
 ### Random Initial Guess
@@ -321,10 +324,14 @@ Different starting points can help find better solutions:
 import numpy as np
 
 # Try multiple random initializations
+from qubitos.pulsegen.hamiltonians import get_target_unitary
+
+target = get_target_unitary("H", num_qubits=1)
 best_result = None
 for seed in range(5):
-    np.random.seed(seed)
-    result = optimizer.optimize(gate_type="H", qubit=0)
+    config = GrapeConfig(num_time_steps=100, duration_ns=50, random_seed=seed)
+    optimizer = GrapeOptimizer(config)
+    result = optimizer.optimize(target, num_qubits=1)
     if best_result is None or result.fidelity > best_result.fidelity:
         best_result = result
 

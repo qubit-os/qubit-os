@@ -50,19 +50,20 @@ from qubitos.pulsegen import generate_pulse
 from qubitos.client import HALClient
 
 # Generate optimized pulse
-pulse = generate_pulse(
-    gate="X",
-    qubit=0,
-    duration_ns=20,
-    target_fidelity=0.999,
-    algorithm="grape"
-)
+pulse = generate_pulse(gate="X", duration_ns=20, target_fidelity=0.999)
 
 # Execute on simulator
 async with HALClient("localhost:50051") as client:
-    result = await client.execute_pulse(pulse, num_shots=1000)
+    result = await client.execute_pulse(
+        i_envelope=pulse.i_envelope.tolist(),
+        q_envelope=pulse.q_envelope.tolist(),
+        duration_ns=20,
+        target_qubits=[0],
+        num_shots=1000,
+    )
     print(f"Counts: {result.bitstring_counts}")
-    print(f"Fidelity: {result.fidelity_estimate:.4f}")
+    if result.fidelity_estimate is not None:
+        print(f"Fidelity: {result.fidelity_estimate:.4f}")
 ```
 
 ### CLI Usage

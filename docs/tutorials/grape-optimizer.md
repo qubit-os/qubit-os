@@ -56,6 +56,7 @@ where $d$ is the Hilbert space dimension.
 
 ```python
 from qubitos.pulsegen import GrapeOptimizer, GrapeConfig
+from qubitos.pulsegen.hamiltonians import get_target_unitary
 
 config = GrapeConfig(
     num_time_steps=100,      # Time discretization
@@ -66,7 +67,8 @@ config = GrapeConfig(
 )
 
 optimizer = GrapeOptimizer(config)
-result = optimizer.optimize(gate_type="X", qubit=0)
+target = get_target_unitary("X", num_qubits=1)
+result = optimizer.optimize(target, num_qubits=1)
 ```
 
 ---
@@ -78,19 +80,20 @@ result = optimizer.optimize(gate_type="X", qubit=0)
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
 | `num_time_steps` | int | 100 | Number of pulse samples |
-| `duration_ns` | float | 50.0 | Pulse duration in nanoseconds |
-| `max_iterations` | int | 200 | Maximum optimization iterations |
+| `duration_ns` | float | 20.0 | Pulse duration in nanoseconds |
+| `max_iterations` | int | 1000 | Maximum optimization iterations |
 | `target_fidelity` | float | 0.999 | Stop when fidelity exceeds this |
-| `learning_rate` | float | 0.1 | Gradient descent step size |
+| `learning_rate` | float | 1.0 | Gradient ascent step size |
 
 ### Advanced Parameters
 
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
-| `gradient_clip` | float | None | Maximum gradient magnitude |
-| `momentum` | float | 0.0 | Momentum for gradient updates |
-| `line_search` | bool | False | Enable adaptive learning rate |
+| `max_amplitude` | float | 100.0 | Maximum pulse amplitude (MHz) |
+| `convergence_threshold` | float | 1e-8 | Stop when improvement < threshold |
+| `use_second_order` | bool | False | Use GRAPE-II optimization |
 | `regularization` | float | 0.0 | L2 penalty on pulse amplitude |
+| `random_seed` | int \| None | None | Random seed for reproducibility |
 
 ---
 
@@ -162,12 +165,12 @@ config = GrapeConfig(
 ### Monitoring Convergence
 
 ```python
-# Enable verbose output
-optimizer = GrapeOptimizer(config, verbose=True)
-result = optimizer.optimize(gate_type="X", qubit=0)
+optimizer = GrapeOptimizer(config)
+target = get_target_unitary("X", num_qubits=1)
+result = optimizer.optimize(target, num_qubits=1)
 
-# Access convergence history
-fidelities = result.convergence_history
+# Access fidelity history
+fidelities = result.fidelity_history
 iterations = range(len(fidelities))
 
 # Plot convergence
@@ -200,7 +203,7 @@ Iteration 100: F = 0.999  (converged)
 | F oscillates | Learning rate too high | Reduce `learning_rate` |
 | F plateaus at 0.5 | Wrong Hamiltonian | Check system parameters |
 | F increases slowly | Learning rate too low | Increase `learning_rate` |
-| F jumps around | Numerical instability | Enable `gradient_clip` |
+| F jumps around | Numerical instability | Reduce `learning_rate` or enable `use_second_order` |
 
 ---
 
@@ -243,12 +246,16 @@ For 99.9% fidelity: ~0.1% error per gate.
 ### Two-Qubit Gates
 
 ```python
-from qubitos.pulsegen.hamiltonians import TwoQubitHamiltonian
+from qubitos.pulsegen import GrapeOptimizer, GrapeConfig
+from qubitos.pulsegen.hamiltonians import (
+    get_target_unitary,
+    build_hamiltonian,
+)
 
-hamiltonian = TwoQubitHamiltonian(
-    omega_q0=5.0,      # Qubit 0 frequency
-    omega_q1=5.2,      # Qubit 1 frequency
-    coupling_j=0.01,   # Coupling strength
+# Build a two-qubit drift Hamiltonian from Pauli strings
+drift, controls = build_hamiltonian(
+    drift="5.0 * Z0 + 5.2 * Z1 + 0.01 * Z0 Z1",
+    num_qubits=2,
 )
 
 config = GrapeConfig(
@@ -257,8 +264,13 @@ config = GrapeConfig(
     max_iterations=500,   # More iterations
 )
 
-optimizer = GrapeOptimizer(config, hamiltonian)
-result = optimizer.optimize(gate_type="CNOT", control=0, target=1)
+optimizer = GrapeOptimizer(config)
+target = get_target_unitary("CNOT", num_qubits=2, qubit_indices=[0, 1])
+result = optimizer.optimize(
+    target, num_qubits=2,
+    drift_hamiltonian=drift,
+    control_hamiltonians=controls,
+)
 ```
 
 ### Challenges with Multi-Qubit Gates
@@ -278,8 +290,7 @@ Prevent high-frequency oscillations:
 
 ```python
 config = GrapeConfig(
-    regularization=0.01,        # L2 penalty
-    smoothness_penalty=0.001,   # Penalize pulse derivatives
+    regularization=0.01,  # L2 penalty on pulse amplitude
 )
 ```
 
@@ -289,8 +300,7 @@ Limit pulse amplitudes to hardware-safe values:
 
 ```python
 config = GrapeConfig(
-    max_amplitude=1.0,          # Hard limit
-    soft_amplitude_penalty=0.1, # Soft penalty above threshold
+    max_amplitude=1.0,  # Hard limit on pulse amplitude (MHz)
 )
 ```
 
@@ -303,12 +313,14 @@ config = GrapeConfig(
 ```python
 import numpy as np
 
-def optimize_with_restarts(gate, n_restarts=5):
+def optimize_with_restarts(gate_name, n_restarts=5):
     best_result = None
+    target = get_target_unitary(gate_name, num_qubits=1)
     
     for i in range(n_restarts):
-        np.random.seed(i)  # Different initialization
-        result = optimizer.optimize(gate_type=gate, qubit=0)
+        config = GrapeConfig(random_seed=i)  # Different initialization
+        optimizer = GrapeOptimizer(config)
+        result = optimizer.optimize(target, num_qubits=1)
         
         if best_result is None or result.fidelity > best_result.fidelity:
             best_result = result
@@ -325,15 +337,15 @@ Use a previously optimized pulse as starting point:
 
 ```python
 # Optimize X gate
-x_result = optimizer.optimize(gate_type="X", qubit=0)
+target_x = get_target_unitary("X", num_qubits=1)
+x_result = optimizer.optimize(target_x, num_qubits=1)
 
 # Use as starting point for similar gate
-config_warm = GrapeConfig(
-    initial_i=x_result.i_envelope,
-    initial_q=x_result.q_envelope,
+target_y = get_target_unitary("Y", num_qubits=1)
+result = optimizer.optimize(
+    target_y, num_qubits=1,
+    initial_pulses=(x_result.i_envelope, x_result.q_envelope),
 )
-optimizer_warm = GrapeOptimizer(config_warm)
-result = optimizer_warm.optimize(gate_type="Y", qubit=0)
 ```
 
 ### Composite Pulses
@@ -342,8 +354,10 @@ Build complex gates from simpler ones:
 
 ```python
 # Hadamard = RY(π/2) @ RZ(π)
-ry_result = optimizer.optimize(gate_type="RY", angle=np.pi/2)
-rz_result = optimizer.optimize(gate_type="RZ", angle=np.pi)
+target_ry = get_target_unitary("RY", num_qubits=1, angle=np.pi/2)
+ry_result = optimizer.optimize(target_ry, num_qubits=1)
+target_rz = get_target_unitary("RZ", num_qubits=1, angle=np.pi)
+rz_result = optimizer.optimize(target_rz, num_qubits=1)
 
 # Concatenate pulses
 h_i = np.concatenate([rz_result.i_envelope, ry_result.i_envelope])
@@ -359,8 +373,9 @@ h_q = np.concatenate([rz_result.q_envelope, ry_result.q_envelope])
 ```python
 from concurrent.futures import ProcessPoolExecutor
 
-def optimize_gate(gate):
-    return optimizer.optimize(gate_type=gate, qubit=0)
+def optimize_gate(gate_name):
+    target = get_target_unitary(gate_name, num_qubits=1)
+    return optimizer.optimize(target, num_qubits=1)
 
 gates = ["X", "Y", "Z", "H", "S", "T"]
 
@@ -399,7 +414,8 @@ def get_or_optimize(gate, config, cache_dir="pulse_cache"):
             "q_envelope": np.array(data["q_envelope"]),
         }
     
-    result = optimizer.optimize(gate_type=gate, qubit=0)
+    target = get_target_unitary(gate, num_qubits=1)
+    result = optimizer.optimize(target, num_qubits=1)
     
     # Cache as JSON (safe serialization)
     cache_data = {
@@ -426,25 +442,31 @@ def get_or_optimize(gate, config, cache_dir="pulse_cache"):
 ### Check the Hamiltonian
 
 ```python
-# Print Hamiltonian matrices
+from qubitos.pulsegen.hamiltonians import build_hamiltonian
+
+# Build and inspect Hamiltonian matrices
+drift, controls = build_hamiltonian(num_qubits=1)
 print("Drift Hamiltonian:")
-print(hamiltonian.h0)
-print("\nControl Hamiltonian (X):")
-print(hamiltonian.hx)
-print("\nControl Hamiltonian (Y):")
-print(hamiltonian.hy)
+print(drift)
+print("\nControl Hamiltonians:")
+for i, H in enumerate(controls):
+    print(f"  H_control[{i}]:")
+    print(f"  {H}")
 ```
 
 ### Verify Target Unitary
 
 ```python
-# Check target gate
+from qubitos.pulsegen.hamiltonians import get_target_unitary
+
+# Check target vs achieved gate
+target = get_target_unitary("X", num_qubits=1)
 print("Target unitary:")
-print(result.target_unitary)
+print(target)
 print("\nAchieved unitary:")
-print(result.achieved_unitary)
+print(result.final_unitary)
 print("\nDifference:")
-print(np.abs(result.target_unitary - result.achieved_unitary))
+print(np.abs(target - result.final_unitary))
 ```
 
 ### Visualize Optimization Progress
@@ -452,7 +474,7 @@ print(np.abs(result.target_unitary - result.achieved_unitary))
 ```python
 # Plot fidelity over iterations
 plt.figure(figsize=(10, 5))
-plt.plot(result.convergence_history)
+plt.plot(result.fidelity_history)
 plt.xlabel('Iteration')
 plt.ylabel('Fidelity')
 plt.title('Optimization Progress')

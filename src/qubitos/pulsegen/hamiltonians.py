@@ -119,6 +119,12 @@ STANDARD_GATES = {
     "CX": GATE_CNOT,  # Alias
     "ISWAP": GATE_ISWAP,
     "SWAP": GATE_SWAP,
+    "SQISWAP": np.array([
+        [1, 0, 0, 0],
+        [0, 1/np.sqrt(2), 1j/np.sqrt(2), 0],
+        [0, 1j/np.sqrt(2), 1/np.sqrt(2), 0],
+        [0, 0, 0, 1]
+    ], dtype=complex),
 }
 
 

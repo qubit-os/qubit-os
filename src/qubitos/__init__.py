@@ -15,7 +15,7 @@ Example:
     >>> from qubitos.pulsegen import generate_pulse
     >>> from qubitos.client import HALClient
     >>>
-    >>> pulse = generate_pulse(gate="X", qubit=0, duration_ns=20)
+    >>> pulse = generate_pulse(gate="X", duration_ns=20)
     >>> async with HALClient() as client:
     ...     result = await client.execute_pulse(pulse, num_shots=1000)
 """

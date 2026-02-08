@@ -157,7 +157,7 @@ For more control, use the Python API:
 
 ```python
 from qubitos.pulsegen import GrapeOptimizer, GrapeConfig
-from qubitos.pulsegen.hamiltonians import TransmonHamiltonian
+from qubitos.pulsegen.hamiltonians import get_target_unitary
 
 # Configure the optimization
 config = GrapeConfig(
@@ -168,17 +168,12 @@ config = GrapeConfig(
     learning_rate=0.1,       # GRAPE step size
 )
 
-# Create the optimizer with a transmon Hamiltonian
-hamiltonian = TransmonHamiltonian(
-    omega_qubit=5.0,    # Qubit frequency in GHz
-    anharmonicity=-0.3, # Anharmonicity in GHz
-    omega_drive=5.0,    # Drive frequency in GHz
-)
-
-optimizer = GrapeOptimizer(config, hamiltonian)
+# Create the optimizer and get the target gate
+optimizer = GrapeOptimizer(config)
+target = get_target_unitary("X", num_qubits=1)
 
 # Run the optimization
-result = optimizer.optimize(gate_type="X", qubit=0)
+result = optimizer.optimize(target, num_qubits=1)
 
 # Check results
 print(f"Converged: {result.converged}")
@@ -269,7 +264,7 @@ Here's the full workflow in one script:
 """QubitOS Quickstart - Complete X-gate Example"""
 
 from qubitos.pulsegen import GrapeOptimizer, GrapeConfig
-from qubitos.pulsegen.hamiltonians import TransmonHamiltonian
+from qubitos.pulsegen.hamiltonians import get_target_unitary
 from qubitos.client import HALClientSync
 
 
@@ -284,14 +279,9 @@ def main():
         target_fidelity=0.999,
     )
     
-    hamiltonian = TransmonHamiltonian(
-        omega_qubit=5.0,
-        anharmonicity=-0.3,
-        omega_drive=5.0,
-    )
-    
-    optimizer = GrapeOptimizer(config, hamiltonian)
-    result = optimizer.optimize(gate_type="X", qubit=0)
+    optimizer = GrapeOptimizer(config)
+    target = get_target_unitary("X", num_qubits=1)
+    result = optimizer.optimize(target, num_qubits=1)
     
     print(f"  Converged: {result.converged}")
     print(f"  Fidelity: {result.fidelity:.4f}")
