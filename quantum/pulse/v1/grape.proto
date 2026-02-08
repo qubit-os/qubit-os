@@ -67,6 +67,8 @@ message OptimizeRequest {
   int32 num_time_steps = 9;
 
   // Total pulse duration in nanoseconds.
+  // DEPRECATED in v0.2.0: Use TimePoint duration (field 17) for new code.
+  // Maintained for backward compatibility; will be removed in v0.4.0.
   // Typical: 20-100 ns for single-qubit, 40-200 ns for two-qubit.
   int32 duration_ns = 10;
 
@@ -99,6 +101,14 @@ message OptimizeRequest {
   // Required calibration fingerprint.
   // If specified, optimization uses this calibration's noise parameters.
   string calibration_fingerprint = 16;
+
+  // --- Temporal (v0.2.0) ---
+
+  // AWG-aware duration. If set, takes precedence over duration_ns (field 10).
+  TimePoint duration = 17;
+
+  // AWG configuration for the target hardware.
+  AWGClockConfig awg_config = 18;
 
   // Reserved for future use.
   reserved 50 to 100;

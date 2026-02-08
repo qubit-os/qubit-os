@@ -10,6 +10,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         "quantum/pulse/v1/pulse.proto",
         "quantum/pulse/v1/hamiltonian.proto",
         "quantum/pulse/v1/grape.proto",
+        "quantum/pulse/v1/temporal.proto",
         "quantum/backend/v1/service.proto",
         "quantum/backend/v1/execution.proto",
         "quantum/backend/v1/hardware.proto",

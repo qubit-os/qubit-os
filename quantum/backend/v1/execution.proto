@@ -8,6 +8,7 @@ package quantum.backend.v1;
 
 import "quantum/common/v1/common.proto";
 import "quantum/pulse/v1/pulse.proto";
+import "quantum/pulse/v1/temporal.proto";
 
 option java_multiple_files = true;
 option java_package = "io.qubitos.backend.v1";
@@ -58,6 +59,12 @@ message ExecutePulseRequest {
   // Allow execution even if calibration fingerprint doesn't match.
   // If true, executes with WARNING; if false, rejects with FAILED_PRECONDITION.
   bool allow_calibration_mismatch = 10;
+
+  // --- Temporal (v0.2.0) ---
+
+  // Full pulse sequence with temporal constraints.
+  // If set, the server executes the sequence rather than a single pulse.
+  quantum.pulse.v1.PulseSequence pulse_sequence = 11;
 
   // Reserved for future use.
   reserved 50 to 100;

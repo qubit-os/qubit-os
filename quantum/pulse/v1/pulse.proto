@@ -39,6 +39,39 @@ enum GateType {
   GATE_TYPE_CUSTOM = 99;
 }
 
+// A physical time value with precision and uncertainty context.
+// See TIME-MODEL-SPEC.md section 5.1 for design rationale.
+//
+// Added in v0.2.0. Used by PulseShape, OptimizeRequest, and temporal.proto.
+message TimePoint {
+  // Intended time value in nanoseconds.
+  double nominal_ns = 1;
+
+  // AWG clock resolution in nanoseconds. Durations are quantized
+  // to integer multiples of this value. Default 1.0 (1 GSa/s AWG).
+  double precision_ns = 2;
+
+  // Worst-case timing uncertainty in nanoseconds.
+  double jitter_bound_ns = 3;
+}
+
+// AWG clock configuration.
+//
+// Added in v0.2.0. Used by PulseShape, OptimizeRequest, and temporal.proto.
+message AWGClockConfig {
+  // Sample rate in GHz (samples per nanosecond).
+  double sample_rate_ghz = 1;
+
+  // Worst-case timing jitter in nanoseconds.
+  double jitter_bound_ns = 2;
+
+  // Minimum samples per pulse waveform.
+  int32 min_samples = 3;
+
+  // Maximum samples per pulse waveform.
+  int32 max_samples = 4;
+}
+
 // PulseShape defines a complete pulse waveform for quantum gate implementation.
 //
 // The pulse consists of in-phase (I) and quadrature (Q) components,
@@ -73,8 +106,10 @@ message PulseShape {
   // --- Time Structure ---
 
   // Total pulse duration in nanoseconds.
+  // DEPRECATED in v0.2.0: Use TimePoint duration (field 22) for new code.
+  // Maintained for backward compatibility; will be removed in v0.4.0.
   // Typical range: 10-1000 ns
-  // Limit: 100,000 ns (100 μs, enforced by server)
+  // Limit: 100,000 ns (100 us, enforced by server)
   int32 duration_ns = 6;
 
   // Number of discrete time steps.
@@ -94,14 +129,14 @@ message PulseShape {
   // Length must equal num_time_steps.
   // Units: MHz (drive amplitude)
   // Limit: 10,000 elements max (enforced by server)
-  // Values must be finite and within ±1000 MHz
+  // Values must be finite and within +/-1000 MHz
   repeated double i_envelope = 9;
 
   // Quadrature (Q) component of the pulse envelope.
   // Length must equal num_time_steps.
   // Units: MHz (drive amplitude)
   // Limit: 10,000 elements max (enforced by server)
-  // Values must be finite and within ±1000 MHz
+  // Values must be finite and within +/-1000 MHz
   repeated double q_envelope = 10;
 
   // Maximum amplitude bound in MHz.
@@ -151,6 +186,14 @@ message PulseShape {
   // For GATE_CUSTOM: JSON representation of the target unitary matrix.
   // Format: {"rows": N, "cols": N, "data": [[re, im], ...]}
   string custom_unitary_json = 21;
+
+  // --- Temporal (v0.2.0) ---
+
+  // AWG-aware duration. If set, takes precedence over duration_ns (field 6).
+  TimePoint duration = 22;
+
+  // AWG configuration used to generate this pulse.
+  AWGClockConfig awg_config = 23;
 
   // Reserved for future use.
   reserved 50 to 100;
