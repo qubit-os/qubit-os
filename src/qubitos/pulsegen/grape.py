@@ -42,6 +42,8 @@ import numpy as np
 from numpy.typing import NDArray
 from scipy import linalg as scipy_linalg
 
+from qubitos.temporal import AWGClockConfig, TimePoint
+
 logger = logging.getLogger(__name__)
 
 # Minimum time step to prevent division by zero (1 femtosecond)
@@ -81,8 +83,10 @@ class GrapeConfig:
     """Configuration for GRAPE optimization.
 
     Attributes:
-        num_time_steps: Number of time discretization steps (must be >= 1)
-        duration_ns: Total pulse duration in nanoseconds (must be > 0)
+        num_time_steps: Number of time discretization steps (must be >= 1).
+            When ``duration`` has an AWG config, ``num_samples`` is preferred.
+        duration_ns: Total pulse duration in nanoseconds (must be > 0).
+            DEPRECATED in favor of ``duration`` TimePoint.
         target_fidelity: Target gate fidelity (0 to 1)
         max_iterations: Maximum optimization iterations
         learning_rate: Initial learning rate for gradient ascent
@@ -91,6 +95,12 @@ class GrapeConfig:
         use_second_order: Use second-order (GRAPE-II) optimization
         regularization: L2 regularization strength for pulse smoothness
         random_seed: Random seed for reproducibility
+        duration: TimePoint carrying nominal + quantized duration with
+            precision/jitter metadata.  When set, ``effective_duration_ns``
+            returns the AWG-quantized value and ``num_time_steps`` may be
+            derived from ``duration.num_samples``.
+        awg_config: AWG clock configuration.  Stored on the result for
+            provenance tracking.
     """
 
     num_time_steps: int = 100
@@ -103,6 +113,8 @@ class GrapeConfig:
     use_second_order: bool = False
     regularization: float = 0.0
     random_seed: int | None = None
+    duration: TimePoint | None = None
+    awg_config: AWGClockConfig | None = None
 
     def __post_init__(self) -> None:
         """Validate configuration parameters."""
@@ -119,6 +131,18 @@ class GrapeConfig:
         if self.max_amplitude <= 0:
             raise ValueError(f"max_amplitude must be > 0, got {self.max_amplitude}")
 
+    @property
+    def effective_duration_ns(self) -> float:
+        """Return the AWG-quantized duration, or fall back to duration_ns."""
+        if self.duration is not None:
+            return self.duration.quantized_ns
+        return float(self.duration_ns)
+
+    @property
+    def effective_dt_seconds(self) -> float:
+        """Time step in SI seconds for the GRAPE propagator."""
+        return self.effective_duration_ns * 1e-9 / self.num_time_steps
+
 
 @dataclass
 class GrapeResult:
@@ -132,6 +156,8 @@ class GrapeResult:
         converged: Whether optimization converged
         fidelity_history: Fidelity at each iteration
         final_unitary: The unitary implemented by the optimized pulse
+        duration: Quantized duration used for this optimization (provenance).
+        awg_config: AWG clock config used for this optimization (provenance).
     """
 
     i_envelope: NDArray[np.float64]
@@ -141,6 +167,8 @@ class GrapeResult:
     converged: bool
     fidelity_history: list[float] = field(default_factory=list)
     final_unitary: NDArray[np.complex128] | None = None
+    duration: TimePoint | None = None
+    awg_config: AWGClockConfig | None = None
 
 
 class GrapeOptimizer:
@@ -187,9 +215,13 @@ class GrapeOptimizer:
         dim = 2**num_qubits
         n_steps = self.config.num_time_steps
 
-        # Compute dt with protection against division by zero
-        # n_steps is guaranteed >= 1 by GrapeConfig validation
-        dt = self.config.duration_ns * 1e-9 / n_steps  # Convert to seconds
+        # When a TimePoint with AWG config is provided, derive n_steps from
+        # num_samples so each GRAPE step corresponds to one AWG sample.
+        if self.config.duration is not None and self.config.duration.num_samples > 0:
+            n_steps = self.config.duration.num_samples
+
+        # Compute dt using the effective (AWG-quantized) duration
+        dt = self.config.effective_duration_ns * 1e-9 / n_steps  # seconds
 
         # Additional safety check (should never trigger due to config validation)
         if dt < MIN_DT_SECONDS:
@@ -261,6 +293,8 @@ class GrapeOptimizer:
                     converged=True,
                     fidelity_history=fidelity_history,
                     final_unitary=total_unitary,
+                    duration=self.config.duration,
+                    awg_config=self.config.awg_config,
                 )
 
             # Check for stagnation
@@ -314,6 +348,8 @@ class GrapeOptimizer:
             converged=best_fidelity >= self.config.target_fidelity,
             fidelity_history=fidelity_history,
             final_unitary=final_unitary,
+            duration=self.config.duration,
+            awg_config=self.config.awg_config,
         )
 
     def _default_control_hamiltonians(self, num_qubits: int) -> list[NDArray[np.complex128]]:

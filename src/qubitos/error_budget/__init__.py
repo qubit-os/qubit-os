@@ -48,6 +48,8 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any
 
+from qubitos.temporal import DecoherenceBudget
+
 logger = logging.getLogger(__name__)
 
 
@@ -94,9 +96,7 @@ class ErrorContribution:
         if self.infidelity < 0:
             raise ValueError(f"infidelity must be >= 0, got {self.infidelity}")
         if self.duration_ns < 0:
-            raise ValueError(
-                f"duration_ns must be >= 0, got {self.duration_ns}"
-            )
+            raise ValueError(f"duration_ns must be >= 0, got {self.duration_ns}")
 
 
 @dataclass
@@ -134,17 +134,13 @@ class ErrorBudget:
     # Internal state
     contributions: list[ErrorContribution] = field(default_factory=list)
     _qubit_time_ns: dict[int, float] = field(default_factory=dict)
+    _decoherence_budget: DecoherenceBudget | None = None
 
     def __post_init__(self) -> None:
         if not 0 <= self.target_fidelity <= 1:
-            raise ValueError(
-                f"target_fidelity must be in [0, 1], got {self.target_fidelity}"
-            )
+            raise ValueError(f"target_fidelity must be in [0, 1], got {self.target_fidelity}")
         if not 0 <= self.coherent_fraction <= 1:
-            raise ValueError(
-                f"coherent_fraction must be in [0, 1], "
-                f"got {self.coherent_fraction}"
-            )
+            raise ValueError(f"coherent_fraction must be in [0, 1], got {self.coherent_fraction}")
 
     # --- Mutation methods ---
 
@@ -172,9 +168,7 @@ class ErrorBudget:
                 label=label,
             )
         )
-        self._qubit_time_ns[qubit] = (
-            self._qubit_time_ns.get(qubit, 0.0) + duration_ns
-        )
+        self._qubit_time_ns[qubit] = self._qubit_time_ns.get(qubit, 0.0) + duration_ns
 
     def add_idle(self, qubit: int, duration_ns: float) -> None:
         """Record idle time on a qubit (decoherence without gate error).
@@ -192,9 +186,7 @@ class ErrorBudget:
                 label=f"idle q{qubit} {duration_ns:.0f}ns",
             )
         )
-        self._qubit_time_ns[qubit] = (
-            self._qubit_time_ns.get(qubit, 0.0) + duration_ns
-        )
+        self._qubit_time_ns[qubit] = self._qubit_time_ns.get(qubit, 0.0) + duration_ns
 
     def add_readout(self, qubit: int, error: float | None = None) -> None:
         """Record a readout operation's error.
@@ -280,9 +272,7 @@ class ErrorBudget:
     def total_gate_infidelity(self) -> float:
         """Sum of gate infidelities (stochastic component)."""
         return sum(
-            c.infidelity
-            for c in self.contributions
-            if c.source == ErrorSource.GATE_INFIDELITY
+            c.infidelity for c in self.contributions if c.source == ErrorSource.GATE_INFIDELITY
         )
 
     @property
@@ -308,11 +298,35 @@ class ErrorBudget:
     def decoherence_error(self) -> float:
         """Total decoherence error from T1/T2 decay across all qubits.
 
-        Per-qubit decoherence:
+        When a ``DecoherenceBudget`` is attached (via ``_decoherence_budget``),
+        delegates to it as the authoritative decoherence source. Otherwise
+        falls back to inline T1/T2 calculation using ``_qubit_time_ns``.
+
+        Per-qubit decoherence (inline fallback):
             ε_q = [1 - exp(-t_q/T1_q)] + [1 - exp(-t_q/T2_q)]
 
         where t_q is the total time qubit q is involved in the sequence.
         """
+        if self._decoherence_budget is not None:
+            return self._decoherence_from_budget()
+        return self._decoherence_inline()
+
+    def _decoherence_from_budget(self) -> float:
+        """Compute decoherence cost from the attached DecoherenceBudget.
+
+        Sums T1 and T2 fractions across all qubits tracked by the budget.
+        This matches the inline calculation semantics but uses the budget's
+        per-qubit tracking (which may include time from PulseSequence).
+        """
+        assert self._decoherence_budget is not None  # noqa: S101
+        total = 0.0
+        for qubit in self._decoherence_budget.qubit_time_ns:
+            total += self._decoherence_budget.t1_fraction(qubit)
+            total += self._decoherence_budget.t2_fraction(qubit)
+        return total
+
+    def _decoherence_inline(self) -> float:
+        """Inline T1/T2 calculation (original implementation)."""
         total = 0.0
         for qubit, time_ns in self._qubit_time_ns.items():
             t_us = time_ns / 1000.0
@@ -327,29 +341,17 @@ class ErrorBudget:
     @property
     def readout_error(self) -> float:
         """Total readout error."""
-        return sum(
-            c.infidelity
-            for c in self.contributions
-            if c.source == ErrorSource.READOUT
-        )
+        return sum(c.infidelity for c in self.contributions if c.source == ErrorSource.READOUT)
 
     @property
     def crosstalk_error(self) -> float:
         """Total crosstalk error."""
-        return sum(
-            c.infidelity
-            for c in self.contributions
-            if c.source == ErrorSource.CROSSTALK
-        )
+        return sum(c.infidelity for c in self.contributions if c.source == ErrorSource.CROSSTALK)
 
     @property
     def leakage_error(self) -> float:
         """Total leakage error."""
-        return sum(
-            c.infidelity
-            for c in self.contributions
-            if c.source == ErrorSource.LEAKAGE
-        )
+        return sum(c.infidelity for c in self.contributions if c.source == ErrorSource.LEAKAGE)
 
     @property
     def projected_infidelity(self) -> float:
@@ -431,8 +433,7 @@ class ErrorBudget:
             amplitude_sum = sum(
                 math.sqrt(c.infidelity)
                 for c in self.contributions
-                if c.source == ErrorSource.GATE_INFIDELITY
-                and c.infidelity > 0
+                if c.source == ErrorSource.GATE_INFIDELITY and c.infidelity > 0
             )
             if gate_infidelity > 0:
                 amplitude_sum += math.sqrt(gate_infidelity)
@@ -442,9 +443,7 @@ class ErrorBudget:
 
         # Hypothetical decoherence with the new gate's time added
         new_decoherence = 0.0
-        new_qubit_time = (
-            self._qubit_time_ns.get(qubit, 0.0) + gate_duration_ns
-        )
+        new_qubit_time = self._qubit_time_ns.get(qubit, 0.0) + gate_duration_ns
         for q, time_ns in self._qubit_time_ns.items():
             t_us = (new_qubit_time if q == qubit else time_ns) / 1000.0
             t1 = self.t1_us.get(q)
@@ -487,9 +486,7 @@ class ErrorBudget:
             "is_within_budget": self.is_within_budget,
             "num_operations": len(self.contributions),
             "dominant_source": (
-                self.dominant_error_source.value
-                if self.dominant_error_source
-                else None
+                self.dominant_error_source.value if self.dominant_error_source else None
             ),
             "breakdown": {
                 "gate_infidelity": round(self.total_gate_infidelity, 8),

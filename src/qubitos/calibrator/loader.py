@@ -26,6 +26,8 @@ from typing import Any
 
 import yaml
 
+from qubitos.temporal import AWGClockConfig
+
 from ..validation import validate_calibration_t1_t2, validate_fidelity
 
 logger = logging.getLogger(__name__)
@@ -54,6 +56,7 @@ class QubitCalibration:
     readout_fidelity: float = 0.99
     gate_fidelity: float = 0.999
     drive_amplitude: float = 1.0
+    awg_config: AWGClockConfig | None = None
 
 
 @dataclass
@@ -227,6 +230,17 @@ class CalibrationLoader:
         # Parse qubits
         qubits = []
         for i, q_data in enumerate(data.get("qubits", [])):
+            # Parse optional AWG config
+            awg_data = q_data.get("awg")
+            awg_config = None
+            if awg_data is not None:
+                awg_config = AWGClockConfig(
+                    sample_rate_ghz=awg_data.get("sample_rate_ghz", 1.0),
+                    jitter_bound_ns=awg_data.get("jitter_bound_ns", 0.0),
+                    min_samples=awg_data.get("min_samples", 4),
+                    max_samples=awg_data.get("max_samples", 100_000),
+                )
+
             qubit = QubitCalibration(
                 index=q_data.get("index", i),
                 frequency_ghz=q_data.get("frequency_ghz", 5.0),
@@ -236,6 +250,7 @@ class CalibrationLoader:
                 readout_fidelity=q_data.get("readout_fidelity", 0.99),
                 gate_fidelity=q_data.get("gate_fidelity", 0.999),
                 drive_amplitude=q_data.get("drive_amplitude", 1.0),
+                awg_config=awg_config,
             )
             qubits.append(qubit)
 
@@ -327,6 +342,18 @@ class CalibrationLoader:
                     "readout_fidelity": q.readout_fidelity,
                     "gate_fidelity": q.gate_fidelity,
                     "drive_amplitude": q.drive_amplitude,
+                    **(
+                        {
+                            "awg": {
+                                "sample_rate_ghz": q.awg_config.sample_rate_ghz,
+                                "jitter_bound_ns": q.awg_config.jitter_bound_ns,
+                                "min_samples": q.awg_config.min_samples,
+                                "max_samples": q.awg_config.max_samples,
+                            }
+                        }
+                        if q.awg_config is not None
+                        else {}
+                    ),
                 }
                 for q in calibration.qubits
             ],

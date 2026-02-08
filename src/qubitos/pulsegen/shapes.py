@@ -25,6 +25,8 @@ from typing import TYPE_CHECKING
 
 import numpy as np
 
+from qubitos.temporal import TimePoint
+
 if TYPE_CHECKING:
     from numpy.typing import NDArray
 
@@ -318,9 +320,11 @@ def drag(
 
 def generate_envelope(
     shape: str | PulseShapeType,
-    num_time_steps: int,
-    duration_ns: float,
+    num_time_steps: int = 100,
+    duration_ns: float | None = None,
     amplitude: float = 1.0,
+    *,
+    duration: TimePoint | None = None,
     **kwargs,
 ) -> PulseEnvelope:
     """Generate a pulse envelope with the specified shape.
@@ -330,33 +334,52 @@ def generate_envelope(
 
     Args:
         shape: Pulse shape type
-        num_time_steps: Number of time discretization points (must be >= 1)
-        duration_ns: Total duration in nanoseconds (must be > 0)
+        num_time_steps: Number of time discretization points (must be >= 1).
+            Default 100.
+        duration_ns: Total duration in nanoseconds (must be > 0).
+            DEPRECATED: use ``duration`` TimePoint instead.
         amplitude: Pulse amplitude
+        duration: TimePoint carrying nominal + quantized duration with
+            precision/jitter metadata. When provided, ``duration.quantized_ns``
+            is used as the actual duration (ignoring ``duration_ns``).
         **kwargs: Additional parameters for the shape function
 
     Returns:
         PulseEnvelope with I and Q components
 
     Raises:
-        ValueError: If parameters are invalid
+        ValueError: If parameters are invalid or neither duration source
+            is provided.
 
     Example:
         >>> env = generate_envelope("gaussian", 100, 20.0, amplitude=1.0)
         >>> env = generate_envelope("drag", 100, 20.0, amplitude=1.0, beta=0.5)
+        >>> from qubitos.temporal import TimePoint
+        >>> tp = TimePoint(nominal_ns=20.0, precision_ns=1.0)
+        >>> env = generate_envelope("gaussian", duration=tp)
     """
+    # Resolve actual duration from TimePoint or bare float
+    if duration is not None:
+        actual_ns = duration.quantized_ns
+    elif duration_ns is not None:
+        actual_ns = duration_ns
+    else:
+        raise ValueError("Either duration or duration_ns must be provided")
+
     # Validate parameters
     if num_time_steps < 1:
         raise ValueError(f"num_time_steps must be >= 1, got {num_time_steps}")
-    if duration_ns <= 0:
-        raise ValueError(f"duration_ns must be > 0, got {duration_ns}")
+    if actual_ns <= 0:
+        if duration is not None:
+            raise ValueError(f"duration.quantized_ns must be > 0, got {actual_ns}")
+        raise ValueError(f"duration_ns must be > 0, got {actual_ns}")
 
     # Convert string to enum
     if isinstance(shape, str):
         shape = PulseShapeType(shape.lower())
 
     # Create time array
-    times = np.linspace(0, duration_ns * 1e-9, num_time_steps)
+    times = np.linspace(0, actual_ns * 1e-9, num_time_steps)
 
     # Generate envelope based on shape
     if shape == PulseShapeType.SQUARE:
