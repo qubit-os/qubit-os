@@ -2133,3 +2133,982 @@ impl DecoherenceBudget {
     }
 }
 ```
+
+### 5.5 ScheduledPulse
+
+A pulse with an assigned position in time within a sequence.
+
+#### 5.5.1 Python Implementation
+
+```python
+from __future__ import annotations
+
+from dataclasses import dataclass
+from typing import Any, List
+
+
+@dataclass(frozen=True)
+class ScheduledPulse:
+    """A pulse placed at a specific time in a sequence.
+
+    Attributes:
+        pulse_id: Unique identifier for this pulse within the sequence.
+            Must be non-empty.
+        pulse: The underlying pulse object (PulseShape or equivalent).
+            Must have a duration_ns attribute or be accompanied by explicit
+            duration.
+        start_time: When this pulse starts, relative to sequence start.
+        target_qubits: List of qubit indices this pulse acts on.
+            Must be non-empty, no duplicates.
+        duration_ns: Pulse duration in nanoseconds. If not provided,
+            extracted from pulse.duration_ns.
+    """
+
+    pulse_id: str
+    pulse: Any
+    start_time: TimePoint
+    target_qubits: List[int]
+    duration_ns: float
+
+    def __post_init__(self) -> None:
+        if not self.pulse_id:
+            raise ValueError("pulse_id must be non-empty")
+        if not self.target_qubits:
+            raise ValueError("target_qubits must be non-empty")
+        if len(self.target_qubits) != len(set(self.target_qubits)):
+            raise ValueError(
+                f"target_qubits contains duplicates: {self.target_qubits}"
+            )
+        if self.duration_ns <= 0:
+            raise ValueError(f"duration_ns must be > 0, got {self.duration_ns}")
+
+    @property
+    def end_time(self) -> TimePoint:
+        """End time of this pulse (start + duration)."""
+        return self.start_time.offset_by(self.duration_ns)
+
+    @property
+    def start_ns(self) -> float:
+        """Convenience: nominal start time in ns."""
+        return self.start_time.nominal_ns
+
+    @property
+    def end_ns(self) -> float:
+        """Convenience: nominal end time in ns."""
+        return self.start_ns + self.duration_ns
+
+    def overlaps_qubit_time(self, other: ScheduledPulse) -> bool:
+        """Check if this pulse overlaps with another on any shared qubit.
+
+        Two pulses conflict if they share a target qubit AND their time
+        intervals overlap.
+        """
+        shared_qubits = set(self.target_qubits) & set(other.target_qubits)
+        if not shared_qubits:
+            return False
+        # Time overlap: A starts before B ends AND B starts before A ends
+        return self.start_ns < other.end_ns and other.start_ns < self.end_ns
+
+    def __repr__(self) -> str:
+        return (
+            f"ScheduledPulse('{self.pulse_id}', "
+            f"t={self.start_ns:.3f}-{self.end_ns:.3f} ns, "
+            f"qubits={self.target_qubits})"
+        )
+```
+
+#### 5.5.2 Rust Implementation
+
+```rust
+// src/temporal/sequence.rs (ScheduledPulse portion)
+
+use super::time_point::TimePoint;
+use serde::{Deserialize, Serialize};
+use std::collections::HashSet;
+
+/// A pulse placed at a specific time in a sequence.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ScheduledPulse {
+    /// Unique identifier within the sequence.
+    pub pulse_id: String,
+    /// Opaque pulse data (serialized PulseShape or reference).
+    pub pulse_data: Vec<u8>,
+    /// When this pulse starts relative to sequence start.
+    pub start_time: TimePoint,
+    /// Qubit indices this pulse acts on.
+    pub target_qubits: Vec<u32>,
+    /// Pulse duration in nanoseconds.
+    pub duration_ns: f64,
+}
+
+#[derive(Debug, Clone, thiserror::Error)]
+pub enum ScheduledPulseError {
+    #[error("pulse_id must be non-empty")]
+    EmptyPulseId,
+    #[error("target_qubits must be non-empty")]
+    NoTargetQubits,
+    #[error("target_qubits contains duplicates: {0:?}")]
+    DuplicateQubits(Vec<u32>),
+    #[error("duration_ns must be > 0, got {0}")]
+    InvalidDuration(f64),
+}
+
+impl ScheduledPulse {
+    pub fn new(
+        pulse_id: String,
+        pulse_data: Vec<u8>,
+        start_time: TimePoint,
+        target_qubits: Vec<u32>,
+        duration_ns: f64,
+    ) -> Result<Self, ScheduledPulseError> {
+        if pulse_id.is_empty() {
+            return Err(ScheduledPulseError::EmptyPulseId);
+        }
+        if target_qubits.is_empty() {
+            return Err(ScheduledPulseError::NoTargetQubits);
+        }
+        let unique: HashSet<_> = target_qubits.iter().collect();
+        if unique.len() != target_qubits.len() {
+            return Err(ScheduledPulseError::DuplicateQubits(
+                target_qubits.clone(),
+            ));
+        }
+        if duration_ns <= 0.0 {
+            return Err(ScheduledPulseError::InvalidDuration(duration_ns));
+        }
+        Ok(Self {
+            pulse_id,
+            pulse_data,
+            start_time,
+            target_qubits,
+            duration_ns,
+        })
+    }
+
+    pub fn start_ns(&self) -> f64 {
+        self.start_time.nominal_ns
+    }
+
+    pub fn end_ns(&self) -> f64 {
+        self.start_time.nominal_ns + self.duration_ns
+    }
+
+    pub fn end_time(&self) -> Result<TimePoint, super::time_point::TimePointError> {
+        self.start_time.offset_by(self.duration_ns)
+    }
+
+    /// Check if this pulse overlaps with another on any shared qubit.
+    pub fn overlaps_qubit_time(&self, other: &ScheduledPulse) -> bool {
+        let shared = self
+            .target_qubits
+            .iter()
+            .any(|q| other.target_qubits.contains(q));
+        if !shared {
+            return false;
+        }
+        self.start_ns() < other.end_ns() && other.start_ns() < self.end_ns()
+    }
+}
+```
+
+### 5.6 PulseSequence
+
+An ordered collection of scheduled pulses with constraints and decoherence
+tracking.
+
+#### 5.6.1 Python Implementation
+
+```python
+from __future__ import annotations
+
+import uuid
+from dataclasses import dataclass, field
+from typing import Any, Dict, List, Optional, Tuple
+
+
+@dataclass
+class SequenceValidationResult:
+    """Result of validating a PulseSequence.
+
+    Attributes:
+        valid: Whether all checks passed.
+        constraint_results: Results for each constraint.
+        budget_result: Decoherence budget check result.
+        conflicts: List of (pulse_a_id, pulse_b_id) pairs with qubit-time conflicts.
+        awg_quantization: Per-pulse AWG quantization results, if AWG config is set.
+        messages: Human-readable messages for all issues found.
+    """
+
+    valid: bool
+    constraint_results: List[ConstraintCheckResult]
+    budget_result: Optional[BudgetCheckResult]
+    conflicts: List[Tuple[str, str]]
+    awg_quantization: Dict[str, QuantizationResult]
+    messages: List[str]
+
+
+@dataclass
+class PulseSequence:
+    """An ordered collection of scheduled pulses with constraints.
+
+    Attributes:
+        sequence_id: Unique identifier for this sequence.
+        pulses: Scheduled pulses, keyed by pulse_id.
+        constraints: Temporal constraints between pulses.
+        decoherence_budget: Optional decoherence tracker.
+        awg_config: Optional AWG clock configuration for timing validation.
+        validated: Whether this sequence has been validated since last modification.
+    """
+
+    sequence_id: str = field(default_factory=lambda: str(uuid.uuid4()))
+    pulses: Dict[str, ScheduledPulse] = field(default_factory=dict)
+    constraints: List[TemporalConstraint] = field(default_factory=list)
+    decoherence_budget: Optional[DecoherenceBudget] = None
+    awg_config: Optional[AWGClockConfig] = None
+    validated: bool = False
+
+    @property
+    def total_duration_ns(self) -> float:
+        """Total duration from first pulse start to last pulse end."""
+        if not self.pulses:
+            return 0.0
+        earliest_start = min(p.start_ns for p in self.pulses.values())
+        latest_end = max(p.end_ns for p in self.pulses.values())
+        return latest_end - earliest_start
+
+    @property
+    def pulse_count(self) -> int:
+        """Number of pulses in the sequence."""
+        return len(self.pulses)
+
+    def append(self, pulse: ScheduledPulse) -> None:
+        """Add a pulse to the sequence.
+
+        Args:
+            pulse: The scheduled pulse to add.
+
+        Raises:
+            ValueError: If pulse_id is already in the sequence.
+        """
+        if pulse.pulse_id in self.pulses:
+            raise ValueError(
+                f"Pulse '{pulse.pulse_id}' already exists in sequence"
+            )
+        self.pulses[pulse.pulse_id] = pulse
+        self.validated = False
+
+        # Update decoherence budget if present
+        if self.decoherence_budget is not None:
+            for qubit_id in pulse.target_qubits:
+                if qubit_id in self.decoherence_budget.qubits:
+                    self.decoherence_budget.add_pulse(qubit_id, pulse.duration_ns)
+
+    def add_constraint(self, constraint: TemporalConstraint) -> None:
+        """Add a temporal constraint to the sequence.
+
+        Args:
+            constraint: The constraint to add.
+
+        Raises:
+            ValueError: If either referenced pulse is not in the sequence.
+        """
+        if constraint.pulse_a_id not in self.pulses:
+            raise ValueError(
+                f"Constraint references unknown pulse_a: '{constraint.pulse_a_id}'"
+            )
+        if constraint.pulse_b_id not in self.pulses:
+            raise ValueError(
+                f"Constraint references unknown pulse_b: '{constraint.pulse_b_id}'"
+            )
+        self.constraints.append(constraint)
+        self.validated = False
+
+    def validate(self) -> SequenceValidationResult:
+        """Validate the entire sequence.
+
+        Checks:
+        1. All temporal constraints are satisfied.
+        2. No qubit-time conflicts (overlapping pulses on same qubit).
+        3. Decoherence budget is within thresholds.
+        4. AWG quantization is acceptable (if AWG config set).
+
+        Returns:
+            SequenceValidationResult with full details.
+        """
+        messages: List[str] = []
+        constraint_results: List[ConstraintCheckResult] = []
+        conflicts: List[Tuple[str, str]] = []
+        awg_results: Dict[str, QuantizationResult] = {}
+        all_valid = True
+
+        # 1. Check constraints
+        for constraint in self.constraints:
+            pa = self.pulses[constraint.pulse_a_id]
+            pb = self.pulses[constraint.pulse_b_id]
+            result = constraint.check(
+                start_a_ns=pa.start_ns,
+                end_a_ns=pa.end_ns,
+                start_b_ns=pb.start_ns,
+                end_b_ns=pb.end_ns,
+            )
+            constraint_results.append(result)
+            if not result.satisfied:
+                all_valid = False
+                messages.append(
+                    f"Constraint violated: {constraint.kind.name} "
+                    f"({constraint.pulse_a_id} -> {constraint.pulse_b_id}): "
+                    f"{result.detail}"
+                )
+
+        # 2. Check qubit-time conflicts
+        pulse_list = list(self.pulses.values())
+        for i in range(len(pulse_list)):
+            for j in range(i + 1, len(pulse_list)):
+                if pulse_list[i].overlaps_qubit_time(pulse_list[j]):
+                    conflicts.append(
+                        (pulse_list[i].pulse_id, pulse_list[j].pulse_id)
+                    )
+                    all_valid = False
+                    shared = set(pulse_list[i].target_qubits) & set(
+                        pulse_list[j].target_qubits
+                    )
+                    messages.append(
+                        f"Qubit-time conflict: '{pulse_list[i].pulse_id}' "
+                        f"({pulse_list[i].start_ns:.3f}-{pulse_list[i].end_ns:.3f} ns) "
+                        f"overlaps '{pulse_list[j].pulse_id}' "
+                        f"({pulse_list[j].start_ns:.3f}-{pulse_list[j].end_ns:.3f} ns) "
+                        f"on qubits {shared}"
+                    )
+
+        # 3. Check decoherence budget
+        budget_result = None
+        if self.decoherence_budget is not None:
+            budget_result = self.decoherence_budget.check()
+            if budget_result.status == BudgetStatus.EXCEEDED:
+                all_valid = False
+                messages.append(budget_result.message)
+            elif budget_result.status == BudgetStatus.WARNING:
+                messages.append(budget_result.message)
+
+        # 4. Check AWG quantization
+        if self.awg_config is not None:
+            for pid, pulse in self.pulses.items():
+                qresult = self.awg_config.quantize_duration(pulse.duration_ns)
+                awg_results[pid] = qresult
+                if qresult.relative_error > 0.01:
+                    messages.append(
+                        f"Pulse '{pid}' duration {qresult.requested_ns:.3f} ns "
+                        f"quantizes to {qresult.actual_ns:.3f} ns "
+                        f"(error: {qresult.relative_error:.4%})"
+                    )
+
+        self.validated = all_valid
+        return SequenceValidationResult(
+            valid=all_valid,
+            constraint_results=constraint_results,
+            budget_result=budget_result,
+            conflicts=conflicts,
+            awg_quantization=awg_results,
+            messages=messages,
+        )
+
+    def to_timeline(self) -> List[ScheduledPulse]:
+        """Return pulses sorted by start time.
+
+        Returns:
+            List of ScheduledPulse sorted by nominal start time,
+            with ties broken by pulse_id for determinism.
+        """
+        return sorted(
+            self.pulses.values(),
+            key=lambda p: (p.start_ns, p.pulse_id),
+        )
+```
+
+#### 5.6.2 PulseSequenceBuilder (Python)
+
+```python
+class PulseSequenceBuilder:
+    """Fluent builder for constructing PulseSequences.
+
+    Example usage:
+
+        seq = (
+            PulseSequenceBuilder("my-sequence")
+            .with_awg(AWGClockConfig.preset_2gsps())
+            .with_decoherence_budget(budget)
+            .add_pulse("x90_q0", x90_pulse, TimePoint(0.0), [0], 20.0)
+            .add_pulse("x90_q1", x90_pulse, TimePoint(0.0), [1], 20.0)
+            .constrain_simultaneous("x90_q0", "x90_q1", tolerance_ns=1.0)
+            .add_pulse("meas_q0", meas_pulse, TimePoint(30.0), [0], 500.0)
+            .constrain_sequential("x90_q0", "meas_q0", max_gap_ns=50.0)
+            .build()
+        )
+    """
+
+    def __init__(self, sequence_id: Optional[str] = None):
+        self._sequence = PulseSequence(
+            sequence_id=sequence_id or str(uuid.uuid4())
+        )
+
+    def with_awg(self, config: AWGClockConfig) -> PulseSequenceBuilder:
+        """Set the AWG clock configuration."""
+        self._sequence.awg_config = config
+        return self
+
+    def with_decoherence_budget(
+        self, budget: DecoherenceBudget
+    ) -> PulseSequenceBuilder:
+        """Set the decoherence budget."""
+        self._sequence.decoherence_budget = budget
+        return self
+
+    def add_pulse(
+        self,
+        pulse_id: str,
+        pulse: Any,
+        start_time: TimePoint,
+        target_qubits: List[int],
+        duration_ns: float,
+    ) -> PulseSequenceBuilder:
+        """Add a pulse to the sequence."""
+        sp = ScheduledPulse(
+            pulse_id=pulse_id,
+            pulse=pulse,
+            start_time=start_time,
+            target_qubits=target_qubits,
+            duration_ns=duration_ns,
+        )
+        self._sequence.append(sp)
+        return self
+
+    def constrain_simultaneous(
+        self,
+        pulse_a: str,
+        pulse_b: str,
+        tolerance_ns: float = 1.0,
+    ) -> PulseSequenceBuilder:
+        """Add a SIMULTANEOUS constraint."""
+        c = TemporalConstraint(
+            kind=ConstraintKind.SIMULTANEOUS,
+            pulse_a_id=pulse_a,
+            pulse_b_id=pulse_b,
+            tolerance_ns=tolerance_ns,
+        )
+        self._sequence.add_constraint(c)
+        return self
+
+    def constrain_sequential(
+        self,
+        pulse_a: str,
+        pulse_b: str,
+        max_gap_ns: float = 0.0,
+    ) -> PulseSequenceBuilder:
+        """Add a SEQUENTIAL constraint."""
+        c = TemporalConstraint(
+            kind=ConstraintKind.SEQUENTIAL,
+            pulse_a_id=pulse_a,
+            pulse_b_id=pulse_b,
+            tolerance_ns=max_gap_ns,
+        )
+        self._sequence.add_constraint(c)
+        return self
+
+    def constrain_aligned(
+        self,
+        pulse_a: str,
+        pulse_b: str,
+        grid_ns: float,
+    ) -> PulseSequenceBuilder:
+        """Add an ALIGNED constraint."""
+        c = TemporalConstraint(
+            kind=ConstraintKind.ALIGNED,
+            pulse_a_id=pulse_a,
+            pulse_b_id=pulse_b,
+            tolerance_ns=grid_ns,
+        )
+        self._sequence.add_constraint(c)
+        return self
+
+    def constrain_max_delay(
+        self,
+        pulse_a: str,
+        pulse_b: str,
+        max_delay_ns: float,
+    ) -> PulseSequenceBuilder:
+        """Add a MAX_DELAY constraint."""
+        c = TemporalConstraint(
+            kind=ConstraintKind.MAX_DELAY,
+            pulse_a_id=pulse_a,
+            pulse_b_id=pulse_b,
+            tolerance_ns=max_delay_ns,
+        )
+        self._sequence.add_constraint(c)
+        return self
+
+    def constrain_min_gap(
+        self,
+        pulse_a: str,
+        pulse_b: str,
+        min_gap_ns: float,
+    ) -> PulseSequenceBuilder:
+        """Add a MIN_GAP constraint."""
+        c = TemporalConstraint(
+            kind=ConstraintKind.MIN_GAP,
+            pulse_a_id=pulse_a,
+            pulse_b_id=pulse_b,
+            tolerance_ns=min_gap_ns,
+        )
+        self._sequence.add_constraint(c)
+        return self
+
+    def build(self, validate: bool = True) -> PulseSequence:
+        """Build and optionally validate the sequence.
+
+        Args:
+            validate: If True, validate the sequence and raise on failure.
+
+        Returns:
+            The constructed PulseSequence.
+
+        Raises:
+            ValueError: If validate=True and validation fails.
+        """
+        if validate:
+            result = self._sequence.validate()
+            if not result.valid:
+                raise ValueError(
+                    f"Sequence validation failed with {len(result.messages)} "
+                    f"issues:\n" + "\n".join(f"  - {m}" for m in result.messages)
+                )
+        return self._sequence
+```
+
+#### 5.6.3 Rust Implementation (PulseSequence)
+
+```rust
+// src/temporal/sequence.rs (PulseSequence portion)
+
+use super::awg::{AWGClockConfig, QuantizationResult};
+use super::budget::{BudgetCheckResult, BudgetStatus, DecoherenceBudget};
+use super::constraints::{ConstraintCheckResult, TemporalConstraint};
+use std::collections::HashMap;
+use serde::{Deserialize, Serialize};
+
+#[derive(Debug, Clone, thiserror::Error)]
+pub enum SequenceError {
+    #[error("pulse '{0}' already exists in sequence")]
+    DuplicatePulseId(String),
+    #[error("constraint references unknown pulse: '{0}'")]
+    UnknownPulse(String),
+    #[error("sequence validation failed: {0}")]
+    ValidationFailed(String),
+    #[error(transparent)]
+    ScheduledPulse(#[from] ScheduledPulseError),
+    #[error(transparent)]
+    Constraint(#[from] super::constraints::ConstraintError),
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SequenceValidationResult {
+    pub valid: bool,
+    pub constraint_results: Vec<ConstraintCheckResult>,
+    pub budget_result: Option<BudgetCheckResult>,
+    pub conflicts: Vec<(String, String)>,
+    pub awg_quantization: HashMap<String, QuantizationResult>,
+    pub messages: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PulseSequence {
+    pub sequence_id: String,
+    pub pulses: HashMap<String, ScheduledPulse>,
+    pub constraints: Vec<TemporalConstraint>,
+    pub decoherence_budget: Option<DecoherenceBudget>,
+    pub awg_config: Option<AWGClockConfig>,
+    pub validated: bool,
+}
+
+impl PulseSequence {
+    pub fn new(sequence_id: String) -> Self {
+        Self {
+            sequence_id,
+            pulses: HashMap::new(),
+            constraints: Vec::new(),
+            decoherence_budget: None,
+            awg_config: None,
+            validated: false,
+        }
+    }
+
+    pub fn total_duration_ns(&self) -> f64 {
+        if self.pulses.is_empty() {
+            return 0.0;
+        }
+        let earliest = self
+            .pulses
+            .values()
+            .map(|p| p.start_ns())
+            .fold(f64::INFINITY, f64::min);
+        let latest = self
+            .pulses
+            .values()
+            .map(|p| p.end_ns())
+            .fold(f64::NEG_INFINITY, f64::max);
+        latest - earliest
+    }
+
+    pub fn pulse_count(&self) -> usize {
+        self.pulses.len()
+    }
+
+    pub fn append(&mut self, pulse: ScheduledPulse) -> Result<(), SequenceError> {
+        if self.pulses.contains_key(&pulse.pulse_id) {
+            return Err(SequenceError::DuplicatePulseId(pulse.pulse_id.clone()));
+        }
+
+        // Update decoherence budget
+        if let Some(ref mut budget) = self.decoherence_budget {
+            for &qubit_id in &pulse.target_qubits {
+                if budget.qubits.contains_key(&qubit_id) {
+                    let _ = budget.add_pulse(qubit_id, pulse.duration_ns);
+                }
+            }
+        }
+
+        self.pulses.insert(pulse.pulse_id.clone(), pulse);
+        self.validated = false;
+        Ok(())
+    }
+
+    pub fn add_constraint(
+        &mut self,
+        constraint: TemporalConstraint,
+    ) -> Result<(), SequenceError> {
+        if !self.pulses.contains_key(&constraint.pulse_a_id) {
+            return Err(SequenceError::UnknownPulse(
+                constraint.pulse_a_id.clone(),
+            ));
+        }
+        if !self.pulses.contains_key(&constraint.pulse_b_id) {
+            return Err(SequenceError::UnknownPulse(
+                constraint.pulse_b_id.clone(),
+            ));
+        }
+        self.constraints.push(constraint);
+        self.validated = false;
+        Ok(())
+    }
+
+    pub fn validate(&mut self) -> SequenceValidationResult {
+        let mut messages: Vec<String> = Vec::new();
+        let mut constraint_results: Vec<ConstraintCheckResult> = Vec::new();
+        let mut conflicts: Vec<(String, String)> = Vec::new();
+        let mut awg_results: HashMap<String, QuantizationResult> = HashMap::new();
+        let mut all_valid = true;
+
+        // 1. Check constraints
+        for constraint in &self.constraints {
+            let pa = &self.pulses[&constraint.pulse_a_id];
+            let pb = &self.pulses[&constraint.pulse_b_id];
+            let result = constraint.check(
+                pa.start_ns(),
+                pa.end_ns(),
+                pb.start_ns(),
+                pb.end_ns(),
+            );
+            if !result.satisfied {
+                all_valid = false;
+                messages.push(format!(
+                    "Constraint violated: {:?} ({} -> {}): {}",
+                    constraint.kind,
+                    constraint.pulse_a_id,
+                    constraint.pulse_b_id,
+                    result.detail,
+                ));
+            }
+            constraint_results.push(result);
+        }
+
+        // 2. Check qubit-time conflicts
+        let pulse_list: Vec<&ScheduledPulse> = self.pulses.values().collect();
+        for i in 0..pulse_list.len() {
+            for j in (i + 1)..pulse_list.len() {
+                if pulse_list[i].overlaps_qubit_time(pulse_list[j]) {
+                    conflicts.push((
+                        pulse_list[i].pulse_id.clone(),
+                        pulse_list[j].pulse_id.clone(),
+                    ));
+                    all_valid = false;
+                    messages.push(format!(
+                        "Qubit-time conflict: '{}' ({:.3}-{:.3} ns) overlaps '{}' ({:.3}-{:.3} ns)",
+                        pulse_list[i].pulse_id,
+                        pulse_list[i].start_ns(),
+                        pulse_list[i].end_ns(),
+                        pulse_list[j].pulse_id,
+                        pulse_list[j].start_ns(),
+                        pulse_list[j].end_ns(),
+                    ));
+                }
+            }
+        }
+
+        // 3. Check decoherence budget
+        let budget_result = self.decoherence_budget.as_ref().map(|budget| {
+            let result = budget.check();
+            match result.status {
+                BudgetStatus::Exceeded => {
+                    all_valid = false;
+                    messages.push(result.message.clone());
+                }
+                BudgetStatus::Warning => {
+                    messages.push(result.message.clone());
+                }
+                BudgetStatus::Ok => {}
+            }
+            result
+        });
+
+        // 4. Check AWG quantization
+        if let Some(ref awg) = self.awg_config {
+            for (pid, pulse) in &self.pulses {
+                if let Ok(qresult) = awg.quantize_duration(pulse.duration_ns) {
+                    if qresult.relative_error > 0.01 {
+                        messages.push(format!(
+                            "Pulse '{}' duration {:.3} ns quantizes to {:.3} ns (error: {:.4}%)",
+                            pid,
+                            qresult.requested_ns,
+                            qresult.actual_ns,
+                            qresult.relative_error * 100.0,
+                        ));
+                    }
+                    awg_results.insert(pid.clone(), qresult);
+                }
+            }
+        }
+
+        self.validated = all_valid;
+        SequenceValidationResult {
+            valid: all_valid,
+            constraint_results,
+            budget_result,
+            conflicts,
+            awg_quantization: awg_results,
+            messages,
+        }
+    }
+
+    /// Return pulses sorted by start time.
+    pub fn to_timeline(&self) -> Vec<&ScheduledPulse> {
+        let mut sorted: Vec<&ScheduledPulse> = self.pulses.values().collect();
+        sorted.sort_by(|a, b| {
+            a.start_ns()
+                .partial_cmp(&b.start_ns())
+                .unwrap_or(std::cmp::Ordering::Equal)
+                .then_with(|| a.pulse_id.cmp(&b.pulse_id))
+        });
+        sorted
+    }
+}
+```
+
+---
+
+## 6. Protocol Buffer Changes
+
+### 6.1 Breaking Change: `duration_ns` Type
+
+**`pulse.proto` change:**
+
+```protobuf
+message PulseShape {
+  string shape_type = 1;
+  map<string, double> parameters = 2;
+  repeated double i_envelope = 3;
+  repeated double q_envelope = 4;
+  double frequency_mhz = 5;
+  double duration_ns = 6;              // CHANGED: int32 → double
+  int32 num_time_steps = 7;
+  double time_step_ns = 8;
+}
+```
+
+**`grape.proto` change:**
+
+```protobuf
+message OptimizeRequest {
+  repeated Qubit qubits = 1;
+  repeated Coupling couplings = 2;
+  string target_gate = 3;
+  double duration_ns = 4;              // CHANGED: int32 → double
+  int32 n_steps = 5;
+  GRAPEOptions options = 6;
+}
+```
+
+**Impact:** This is a wire-incompatible change. Protobuf `int32` and `double`
+use different wire types (`varint` vs `fixed64`). Old clients sending `int32`
+will produce deserialization errors on new servers. This is acceptable for
+v0.2.0 (pre-stable), but requires:
+
+1. Coordinated deployment of client and server.
+2. Proto rebuild for all consumers.
+3. Clear release note.
+
+### 6.2 New File: `temporal.proto`
+
+```protobuf
+syntax = "proto3";
+
+package qubitos.temporal;
+
+option java_package = "com.qubitos.temporal";
+
+import "pulse.proto";
+
+// --- TimePoint ---
+
+message TimePoint {
+  // Nominal time in nanoseconds relative to sequence start.
+  double nominal_ns = 1;
+  // Precision of time specification in nanoseconds. Default: 0.1.
+  double precision_ns = 2;
+  // Upper bound on hardware timing jitter in nanoseconds. Default: 0.0.
+  double jitter_bound_ns = 3;
+}
+
+// --- AWG Clock Configuration ---
+
+message AWGClockConfig {
+  // Sample rate in GSa/s. Common: 1.0, 2.0, 4.0.
+  double sample_rate_ghz = 1;
+  // Minimum samples per pulse. Default: 4.
+  uint32 min_samples = 2;
+  // Maximum samples per pulse. Default: 65536.
+  uint32 max_samples = 3;
+  // Sample alignment requirement. Default: 1 (no alignment).
+  uint32 alignment_samples = 4;
+}
+
+// --- Temporal Constraints ---
+
+enum ConstraintKind {
+  CONSTRAINT_KIND_UNSPECIFIED = 0;
+  CONSTRAINT_KIND_SIMULTANEOUS = 1;
+  CONSTRAINT_KIND_SEQUENTIAL = 2;
+  CONSTRAINT_KIND_ALIGNED = 3;
+  CONSTRAINT_KIND_MAX_DELAY = 4;
+  CONSTRAINT_KIND_MIN_GAP = 5;
+}
+
+message TemporalConstraint {
+  ConstraintKind kind = 1;
+  string pulse_a_id = 2;
+  string pulse_b_id = 3;
+  // Interpretation depends on kind (see spec section 5.3.1).
+  double tolerance_ns = 4;
+}
+
+// --- Decoherence Budget ---
+
+message QubitDecoherenceBudget {
+  uint32 qubit_id = 1;
+  double t1_us = 2;
+  double t2_us = 3;
+  double active_duration_ns = 4;
+  double idle_duration_ns = 5;
+}
+
+message DecoherenceBudget {
+  map<uint32, QubitDecoherenceBudget> qubits = 1;
+  // T2 fraction threshold for warnings. Default: 0.3.
+  double warning_threshold = 2;
+  // T2 fraction threshold for blocking. Default: 0.8.
+  double blocking_threshold = 3;
+}
+
+// --- Scheduled Pulse ---
+
+message ScheduledPulse {
+  string pulse_id = 1;
+  // The pulse shape data.
+  qubitos.PulseShape pulse = 2;
+  TimePoint start_time = 3;
+  repeated uint32 target_qubits = 4;
+  // Explicit duration (may differ from pulse.duration_ns after quantization).
+  double duration_ns = 5;
+}
+
+// --- Pulse Sequence ---
+
+message PulseSequence {
+  string sequence_id = 1;
+  repeated ScheduledPulse pulses = 2;
+  repeated TemporalConstraint constraints = 3;
+  DecoherenceBudget decoherence_budget = 4;
+  AWGClockConfig awg_config = 5;
+}
+
+// --- Execution ---
+
+message ExecutePulseSequenceRequest {
+  PulseSequence sequence = 1;
+  uint32 num_shots = 2;
+  // If true, validate constraints before execution. Default: true.
+  bool validate = 3;
+}
+
+message ExecutePulseSequenceResponse {
+  bool success = 1;
+  string message = 2;
+  // Per-pulse execution results.
+  repeated PulseExecutionResult pulse_results = 3;
+  // Validation report (if validate was true).
+  SequenceValidationReport validation_report = 4;
+}
+
+message PulseExecutionResult {
+  string pulse_id = 1;
+  bool success = 2;
+  string message = 3;
+  // Actual duration after AWG quantization (may differ from requested).
+  double actual_duration_ns = 4;
+}
+
+message SequenceValidationReport {
+  bool valid = 1;
+  repeated string messages = 2;
+  repeated ConstraintCheckReport constraint_checks = 3;
+}
+
+message ConstraintCheckReport {
+  ConstraintKind kind = 1;
+  string pulse_a_id = 2;
+  string pulse_b_id = 3;
+  bool satisfied = 4;
+  double margin_ns = 5;
+  string detail = 6;
+}
+```
+
+### 6.3 New gRPC Method
+
+Add to the existing backend service definition:
+
+```protobuf
+service QubitOSBackend {
+  // ... existing methods ...
+
+  // Execute a pulse sequence with temporal constraints.
+  rpc ExecutePulseSequence(ExecutePulseSequenceRequest)
+      returns (ExecutePulseSequenceResponse);
+}
+```
+
+### 6.4 Proto Import Graph
+
+```
+temporal.proto ──imports──> pulse.proto (for PulseShape)
+execution.proto ──imports──> temporal.proto (for ExecutePulseSequenceRequest)
+grape.proto (duration_ns type change only, no new imports)
+```

@@ -1103,5 +1103,129 @@ def config_show() -> None:
         click.echo(f"  {key}={value}")
 
 
+# =============================================================================
+# Experiment Commands
+# =============================================================================
+
+
+@cli.group()
+def experiment() -> None:
+    """Experiment provenance commands."""
+    pass
+
+
+@experiment.command("provenance")
+@click.argument("hash_prefix")
+@click.option(
+    "--store",
+    "-s",
+    default=None,
+    type=click.Path(),
+    help="Path to provenance store file",
+)
+@click.option(
+    "--format",
+    "-f",
+    "output_format",
+    default="text",
+    type=click.Choice(["text", "json"]),
+    help="Output format",
+)
+def experiment_provenance(
+    hash_prefix: str,
+    store: str | None,
+    output_format: str,
+) -> None:
+    """Show the provenance tree for an experiment.
+
+    HASH_PREFIX is the full or partial root hash.
+
+    Examples:
+
+        qubit-os experiment provenance a1b2c3d4
+        qubit-os experiment provenance a1b2c3d4 --format json
+    """
+    try:
+        from ..provenance import ProvenanceStore
+
+        store_path = Path(store) if store else _default_provenance_path()
+        pstore = ProvenanceStore(persist_path=store_path)
+        tree = pstore.get(hash_prefix)
+
+        if tree is None:
+            click.echo(f"No provenance tree found for: {hash_prefix}", err=True)
+            sys.exit(1)
+
+        if output_format == "text":
+            click.echo(tree.summary())
+        else:
+            _output(tree.to_dict(), output_format)
+
+    except Exception as e:
+        click.echo(f"Error ({type(e).__name__}): {e}", err=True)
+        sys.exit(1)
+
+
+@experiment.command("diff")
+@click.argument("hash_a")
+@click.argument("hash_b")
+@click.option(
+    "--store",
+    "-s",
+    default=None,
+    type=click.Path(),
+    help="Path to provenance store file",
+)
+@click.option(
+    "--format",
+    "-f",
+    "output_format",
+    default="text",
+    type=click.Choice(["text", "json"]),
+    help="Output format",
+)
+def experiment_diff(
+    hash_a: str,
+    hash_b: str,
+    store: str | None,
+    output_format: str,
+) -> None:
+    """Diff two experiment provenance trees.
+
+    Shows exactly what changed between two experiments.
+
+    Examples:
+
+        qubit-os experiment diff a1b2c3d4 e5f6a7b8
+    """
+    try:
+        from ..provenance import ProvenanceStore
+
+        store_path = Path(store) if store else _default_provenance_path()
+        pstore = ProvenanceStore(persist_path=store_path)
+        diff_result = pstore.diff(hash_a, hash_b)
+
+        if diff_result is None:
+            click.echo(
+                "Could not find one or both trees. Check hash prefixes.",
+                err=True,
+            )
+            sys.exit(1)
+
+        if output_format == "text":
+            click.echo(diff_result.summary())
+        else:
+            _output(diff_result.to_dict(), output_format)
+
+    except Exception as e:
+        click.echo(f"Error ({type(e).__name__}): {e}", err=True)
+        sys.exit(1)
+
+
+def _default_provenance_path() -> Path:
+    """Default location for the provenance store."""
+    return Path.home() / ".qubitos" / "provenance.json"
+
+
 if __name__ == "__main__":
     cli()

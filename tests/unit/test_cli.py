@@ -594,3 +594,93 @@ class TestEdgeCases:
             data = json.load(f)
         assert data["gate"] == "CZ"
         assert data["num_qubits"] == 2
+
+
+class TestExperimentCommands:
+    """Tests for experiment provenance CLI commands."""
+
+    @pytest.fixture
+    def runner(self):
+        return CliRunner()
+
+    def test_experiment_provenance_not_found(self, runner, tmp_path):
+        """Test provenance lookup with nonexistent hash."""
+        store_path = tmp_path / "provenance.json"
+        result = runner.invoke(
+            cli,
+            [
+                "experiment",
+                "provenance",
+                "nonexistent",
+                "--store",
+                str(store_path),
+            ],
+        )
+        assert result.exit_code != 0
+        assert "No provenance tree found" in result.output
+
+    def test_experiment_provenance_found(self, runner, tmp_path):
+        """Test provenance lookup with a stored tree."""
+        import numpy as np
+        from types import SimpleNamespace
+        from qubitos.provenance import ProvenanceBuilder, ProvenanceStore
+
+        # Build a tree
+        builder = ProvenanceBuilder()
+        builder.set_calibration(
+            qubit_data=[{
+                "qubit_index": 0,
+                "frequency_ghz": 5.0,
+                "t1_us": 50.0,
+                "t2_us": 30.0,
+            }],
+        )
+        cfg = SimpleNamespace(
+            num_time_steps=100, duration_ns=20, target_fidelity=0.999,
+            max_iterations=1000, learning_rate=1.0, convergence_threshold=1e-8,
+            max_amplitude=100.0, use_second_order=False, regularization=0.0,
+            random_seed=42,
+        )
+        builder.set_grape_config(cfg)
+        rng = np.random.default_rng(0)
+        builder.add_pulse(
+            "p0", "X", [0], 20, 100, 0.999, 100.0,
+            rng.standard_normal(100), rng.standard_normal(100),
+        )
+        builder.set_software_versions()
+        tree = builder.build()
+
+        # Store it
+        store_path = tmp_path / "provenance.json"
+        store = ProvenanceStore(persist_path=store_path)
+        store.store(tree)
+
+        # Look it up
+        result = runner.invoke(
+            cli,
+            [
+                "experiment",
+                "provenance",
+                tree.root_hash[:8],
+                "--store",
+                str(store_path),
+            ],
+        )
+        assert result.exit_code == 0
+        assert "Provenance Tree" in result.output
+
+    def test_experiment_diff_not_found(self, runner, tmp_path):
+        """Test diff with nonexistent hashes."""
+        store_path = tmp_path / "provenance.json"
+        result = runner.invoke(
+            cli,
+            [
+                "experiment",
+                "diff",
+                "aaa",
+                "bbb",
+                "--store",
+                str(store_path),
+            ],
+        )
+        assert result.exit_code != 0
