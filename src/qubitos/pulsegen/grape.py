@@ -220,6 +220,7 @@ class GrapeOptimizer:
             control_hamiltonians = self._default_control_hamiltonians(num_qubits)
 
         # Initialize pulses
+        n_channels = len(control_hamiltonians) // 2  # Number of qubit channels
         if initial_pulses is not None:
             i_pulse, q_pulse = initial_pulses
         else:
@@ -227,8 +228,14 @@ class GrapeOptimizer:
             # For trace-zero targets like X, Y, CZ, the gradient vanishes when U~I
             # Starting with ~25% of max amplitude helps escape this saddle point
             init_amp = 0.25 * self.config.max_amplitude
-            i_pulse = self._rng.uniform(-init_amp, init_amp, n_steps)
-            q_pulse = self._rng.uniform(-init_amp, init_amp, n_steps)
+            if n_channels > 1:
+                # Multi-qubit: independent envelope per qubit (n_channels, n_steps)
+                i_pulse = self._rng.uniform(-init_amp, init_amp, (n_channels, n_steps))
+                q_pulse = self._rng.uniform(-init_amp, init_amp, (n_channels, n_steps))
+            else:
+                # Single-qubit: 1D array (backward compatible)
+                i_pulse = self._rng.uniform(-init_amp, init_amp, n_steps)
+                q_pulse = self._rng.uniform(-init_amp, init_amp, n_steps)
 
         # Optimization loop
         fidelity_history = []
@@ -297,7 +304,7 @@ class GrapeOptimizer:
                 grad_q -= self.config.regularization * q_pulse
 
             # Update pulses (gradient ascent) with adaptive learning rate
-            lr = self._adaptive_learning_rate(iteration, fidelity_history)
+            lr = self._adaptive_learning_rate(iteration, fidelity_history, dim)
             i_pulse += lr * grad_i
             q_pulse += lr * grad_q
 
@@ -361,20 +368,41 @@ class GrapeOptimizer:
         controls: list[NDArray[np.complex128]],
         dt: float,
     ) -> list[NDArray[np.complex128]]:
-        """Compute time-step propagators."""
+        """Compute time-step propagators.
+
+        For multi-qubit systems, i_pulse and q_pulse may be 2D arrays of shape
+        (num_qubits, num_time_steps). For single-qubit (1D arrays), the pulse
+        drives the first pair of control Hamiltonians.
+
+        Controls are assumed in pairs: [Hx_q0, Hy_q0, Hx_q1, Hy_q1, ...].
+        """
         propagators = []
         n_controls = len(controls)
+        n_qubit_channels = n_controls // 2
 
-        for t in range(len(i_pulse)):
+        # Normalize pulse shape: ensure 2D (num_channels, num_time_steps)
+        if i_pulse.ndim == 1:
+            if n_qubit_channels == 1:
+                i_2d = i_pulse[np.newaxis, :]
+                q_2d = q_pulse[np.newaxis, :]
+            else:
+                # Single pulse pair applied to all qubits (legacy behavior)
+                i_2d = np.tile(i_pulse, (n_qubit_channels, 1))
+                q_2d = np.tile(q_pulse, (n_qubit_channels, 1))
+        else:
+            i_2d = i_pulse
+            q_2d = q_pulse
+
+        n_steps = i_2d.shape[1]
+
+        for t in range(n_steps):
             # Build total Hamiltonian at this time step
             H = drift.copy()
 
-            # Add control terms (assuming alternating I/Q for each qubit)
-            for c in range(0, n_controls, 2):
-                qubit_idx = c // 2
-                if qubit_idx == 0:  # For now, only first qubit controlled
-                    H += i_pulse[t] * controls[c]  # I * sigma_x
-                    H += q_pulse[t] * controls[c + 1]  # Q * sigma_y
+            # Add control terms for ALL qubits
+            for q in range(n_qubit_channels):
+                H += i_2d[q, t] * controls[2 * q]  # I_q * sigma_x_q
+                H += q_2d[q, t] * controls[2 * q + 1]  # Q_q * sigma_y_q
 
             # Compute propagator: U = exp(-i * H * dt)
             # Scale by 2*pi for angular frequency
@@ -441,9 +469,15 @@ class GrapeOptimizer:
         """
         n_steps = len(propagators)
         dim = propagators[0].shape[0]
+        n_qubit_channels = len(controls) // 2
 
-        grad_i = np.zeros(n_steps)
-        grad_q = np.zeros(n_steps)
+        # Output shape matches pulse shape: (n_channels, n_steps) or (n_steps,)
+        if n_qubit_channels > 1:
+            grad_i = np.zeros((n_qubit_channels, n_steps))
+            grad_q = np.zeros((n_qubit_channels, n_steps))
+        else:
+            grad_i = np.zeros(n_steps)
+            grad_q = np.zeros(n_steps)
 
         # Compute the overlap chi = Tr(W^dag @ U) - needed for chain rule
         chi = np.trace(target.conj().T @ total_unitary)
@@ -469,21 +503,24 @@ class GrapeOptimizer:
             P = forward[t]
             Q = backward[t + 1]
 
-            # Derivative of propagator with respect to control
-            # dU/du = -i * dt * H_control * U (first order)
-            for c_idx, H_control in enumerate(controls[:2]):  # First qubit only
-                dU = -1j * 2 * np.pi * dt * 1e6 * H_control @ propagators[t]
+            # Derivative of propagator with respect to each control channel
+            for q in range(n_qubit_channels):
+                for c_offset in range(2):
+                    H_control = controls[2 * q + c_offset]
+                    dU = -1j * 2 * np.pi * dt * 1e6 * H_control @ propagators[t]
 
-                # Inner product: Tr(W^dag @ Q @ dU @ P)
-                inner = np.trace(target.conj().T @ Q @ dU @ P)
+                    # Inner product: Tr(W^dag @ Q @ dU @ P)
+                    inner = np.trace(target.conj().T @ Q @ dU @ P)
 
-                # Apply chain rule: dF/du = norm_factor * Re(chi* . inner)
-                grad_contribution = norm_factor * np.real(np.conj(chi) * inner)
+                    # Apply chain rule: dF/du = norm_factor * Re(chi* . inner)
+                    grad_contribution = norm_factor * np.real(np.conj(chi) * inner)
 
-                if c_idx == 0:
-                    grad_i[t] = grad_contribution
-                else:
-                    grad_q[t] = grad_contribution
+                    # Write to correct channel
+                    grad_target = grad_i if c_offset == 0 else grad_q
+                    if n_qubit_channels > 1:
+                        grad_target[q, t] += grad_contribution
+                    else:
+                        grad_target[t] += grad_contribution
 
         # Note: We do NOT normalize gradients here - that was a bug!
         # Normalizing destroys the magnitude information needed for proper gradient ascent.
@@ -494,13 +531,23 @@ class GrapeOptimizer:
         """Compute matrix exponential using scipy's numerically stable implementation."""
         return scipy_linalg.expm(A)
 
-    def _adaptive_learning_rate(self, iteration: int, history: list[float]) -> float:
-        """Compute adaptive learning rate based on progress."""
+    def _adaptive_learning_rate(self, iteration: int, history: list[float], dim: int = 2) -> float:
+        """Compute adaptive learning rate based on progress.
+
+        Args:
+            iteration: Current iteration number.
+            history: Fidelity history so far.
+            dim: Hilbert space dimension (2^num_qubits). Used to scale
+                 the learning rate to compensate for the (d²+d) normalization
+                 in the fidelity gradient.
+        """
         base_lr = self.config.learning_rate
 
-        # Scale by a factor that accounts for the typical gradient magnitude
-        # Gradients are typically O(1e-3) to O(1e-5), so we need larger steps
-        scale = 100.0  # Amplify learning rate
+        # Dimension-dependent scale: compensate for gradient normalization.
+        # Fidelity gradient ∝ 1/(d²+d), so we scale by (d²+d)/6 relative
+        # to the single-qubit baseline (d=2: (4+2)/6 = 1.0).
+        dim_scale = (dim**2 + dim) / 6.0
+        scale = 100.0 * dim_scale
 
         # Decay learning rate over time
         decay = 0.999**iteration
@@ -550,7 +597,7 @@ def generate_pulse(
         >>> result = generate_pulse("X", duration_ns=20, target_fidelity=0.999)
         >>> result = generate_pulse(TargetUnitary.CZ, num_qubits=2)
     """
-    from .hamiltonians import get_target_unitary
+    from .hamiltonians import build_drift_hamiltonian, get_target_unitary
 
     # Convert string to enum
     if isinstance(gate, str):
@@ -569,9 +616,26 @@ def generate_pulse(
     # Get target unitary
     target = get_target_unitary(gate, num_qubits, qubit_indices)
 
+    # Build drift Hamiltonian for multi-qubit systems.
+    # Use default qubit frequencies offset by 100 MHz to break degeneracy,
+    # and a small ZZ coupling for entangling gates.
+    # Users needing specific parameters should use GrapeOptimizer.optimize()
+    # directly with explicit Hamiltonians.
+    drift = None
+    if num_qubits > 1:
+        # Default frequencies: 5.0, 5.1, 5.2, ... GHz (100 MHz detuning)
+        freqs = [5.0 + 0.1 * q for q in range(num_qubits)]
+
+        # Default ZZ couplings: 5 MHz between nearest neighbors
+        couplings: dict[tuple[int, int], float] = {}
+        for q in range(num_qubits - 1):
+            couplings[(q, q + 1)] = 5.0  # MHz
+
+        drift = build_drift_hamiltonian(freqs, couplings)
+
     # Run optimization
     optimizer = GrapeOptimizer(config)
-    result = optimizer.optimize(target, num_qubits)
+    result = optimizer.optimize(target, num_qubits, drift_hamiltonian=drift)
 
     return result
 

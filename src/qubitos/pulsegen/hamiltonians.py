@@ -428,6 +428,71 @@ def embed_gate(
     return result
 
 
+def build_drift_hamiltonian(
+    qubit_frequencies_ghz: list[float],
+    coupling_map: dict[tuple[int, int], float] | None = None,
+) -> NDArray[np.complex128]:
+    """Build a drift Hamiltonian for a multi-qubit transmon system.
+
+    Constructs the drift Hamiltonian in the **interaction frame** (rotating
+    frame where single-qubit drive frequencies are removed):
+
+        H_drift = Σ_q (δω_q/2) σz_q + Σ_{q<r} g_{qr} σz_q ⊗ σz_r
+
+    where δω_q is the detuning of qubit q from a reference frequency
+    (chosen as the mean qubit frequency), and g_{qr} is the ZZ coupling.
+
+    Working in the rotating frame keeps the drift Hamiltonian small
+    (order of detunings + couplings, typically < 100 MHz) so that
+    control amplitudes (also ~100 MHz) can compete effectively.
+
+    Args:
+        qubit_frequencies_ghz: Resonance frequency per qubit (GHz).
+        coupling_map: {(q_a, q_b): coupling_mhz} for ZZ interactions.
+            Indices must satisfy q_a < q_b.
+
+    Returns:
+        Drift Hamiltonian matrix (2^n × 2^n) in MHz units.
+
+    Raises:
+        ValueError: If coupling indices are invalid.
+
+    Ref: Krantz et al. (2019), "A Quantum Engineer's Guide to
+         Superconducting Qubits", arXiv:1904.06560, Section III.
+    """
+    n = len(qubit_frequencies_ghz)
+    dim = 2**n
+    H = np.zeros((dim, dim), dtype=np.complex128)
+
+    sigma_z = np.array([[1, 0], [0, -1]], dtype=np.complex128)
+    identity = np.eye(2, dtype=np.complex128)
+
+    # Rotating frame: detunings relative to mean frequency
+    mean_freq_ghz = sum(qubit_frequencies_ghz) / n
+    detunings_mhz = [(f - mean_freq_ghz) * 1000.0 for f in qubit_frequencies_ghz]
+
+    # Detuning terms: (δω_q / 2) σz_q
+    for q, delta_mhz in enumerate(detunings_mhz):
+        if abs(delta_mhz) > 1e-10:  # Skip zero detunings
+            ops = [identity] * n
+            ops[q] = sigma_z
+            H += (delta_mhz / 2.0) * tensor_product(ops)
+
+    # ZZ coupling terms: g_{qr} σz_q ⊗ σz_r  (already in MHz)
+    if coupling_map:
+        for (qa, qb), g_mhz in coupling_map.items():
+            if qa >= qb:
+                raise ValueError(f"Coupling indices must be ordered (q_a < q_b), got ({qa}, {qb})")
+            if qa >= n or qb >= n:
+                raise ValueError(f"Coupling index out of range: ({qa}, {qb}) for {n} qubits")
+            ops = [identity] * n
+            ops[qa] = sigma_z
+            ops[qb] = sigma_z
+            H += g_mhz * tensor_product(ops)
+
+    return H
+
+
 __all__ = [
     # Pauli matrices
     "PAULI_I",
@@ -444,6 +509,7 @@ __all__ = [
     "pauli_string_to_matrix",
     "parse_pauli_string",
     "build_hamiltonian",
+    "build_drift_hamiltonian",
     "rotation_gate",
     "get_target_unitary",
     "embed_gate",
