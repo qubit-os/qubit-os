@@ -30,6 +30,8 @@ class NodeType(Enum):
     CONFIG = "config"
     GRAPE_CONFIG = "grape_config"
     SOFTWARE_VERSION = "software_version"
+    DRIFT_EVENT = "drift_event"
+    RECALIBRATION = "recalibration"
 
 
 @dataclass(frozen=True)

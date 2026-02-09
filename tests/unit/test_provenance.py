@@ -633,3 +633,118 @@ class TestTargetUnitaryAdditional:
         """Name equals value for all members."""
         for tu in TargetUnitary:
             assert tu.name == tu.value
+
+
+class TestDriftRecalibrationProvenance:
+    """Test provenance recording of drift events and recalibrations."""
+
+    @staticmethod
+    def _make_builder(n_qubits: int = 1) -> ProvenanceBuilder:
+        """Create a builder with calibration pre-set."""
+        builder = ProvenanceBuilder()
+        qubit_data = [
+            {
+                "qubit_index": i,
+                "frequency_ghz": 5.0 + 0.1 * i,
+                "t1_us": 50.0 - 5 * i,
+                "t2_us": 30.0 - 2 * i,
+                "readout_fidelity": 0.99,
+                "gate_fidelity": 0.999,
+            }
+            for i in range(n_qubits)
+        ]
+        builder.set_calibration(qubit_data=qubit_data)
+        return builder
+
+    def test_drift_event_node_in_tree(self):
+        """Drift events should appear as children of the root node."""
+        builder = self._make_builder()
+        builder.add_drift_event(
+            severity="HIGH",
+            overall_score=0.35,
+            affected_qubits=[0],
+            timestamp="2026-02-08T18:00:00Z",
+        )
+        tree = builder.build()
+        root = tree.root
+        # Root should have 3 children: calibration, experiment, drift_event
+        assert len(root.children) == 3
+        drift_node = root.children[2]
+        assert drift_node.node_type == NodeType.DRIFT_EVENT
+        assert drift_node.content["severity"] == "HIGH"
+        assert drift_node.content["affected_qubits"] == [0]
+
+    def test_recalibration_node_in_tree(self):
+        """Recalibration events should appear as children of the root node."""
+        builder = self._make_builder(n_qubits=2)
+        builder.add_recalibration(
+            strategy="selective",
+            qubits_recalibrated=[1],
+            trigger_severity="HIGH",
+            cycle=3,
+            timestamp="2026-02-08T18:05:00Z",
+        )
+        tree = builder.build()
+        root = tree.root
+        assert len(root.children) == 3
+        recal_node = root.children[2]
+        assert recal_node.node_type == NodeType.RECALIBRATION
+        assert recal_node.content["strategy"] == "selective"
+        assert recal_node.content["qubits_recalibrated"] == [1]
+        assert recal_node.content["cycle"] == 3
+
+    def test_multiple_drift_and_recal_events(self):
+        """Multiple drift/recal events all appear in the tree."""
+        builder = self._make_builder()
+        builder.add_drift_event(
+            severity="MODERATE",
+            overall_score=0.2,
+            affected_qubits=[0],
+        )
+        builder.add_drift_event(
+            severity="HIGH",
+            overall_score=0.35,
+            affected_qubits=[0],
+        )
+        builder.add_recalibration(
+            strategy="full",
+            qubits_recalibrated=[0],
+            trigger_severity="HIGH",
+            cycle=1,
+        )
+        tree = builder.build()
+        root = tree.root
+        # calibration + experiment + 2 drift + 1 recal = 5
+        assert len(root.children) == 5
+        types = [c.node_type for c in root.children]
+        assert types.count(NodeType.DRIFT_EVENT) == 2
+        assert types.count(NodeType.RECALIBRATION) == 1
+
+    def test_drift_event_hash_deterministic(self):
+        """Same drift event content produces same hash."""
+        builder1 = self._make_builder()
+        builder1.add_drift_event(
+            severity="HIGH",
+            overall_score=0.35,
+            affected_qubits=[0],
+            timestamp="2026-02-08T18:00:00Z",
+        )
+        tree1 = builder1.build()
+
+        builder2 = self._make_builder()
+        builder2.add_drift_event(
+            severity="HIGH",
+            overall_score=0.35,
+            affected_qubits=[0],
+            timestamp="2026-02-08T18:00:00Z",
+        )
+        tree2 = builder2.build()
+
+        assert tree1.root.hash == tree2.root.hash
+
+    def test_tree_without_drift_unchanged(self):
+        """Trees without drift events still work exactly as before."""
+        builder = self._make_builder()
+        tree = builder.build()
+        root = tree.root
+        assert len(root.children) == 2  # calibration + experiment only

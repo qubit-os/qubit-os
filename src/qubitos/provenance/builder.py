@@ -18,6 +18,7 @@ import hashlib
 import json
 import math
 import sys
+from datetime import UTC
 from typing import Any
 
 import numpy as np
@@ -313,6 +314,83 @@ class ProvenanceBuilder:
         )
         return self
 
+    def add_drift_event(
+        self,
+        severity: str,
+        overall_score: float,
+        affected_qubits: list[int],
+        timestamp: str | None = None,
+    ) -> ProvenanceBuilder:
+        """Record a drift detection event in the provenance tree.
+
+        Args:
+            severity: Drift severity level (NONE, LOW, MODERATE, HIGH, CRITICAL).
+            overall_score: Overall drift score from DriftMonitor.
+            affected_qubits: Qubit indices affected by drift.
+            timestamp: ISO-8601 timestamp (auto-generated if None).
+        """
+        from datetime import datetime
+
+        if timestamp is None:
+            timestamp = datetime.now(UTC).isoformat()
+        content = {
+            "severity": severity,
+            "overall_score": canonicalize_float(overall_score),
+            "affected_qubits": affected_qubits,
+            "timestamp": timestamp,
+        }
+        node_hash = _hash_leaf("drift_event", content)
+        node = ProvenanceNode(
+            node_type=NodeType.DRIFT_EVENT,
+            hash=node_hash,
+            content=content,
+            label=f"drift_{severity.lower()}",
+        )
+        if not hasattr(self, "_drift_nodes"):
+            self._drift_nodes: list[ProvenanceNode] = []
+        self._drift_nodes.append(node)
+        return self
+
+    def add_recalibration(
+        self,
+        strategy: str,
+        qubits_recalibrated: list[int],
+        trigger_severity: str,
+        cycle: int,
+        timestamp: str | None = None,
+    ) -> ProvenanceBuilder:
+        """Record a recalibration action in the provenance tree.
+
+        Args:
+            strategy: Recalibration strategy used (selective, full, adaptive).
+            qubits_recalibrated: Qubit indices that were recalibrated.
+            trigger_severity: Drift severity that triggered recalibration.
+            cycle: Active calibration loop cycle number.
+            timestamp: ISO-8601 timestamp (auto-generated if None).
+        """
+        from datetime import datetime
+
+        if timestamp is None:
+            timestamp = datetime.now(UTC).isoformat()
+        content = {
+            "strategy": strategy,
+            "qubits_recalibrated": qubits_recalibrated,
+            "trigger_severity": trigger_severity,
+            "cycle": cycle,
+            "timestamp": timestamp,
+        }
+        node_hash = _hash_leaf("recalibration", content)
+        node = ProvenanceNode(
+            node_type=NodeType.RECALIBRATION,
+            hash=node_hash,
+            content=content,
+            label=f"recal_cycle_{cycle}",
+        )
+        if not hasattr(self, "_recal_nodes"):
+            self._recal_nodes: list[ProvenanceNode] = []
+        self._recal_nodes.append(node)
+        return self
+
     def build(self) -> ProvenanceTree:
         """Construct the complete provenance tree.
 
@@ -377,7 +455,17 @@ class ProvenanceBuilder:
         )
 
         # Build Root
-        root_children = (self._calibration_node, experiment_node)
+        root_children_list: list[ProvenanceNode] = [self._calibration_node, experiment_node]
+
+        # Include drift events if any
+        drift_nodes = getattr(self, "_drift_nodes", [])
+        root_children_list.extend(drift_nodes)
+
+        # Include recalibration events if any
+        recal_nodes = getattr(self, "_recal_nodes", [])
+        root_children_list.extend(recal_nodes)
+
+        root_children = tuple(root_children_list)
         root_hash = _hash_internal("root", [c.hash for c in root_children])
         root_node = ProvenanceNode(
             node_type=NodeType.ROOT,
