@@ -31,6 +31,13 @@ Example:
     ...     print(f"Recalibration needed: {drift.reason}")
 """
 
+from .active import (
+    ActionType,
+    ActiveCalibrationLoop,
+    CalibrationAction,
+    LoopConfig,
+    RecalibrationPolicy,
+)
 from .benchmarking import (
     SINGLE_QUBIT_CLIFFORDS,
     RBConfig,
@@ -43,6 +50,12 @@ from .cliffords import (
     CliffordTableau,
     generate_multiqubit_rb_sequence,
     sample_random_clifford,
+)
+from .drift import (
+    DriftEvent,
+    DriftMonitor,
+    DriftMonitorConfig,
+    DriftSeverity,
 )
 from .fingerprint import (
     CalibrationFingerprint,
@@ -96,6 +109,17 @@ __all__ = [
     "CliffordTableau",
     "generate_multiqubit_rb_sequence",
     "sample_random_clifford",
+    # Drift monitoring
+    "DriftEvent",
+    "DriftMonitor",
+    "DriftMonitorConfig",
+    "DriftSeverity",
+    # Active calibration loop
+    "ActionType",
+    "ActiveCalibrationLoop",
+    "CalibrationAction",
+    "LoopConfig",
+    "RecalibrationPolicy",
     # Fitting
     "DecayFitResult",
     "counts_to_excited_probability",
