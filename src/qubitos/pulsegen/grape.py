@@ -79,7 +79,7 @@ class GrapeConfig:
     """
 
     num_time_steps: int = 100
-    duration_ns: int = 20
+    duration_ns: float = 20.0
     target_fidelity: float = 0.999
     max_iterations: int = 1000
     learning_rate: float = 1.0  # Increased from 0.1
@@ -472,6 +472,8 @@ class GrapeOptimizer:
         n_qubit_channels = len(controls) // 2
 
         # Output shape matches pulse shape: (n_channels, n_steps) or (n_steps,)
+        grad_i: NDArray[np.float64]
+        grad_q: NDArray[np.float64]
         if n_qubit_channels > 1:
             grad_i = np.zeros((n_qubit_channels, n_steps))
             grad_q = np.zeros((n_qubit_channels, n_steps))
@@ -568,7 +570,7 @@ class GrapeOptimizer:
 def generate_pulse(
     gate: str | TargetUnitary,
     num_qubits: int = 1,
-    duration_ns: int = 20,
+    duration_ns: float = 20.0,
     target_fidelity: float = 0.999,
     qubit_indices: list[int] | None = None,
     config: GrapeConfig | None = None,

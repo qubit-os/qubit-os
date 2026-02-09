@@ -471,3 +471,98 @@ class TestMultiQubitScenarios:
         # Shared qubit 1 → sequential
         assert starts["cnot12"] >= 40.0
         assert result.makespan_ns == 80.0
+
+
+class TestSchedulerEdgeCases:
+    """Tests for scheduler edge cases and untested paths."""
+
+    def test_ascii_timeline_basic(self):
+        """ASCII timeline renders without error for a simple schedule."""
+        scheduler = PulseScheduler()
+        ops = [
+            PulseOp(pulse_id="h0", qubit_indices=(0,), duration_ns=20.0),
+            PulseOp(pulse_id="h1", qubit_indices=(1,), duration_ns=20.0),
+        ]
+        result = scheduler.schedule_asap(ops)
+        timeline = result.ascii_timeline(width=60)
+        assert "q0:" in timeline
+        assert "q1:" in timeline
+        assert "h0" in timeline
+        assert "t(ns)" in timeline
+
+    def test_ascii_timeline_empty(self):
+        """Empty schedule produces empty timeline string."""
+        scheduler = PulseScheduler()
+        result = scheduler.schedule_asap([])
+        assert result.ascii_timeline() == "(empty schedule)"
+
+    def test_non_positive_duration_raises(self):
+        """Pulse with zero or negative duration raises SchedulingError."""
+        scheduler = PulseScheduler()
+        ops = [PulseOp(pulse_id="bad", qubit_indices=(0,), duration_ns=0.0)]
+        with pytest.raises(SchedulingError, match="non-positive duration"):
+            scheduler.schedule_asap(ops)
+
+    def test_constraint_unknown_pulse_raises(self):
+        """Constraint referencing unknown pulse raises SchedulingError."""
+        scheduler = PulseScheduler()
+        ops = [PulseOp(pulse_id="h0", qubit_indices=(0,), duration_ns=20.0)]
+        constraints = [
+            TemporalConstraint(
+                kind=ConstraintKind.SEQUENTIAL,
+                pulse_a_id="h0",
+                pulse_b_id="missing",
+            )
+        ]
+        with pytest.raises(SchedulingError, match="unknown pulse"):
+            scheduler.schedule_asap(ops, constraints=constraints)
+
+    def test_max_delay_constraint(self):
+        """MAX_DELAY constraint ensures B starts after A ends."""
+        scheduler = PulseScheduler()
+        ops = [
+            PulseOp(pulse_id="a", qubit_indices=(0,), duration_ns=20.0),
+            PulseOp(pulse_id="b", qubit_indices=(1,), duration_ns=20.0),
+        ]
+        constraints = [
+            TemporalConstraint(
+                kind=ConstraintKind.MAX_DELAY,
+                pulse_a_id="a",
+                pulse_b_id="b",
+                tolerance_ns=10.0,
+            )
+        ]
+        result = scheduler.schedule_asap(ops, constraints=constraints)
+        starts = {p.pulse_id: p.start_time.quantized_ns for p in result.sequence.pulses}
+        # b starts after a ends (20 ns)
+        assert starts["b"] >= 20.0
+
+    def test_aligned_constraint(self):
+        """ALIGNED constraint centers B at a fraction of A."""
+        scheduler = PulseScheduler()
+        ops = [
+            PulseOp(pulse_id="a", qubit_indices=(0,), duration_ns=40.0),
+            PulseOp(pulse_id="b", qubit_indices=(1,), duration_ns=10.0),
+        ]
+        constraints = [
+            TemporalConstraint(
+                kind=ConstraintKind.ALIGNED,
+                pulse_a_id="a",
+                pulse_b_id="b",
+                alignment_fraction=0.5,
+            )
+        ]
+        result = scheduler.schedule_asap(ops, constraints=constraints)
+        starts = {p.pulse_id: p.start_time.quantized_ns for p in result.sequence.pulses}
+        # a starts at 0, midpoint at 20 ns. b centered at 20 → starts at 15.
+        assert starts["b"] == pytest.approx(15.0, abs=1.0)
+
+    def test_duplicate_pulse_id_raises(self):
+        """Duplicate pulse IDs raise SchedulingError."""
+        scheduler = PulseScheduler()
+        ops = [
+            PulseOp(pulse_id="h0", qubit_indices=(0,), duration_ns=20.0),
+            PulseOp(pulse_id="h0", qubit_indices=(1,), duration_ns=20.0),
+        ]
+        with pytest.raises(SchedulingError, match="Duplicate pulse_id"):
+            scheduler.schedule_asap(ops)

@@ -39,6 +39,11 @@ from .benchmarking import (
     fit_rb,
     generate_rb_sequence,
 )
+from .cliffords import (
+    CliffordTableau,
+    generate_multiqubit_rb_sequence,
+    sample_random_clifford,
+)
 from .fingerprint import (
     CalibrationFingerprint,
     DriftMetrics,
@@ -87,6 +92,10 @@ __all__ = [
     "find_inverse_clifford",
     "fit_rb",
     "generate_rb_sequence",
+    # Multi-qubit Cliffords
+    "CliffordTableau",
+    "generate_multiqubit_rb_sequence",
+    "sample_random_clifford",
     # Fitting
     "DecayFitResult",
     "counts_to_excited_probability",

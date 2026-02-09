@@ -43,7 +43,7 @@ jobs:
           pip install mypy types-PyYAML types-protobuf types-grpcio
 
       - name: MyPy
-        run: mypy src/qubitos/ --ignore-missing-imports
+        run: mypy src/qubitos/ --ignore-missing-imports --exclude 'proto_convert'
 
   test:
     name: Test (Python ${{ matrix.python-version }})

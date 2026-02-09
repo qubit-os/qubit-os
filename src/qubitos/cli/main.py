@@ -471,6 +471,7 @@ def generate(
         # AWG alignment: quantize duration and warn if rounded (§15.2)
         actual_duration = duration
         if awg_config is not None:
+            assert sample_rate is not None  # guaranteed by awg_config construction
             quantized = awg_config.quantize_duration(duration)
             if abs(quantized - duration) > 1e-9:
                 q_error = abs(quantized - duration)

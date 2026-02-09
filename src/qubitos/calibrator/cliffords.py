@@ -461,7 +461,7 @@ def _cnot_tableau(n: int, control: int, target: int) -> CliffordTableau:
 
 def _build_pauli_basis(n: int) -> list[NDArray[np.complex128]]:
     """Build the 4^n Pauli basis for n qubits."""
-    single = [
+    single: list[NDArray[np.complex128]] = [
         np.eye(2, dtype=np.complex128),
         np.array([[0, 1], [1, 0]], dtype=np.complex128),
         np.array([[0, -1j], [1j, 0]], dtype=np.complex128),
@@ -470,12 +470,12 @@ def _build_pauli_basis(n: int) -> list[NDArray[np.complex128]]:
     if n == 1:
         return list(single)
 
-    result = list(single)
+    result: list[NDArray[np.complex128]] = list(single)
     for _ in range(n - 1):
-        new_result = []
+        new_result: list[NDArray[np.complex128]] = []
         for p in result:
             for s in single:
-                new_result.append(np.kron(p, s))
+                new_result.append(np.kron(p, s).astype(np.complex128))
         result = new_result
     return result
 
@@ -546,23 +546,23 @@ def _compose_pauli(
     X = np.array([[0, 1], [1, 0]], dtype=np.complex128)
     Z = np.array([[1, 0], [0, -1]], dtype=np.complex128)
 
-    result = np.eye(1, dtype=np.complex128)
+    result: NDArray[np.complex128] = np.eye(1, dtype=np.complex128)
     local_phase = 0  # Track i factors from Y = iXZ
 
     for q in range(n):
         if x_bits[q] and z_bits[q]:
             # Y = iXZ
-            result = np.kron(result, X @ Z)
+            result = np.kron(result, X @ Z).astype(np.complex128)
             local_phase += 1  # Factor of i
         elif x_bits[q]:
-            result = np.kron(result, X)
+            result = np.kron(result, X).astype(np.complex128)
         elif z_bits[q]:
-            result = np.kron(result, Z)
+            result = np.kron(result, Z).astype(np.complex128)
         else:
-            result = np.kron(result, I2)
+            result = np.kron(result, I2).astype(np.complex128)
 
     # Apply total phase: i^phase * i^local_phase
     total_phase = (phase + local_phase) % 4
     phase_factor = 1j**total_phase
 
-    return phase_factor * result
+    return (phase_factor * result).astype(np.complex128)
