@@ -7,9 +7,9 @@ syntax = "proto3";
 package quantum.backend.v1;
 
 import "quantum/common/v1/common.proto";
+import "quantum/error/v1/error_budget.proto";
 import "quantum/pulse/v1/pulse.proto";
 import "quantum/pulse/v1/temporal.proto";
-import "quantum/error/v1/error_budget.proto";
 
 option java_multiple_files = true;
 option java_package = "io.qubitos.backend.v1";
