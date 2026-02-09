@@ -5,11 +5,13 @@
 QubitOS provides pulse optimization and hardware abstraction for quantum computing.
 
 Modules:
-    pulsegen: GRAPE/DRAG pulse optimization (single & multi-qubit)
-    calibrator: Calibration management, benchmarking, Clifford sampling
+    pulsegen: GRAPE/DRAG pulse optimization (single & multi-qubit),
+              parametric gates (fSim, cross-resonance)
+    calibrator: Calibration management, benchmarking, Clifford tableaux,
+                drift monitoring, active recalibration loop
     temporal: Time model, pulse scheduling, decoherence budgets
     error_budget: Cumulative error tracking with per-source breakdown
-    provenance: Experiment provenance Merkle tree
+    provenance: Experiment provenance Merkle tree (incl. drift/recal events)
     client: HAL gRPC client
     validation: AgentBible integration
     cli: Command-line interface
@@ -23,7 +25,7 @@ Example:
     ...     result = await client.execute_pulse(pulse, num_shots=1000)
 """
 
-__version__ = "0.3.0"
+__version__ = "0.4.0"
 __author__ = "QubitOS Contributors"
 __license__ = "Apache-2.0"
 

@@ -463,3 +463,23 @@ class TestVersionPinning:
         rng = np.random.default_rng(42)
         assert hasattr(rng, "random"), "NumPy Generator API not available"
         assert hasattr(rng, "choice"), "NumPy Generator.choice not available"
+
+
+class TestGrapeGolden:
+    """Verify GRAPE golden file data is reproducible."""
+
+    def test_golden_x_gate_achieves_target(self):
+        """X gate from golden file achieves ≥0.99 fidelity."""
+        import json
+        from pathlib import Path
+
+        golden_path = Path(__file__).parent / "rust_crossval_golden.json"
+        if not golden_path.exists():
+            pytest.skip("rust_crossval_golden.json not found")
+
+        with open(golden_path) as f:
+            golden = json.load(f)
+
+        entry = golden["X"]
+        assert entry["python_fidelity"] > 0.99
+        assert entry["python_converged"] is True

@@ -3,8 +3,8 @@
 [![CI](https://github.com/qubit-os/qubit-os-core/actions/workflows/ci.yaml/badge.svg)](https://github.com/qubit-os/qubit-os-core/actions/workflows/ci.yaml)
 [![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 [![Python](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/downloads/)
-[![Version](https://img.shields.io/badge/version-0.3.0-purple.svg)](https://github.com/qubit-os/qubit-os-core/releases/tag/v0.3.0)
-[![Tests](https://img.shields.io/badge/tests-947_passing-brightgreen.svg)]()
+[![Version](https://img.shields.io/badge/version-0.4.0-purple.svg)](https://github.com/qubit-os/qubit-os-core/releases/tag/v0.4.0)
+[![Tests](https://img.shields.io/badge/tests-982_passing-brightgreen.svg)]()
 [![Coverage](https://img.shields.io/badge/coverage-91%25-brightgreen.svg)]()
 
 Open-source quantum control system: pulse optimization, multi-qubit scheduling, calibration management, and hardware abstraction.
