@@ -183,7 +183,7 @@ class ActiveCalibrationLoop:
         self._pulse_callback = pulse_callback
         self._cycle_count: int = 0
         self._recal_count: int = 0
-        self._last_recal_time: float = 0.0
+        self._last_recal_time: float = float("-inf")
         self._history: list[CalibrationAction] = []
 
     @property

@@ -14,6 +14,8 @@ Ref: Kelly et al. (2016), Phys. Rev. A 94, 032321. arXiv:1603.03082
 
 from __future__ import annotations
 
+import time
+
 import pytest
 
 from qubitos.calibrator.active import (
@@ -470,7 +472,7 @@ class TestEdgeCases:
 
     @pytest.mark.asyncio
     async def test_cooldown_skips_recalibration(self):
-        """Cooldown prevents rapid recalibration."""
+        """Cooldown prevents rapid recalibration after a successful recal."""
         baseline = _make_fingerprint(t1_us=50.0)
         drifted = _make_fingerprint(t1_us=30.0)
 
@@ -487,13 +489,13 @@ class TestEdgeCases:
             config=LoopConfig(check_interval_s=0),
         )
 
-        # First check with drift → would try recal but runner is None → ERROR
+        # First check with drift → runner is None → ERROR trying to recalibrate
         action1 = await loop.run_once(drifted)
         assert action1.action_type == ActionType.ERROR
 
+        # Simulate a successful recalibration by setting the timer manually
+        loop._last_recal_time = time.monotonic()
+
         # Second check → cooldown should kick in → SKIPPED
         action2 = await loop.run_once(drifted)
-        # Actually, ERROR doesn't set _last_recal_time, so it won't skip.
-        # Only successful recalibrations set the cooldown timer.
-        # This verifies the design is correct: failed recals don't block retries.
-        assert action2.action_type == ActionType.ERROR
+        assert action2.action_type == ActionType.SKIPPED
