@@ -7,6 +7,39 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+#### Multi-Qubit GRAPE Optimization (v0.3.0, Phase 3a)
+- Per-qubit pulse envelopes: shape `(n_qubits, n_steps)` for multi-qubit control
+- `build_drift_hamiltonian()`: rotating-frame drift with qubit detunings + ZZ coupling
+- Dimension-scaled adaptive learning rate: `(d²+d)/6` compensates gradient normalization
+- Results: 2-qubit CZ/CNOT at 95%+ fidelity (from 40% random baseline), 3-qubit Toffoli functional
+
+#### Pulse Scheduler (v0.3.0, Phase 3b)
+- `PulseScheduler` with ASAP scheduling via topological sort (Kahn's algorithm)
+- Constraint-based scheduling: SEQUENTIAL, SIMULTANEOUS, ALIGNED, MAX_DELAY
+- Automatic qubit-conflict avoidance (no overlap on same qubit)
+- Crosstalk-aware scheduling: coupled qubit pairs serialized automatically
+- AWG clock grid alignment for all start times
+- ASCII timeline visualization (`ScheduleResult.ascii_timeline()`)
+- Schedule metrics: makespan, parallelism, per-qubit utilization
+
+#### Three-Qubit Gates
+- `GATE_TOFFOLI` (CCX): Toffoli gate (8×8 unitary)
+- `GATE_FREDKIN` (CSWAP): Fredkin gate (8×8 unitary)
+- `TargetUnitary` enum: TOFFOLI, CCX, FREDKIN, CSWAP (Python-only, proto in v0.4.0)
+
+#### Parametric Two-Qubit Gates (v0.3.0, Phase 3c)
+- `fsim_gate(theta, phi)`: fSim gate family (Google Sycamore style)
+- `cross_resonance_unitary(zx, ix, zi)`: Cross-resonance gate (IBM style)
+
+#### Symplectic Clifford Representation (v0.3.0, Phase 3d)
+- `CliffordTableau`: (2n×2n) binary symplectic matrix + phase vector
+- Composition, inverse, and to_unitary() conversion
+- `sample_random_clifford()`: random n-qubit Clifford sampling
+- `generate_multiqubit_rb_sequence()`: multi-qubit RB sequence generation
+- Elementary gate tableaux: Hadamard, S, CNOT
+
 ## [0.2.0] - 2026-02-08
 
 ### Added
