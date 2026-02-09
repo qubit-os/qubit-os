@@ -40,6 +40,7 @@ class TargetUnitary(Enum):
         Single-qubit fixed:      I, X, Y, Z, H, SX, S, T
         Single-qubit parametric: RX, RY, RZ (require angle parameter)
         Two-qubit:               CZ, CNOT, CX, ISWAP, SQISWAP, SWAP
+        Three-qubit:             TOFFOLI, CCX, FREDKIN, CSWAP
         Custom:                  CUSTOM (user-provided unitary matrix)
     """
 
@@ -68,6 +69,12 @@ class TargetUnitary(Enum):
     SQISWAP = "SQISWAP"  # sqrt(iSWAP)
     SWAP = "SWAP"  # SWAP
 
+    # Three-qubit gates
+    TOFFOLI = "TOFFOLI"  # Toffoli (CCX)
+    CCX = "CCX"  # Alias for Toffoli
+    FREDKIN = "FREDKIN"  # Fredkin (CSWAP)
+    CSWAP = "CSWAP"  # Alias for Fredkin
+
     # Custom (user-provided)
     CUSTOM = "CUSTOM"
 
@@ -90,6 +97,14 @@ class TargetUnitary(Enum):
             TargetUnitary.SQISWAP,
             TargetUnitary.SWAP,
         }
+        _THREE_QUBIT = {
+            TargetUnitary.TOFFOLI,
+            TargetUnitary.CCX,
+            TargetUnitary.FREDKIN,
+            TargetUnitary.CSWAP,
+        }
+        if self in _THREE_QUBIT:
+            return 3
         if self in _TWO_QUBIT:
             return 2
         if self in (TargetUnitary.UNSPECIFIED, TargetUnitary.CUSTOM):

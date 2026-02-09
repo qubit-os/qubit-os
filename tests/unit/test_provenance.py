@@ -625,7 +625,9 @@ class TestTargetUnitaryAdditional:
     def test_target_unitary_iteration(self):
         """Can iterate over all members."""
         members = list(TargetUnitary)
-        assert len(members) == 19  # 8 fixed + 3 parametric + 6 two-qubit + UNSPECIFIED + CUSTOM
+        assert (
+            len(members) == 23
+        )  # 8 fixed + 3 parametric + 6 two-qubit + 4 three-qubit + UNSPECIFIED + CUSTOM
 
     def test_target_unitary_name_value_match(self):
         """Name equals value for all members."""

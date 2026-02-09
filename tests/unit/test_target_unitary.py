@@ -38,6 +38,10 @@ class TestTargetUnitary:
             "ISWAP",
             "SQISWAP",
             "SWAP",
+            "TOFFOLI",
+            "CCX",
+            "FREDKIN",
+            "CSWAP",
             "CUSTOM",
         }
         actual = {m.name for m in TargetUnitary}
@@ -94,14 +98,24 @@ class TestTargetUnitary:
         assert TargetUnitary.CUSTOM.num_qubits == 0
 
     def test_proto_field_numbers_complete(self):
-        """Every TargetUnitary member except I has a proto field number.
+        """Every TargetUnitary member except Python-only gates has a proto field number.
 
-        TargetUnitary.I is a Python-only convenience (identity gate);
-        it has no corresponding proto GateType enum value.
+        Python-only gates (no proto GateType equivalent):
+        - I: identity convenience
+        - TOFFOLI, CCX, FREDKIN, CSWAP: three-qubit gates (proto in v0.4.0)
         """
+        _PYTHON_ONLY = {
+            TargetUnitary.I,
+            TargetUnitary.TOFFOLI,
+            TargetUnitary.CCX,
+            TargetUnitary.FREDKIN,
+            TargetUnitary.CSWAP,
+        }
         for member in TargetUnitary:
-            if member == TargetUnitary.I:
-                assert member not in _PROTO_FIELD_NUMBERS, "I should NOT be in proto map"
+            if member in _PYTHON_ONLY:
+                assert member not in _PROTO_FIELD_NUMBERS, (
+                    f"{member.name} should NOT be in proto map (Python-only)"
+                )
                 continue
             assert member in _PROTO_FIELD_NUMBERS, f"{member.name} missing from proto map"
 
@@ -291,6 +305,28 @@ class TestTargetUnitaryMatrix:
         U = TARGET_UNITARIES[gate]
         product = U.conj().T @ U
         assert np.allclose(product, np.eye(4), atol=1e-14)
+
+    @pytest.mark.parametrize(
+        "gate",
+        ["TOFFOLI", "CCX", "FREDKIN", "CSWAP"],
+    )
+    def test_three_qubit_unitarity(self, gate):
+        """Every three-qubit gate must be unitary: U†U = I."""
+        from qubitos.pulsegen.hamiltonians import TARGET_UNITARIES
+
+        U = TARGET_UNITARIES[gate]
+        product = U.conj().T @ U
+        assert np.allclose(product, np.eye(8), atol=1e-14)
+
+    @pytest.mark.parametrize(
+        "gate,alias",
+        [("TOFFOLI", "CCX"), ("FREDKIN", "CSWAP")],
+    )
+    def test_three_qubit_aliases(self, gate, alias):
+        """Three-qubit aliases map to the same matrix."""
+        from qubitos.pulsegen.hamiltonians import TARGET_UNITARIES
+
+        assert np.allclose(TARGET_UNITARIES[gate], TARGET_UNITARIES[alias])
 
 
 class TestProtoFieldNumberCrossValidation:

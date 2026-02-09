@@ -20,6 +20,7 @@ Example:
 
 from qubitos.temporal.budget import DecoherenceBudget
 from qubitos.temporal.constraints import ConstraintKind, TemporalConstraint
+from qubitos.temporal.scheduler import PulseOp, PulseScheduler, ScheduleResult, SchedulingError
 from qubitos.temporal.sequence import PulseSequence, ScheduledPulse
 from qubitos.temporal.types import AWGClockConfig, TimePoint
 
@@ -31,4 +32,8 @@ __all__ = [
     "DecoherenceBudget",
     "ScheduledPulse",
     "PulseSequence",
+    "PulseOp",
+    "PulseScheduler",
+    "ScheduleResult",
+    "SchedulingError",
 ]

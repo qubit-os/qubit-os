@@ -376,7 +376,6 @@ class GrapeOptimizer:
 
         Controls are assumed in pairs: [Hx_q0, Hy_q0, Hx_q1, Hy_q1, ...].
         """
-        propagators = []
         n_controls = len(controls)
         n_qubit_channels = n_controls // 2
 
@@ -394,20 +393,21 @@ class GrapeOptimizer:
             q_2d = q_pulse
 
         n_steps = i_2d.shape[1]
+        scale = -1j * 2 * np.pi * dt * 1e6  # MHz→Hz, angular freq
+
+        # Compute propagators
+        propagators = []
+        scale = -1j * 2 * np.pi * dt * 1e6  # MHz→Hz, angular freq
 
         for t in range(n_steps):
-            # Build total Hamiltonian at this time step
+            # Build total Hamiltonian.  For small channel counts (<= 6),
+            # a manual loop over controls is faster than einsum due to
+            # avoided memory allocation.
             H = drift.copy()
-
-            # Add control terms for ALL qubits
             for q in range(n_qubit_channels):
-                H += i_2d[q, t] * controls[2 * q]  # I_q * sigma_x_q
-                H += q_2d[q, t] * controls[2 * q + 1]  # Q_q * sigma_y_q
-
-            # Compute propagator: U = exp(-i * H * dt)
-            # Scale by 2*pi for angular frequency
-            U = self._matrix_exp(-1j * 2 * np.pi * H * dt * 1e6)  # MHz to Hz
-            propagators.append(U)
+                H += i_2d[q, t] * controls[2 * q]
+                H += q_2d[q, t] * controls[2 * q + 1]
+            propagators.append(self._matrix_exp(scale * H))
 
         return propagators
 

@@ -105,6 +105,24 @@ GATE_SWAP = np.array(
     dtype=np.complex128,
 )
 
+# --- Three-qubit gates (8×8) ---
+
+# Toffoli (CCX): flips target qubit iff both controls are |1⟩.
+# Computational basis ordering: |c₁ c₀ t⟩, Toffoli flips |110⟩↔|111⟩.
+GATE_TOFFOLI = np.eye(8, dtype=np.complex128)
+GATE_TOFFOLI[6, 6] = 0  # |110⟩
+GATE_TOFFOLI[7, 7] = 0  # |111⟩
+GATE_TOFFOLI[6, 7] = 1  # |110⟩→|111⟩
+GATE_TOFFOLI[7, 6] = 1  # |111⟩→|110⟩
+
+# Fredkin (CSWAP): swaps target qubits iff control is |1⟩.
+# Computational basis ordering: |c t₁ t₀⟩, swaps |101⟩↔|110⟩.
+GATE_FREDKIN = np.eye(8, dtype=np.complex128)
+GATE_FREDKIN[5, 5] = 0  # |101⟩
+GATE_FREDKIN[6, 6] = 0  # |110⟩
+GATE_FREDKIN[5, 6] = 1  # |101⟩→|110⟩
+GATE_FREDKIN[6, 5] = 1  # |110⟩→|101⟩
+
 STANDARD_GATES = {
     "I": PAULI_I,
     "X": GATE_X,
@@ -128,6 +146,10 @@ STANDARD_GATES = {
         ],
         dtype=complex,
     ),
+    "TOFFOLI": GATE_TOFFOLI,
+    "CCX": GATE_TOFFOLI,  # Alias
+    "FREDKIN": GATE_FREDKIN,
+    "CSWAP": GATE_FREDKIN,  # Alias
 }
 
 # Canonical name (v0.2.0): TargetUnitary presets as matrices.
@@ -500,6 +522,20 @@ __all__ = [
     "PAULI_Y",
     "PAULI_Z",
     "PAULI_MATRICES",
+    # Gate constants
+    "GATE_X",
+    "GATE_Y",
+    "GATE_Z",
+    "GATE_H",
+    "GATE_S",
+    "GATE_T",
+    "GATE_SX",
+    "GATE_CZ",
+    "GATE_CNOT",
+    "GATE_ISWAP",
+    "GATE_SWAP",
+    "GATE_TOFFOLI",
+    "GATE_FREDKIN",
     # Target unitaries (v0.2.0 canonical name)
     "TARGET_UNITARIES",
     # Backward compat alias
