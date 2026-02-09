@@ -350,6 +350,91 @@ def rotation_gate(
         raise ValueError(f"Unknown rotation axis: {axis}")
 
 
+def fsim_gate(
+    theta: float,
+    phi: float,
+) -> NDArray[np.complex128]:
+    """Generate an fSim (fermionic simulation) gate.
+
+    The fSim gate is a parametric two-qubit gate used in Google's
+    Sycamore processor. It combines an iSWAP-like interaction (θ)
+    with a conditional phase (φ):
+
+        fSim(θ, φ) = [[1, 0, 0, 0],
+                       [0, cos(θ), -i·sin(θ), 0],
+                       [0, -i·sin(θ), cos(θ), 0],
+                       [0, 0, 0, e^{-iφ}]]
+
+    Special cases:
+        - fSim(π/2, 0) = iSWAP
+        - fSim(0, π)   = CZ
+        - fSim(π/2, π/6) ≈ Sycamore gate
+
+    Args:
+        theta: iSWAP-like angle in radians.
+        phi: Conditional phase in radians.
+
+    Returns:
+        4×4 unitary matrix.
+
+    Ref: Foxen et al. (2020), "Demonstrating a continuous set of two-qubit
+         gates for near-term quantum algorithms", Phys. Rev. Lett. 125,
+         120504. arXiv:2001.08343.
+    """
+    c = np.cos(theta)
+    s = np.sin(theta)
+    return np.array(
+        [
+            [1, 0, 0, 0],
+            [0, c, -1j * s, 0],
+            [0, -1j * s, c, 0],
+            [0, 0, 0, np.exp(-1j * phi)],
+        ],
+        dtype=np.complex128,
+    )
+
+
+def cross_resonance_unitary(
+    zx_angle: float,
+    ix_angle: float = 0.0,
+    zi_angle: float = 0.0,
+) -> NDArray[np.complex128]:
+    """Generate a cross-resonance (CR) gate unitary.
+
+    The cross-resonance gate drives qubit 0 at qubit 1's frequency,
+    producing an effective ZX interaction (plus spurious IX, ZI terms):
+
+        U_CR = exp(-i/2 * (zx·ZX + ix·IX + zi·ZI))
+
+    where ZX = σz⊗σx, IX = I⊗σx, ZI = σz⊗I.
+
+    An ideal CNOT requires zx_angle = π/2, ix_angle = zi_angle = 0,
+    followed by local rotations.
+
+    Args:
+        zx_angle: ZX interaction strength (radians).
+        ix_angle: Spurious IX rotation (radians). Default 0.
+        zi_angle: Spurious ZI rotation (radians). Default 0.
+
+    Returns:
+        4×4 unitary matrix.
+
+    Ref: Rigetti & Devoret (2010), "Fully microwave-tunable universal
+         gates in superconducting qubits", Phys. Rev. B 81, 134507.
+         Sheldon et al. (2016), "Procedure for systematically tuning up
+         cross-talk in the cross-resonance gate", Phys. Rev. A 93, 060302.
+    """
+    from scipy import linalg as la
+
+    I2 = np.eye(2, dtype=np.complex128)  # noqa: E741
+    ZX = np.kron(PAULI_Z, PAULI_X)
+    IX = np.kron(I2, PAULI_X)
+    ZI = np.kron(PAULI_Z, I2)
+
+    generator = zx_angle * ZX + ix_angle * IX + zi_angle * ZI
+    return la.expm(-1j / 2 * generator)
+
+
 def get_target_unitary(
     gate: str | TargetUnitary,
     num_qubits: int = 1,
@@ -547,6 +632,8 @@ __all__ = [
     "build_hamiltonian",
     "build_drift_hamiltonian",
     "rotation_gate",
+    "fsim_gate",
+    "cross_resonance_unitary",
     "get_target_unitary",
     "embed_gate",
 ]
