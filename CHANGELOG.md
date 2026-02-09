@@ -7,6 +7,42 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added (v0.4.0-dev)
+
+#### Active Calibration (0.4.1)
+- **DriftMonitor**: Real-time drift detection comparing calibration fingerprints against baseline
+  - Five severity levels: NONE, LOW, MODERATE, HIGH, CRITICAL
+  - Per-qubit drift identification with affected parameter breakdown
+  - Configurable thresholds for frequency, T1/T2, and gate fidelity
+  - `DriftEvent` frozen dataclass with severity, metrics, and summary
+- **RecalibrationPolicy**: Three strategies for automated recalibration
+  - `selective`: Recalibrate only affected qubits (fastest recovery)
+  - `full`: Recalibrate all qubits (most thorough)
+  - `adaptive`: Selective for HIGH drift, full for CRITICAL
+  - Cooldown timer to prevent rapid recalibration cascades
+- **ActiveCalibrationLoop**: Async feedback control loop
+  - `run_once()` for testable single-cycle execution
+  - Action types: MEASURED, DRIFT_DETECTED, RECALIBRATED, ERROR, SKIPPED
+  - Full action history tracking with cycle counting
+  - Ref: Kelly et al. (2016), Phys. Rev. A 94, 032321. arXiv:1603.03082
+- **Provenance integration**: DRIFT_EVENT and RECALIBRATION node types in Merkle tree
+  - `ProvenanceBuilder.add_drift_event()`: Record drift detection events
+  - `ProvenanceBuilder.add_recalibration()`: Record recalibration actions
+  - Deterministic hashing for audit trail reproducibility
+
+#### GRAPE in Rust (0.4.2) — qubit-os-hardware
+- **Rust GRAPE optimizer**: Full port from Python to Rust using `ndarray`
+  - Matrix exponential via Padé(13) scaling-and-squaring (Higham 2005)
+  - Forward/backward propagator chains
+  - Nielsen (2002) average gate fidelity
+  - Analytic gradient computation (Khaneja et al. 2005)
+  - Adaptive learning rate matching Python implementation
+  - X gate convergence: >0.90 fidelity in 154 iterations
+- **PyO3 bindings**: `RustGrapeOptimizer` callable from Python
+  - Drop-in interface matching Python `GrapeConfig`/`GrapeResult`
+  - Flat complex array marshalling for zero-copy potential
+- **Cross-validation tests**: Python vs Rust GRAPE comparison (requires PyO3 build)
+
 ## [0.3.0] - 2026-02-08
 
 ### Added

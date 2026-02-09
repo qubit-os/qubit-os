@@ -9,6 +9,10 @@ calibration data for quantum backends.
 Submodules:
     loader: Load calibration from YAML files
     fingerprint: Compute and validate calibration fingerprints
+    benchmarking: Randomized benchmarking (single-qubit Cliffords)
+    cliffords: Multi-qubit Clifford tableaux and RB sequences
+    drift: Real-time drift monitoring (DriftMonitor, DriftSeverity)
+    active: Active calibration loop (measure → detect → recalibrate)
 
 Example:
     >>> from qubitos.calibrator import load_calibration, CalibrationLoader
