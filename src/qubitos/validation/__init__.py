@@ -477,6 +477,90 @@ def validate_calibration(
     return default_validator.validate_calibration(t1_us, t2_us, readout_fidelity, gate_fidelity)
 
 
+def validate_pulse_physics(
+    duration_ns: float,
+    drive_amplitude_mhz: float,
+    frequency_ghz: float = 5.0,
+    anharmonicity_mhz: float = -330.0,
+) -> ValidationResult:
+    """Physics-aware validation for pulse parameters.
+
+    Checks:
+    1. Pulse duration vs Rabi period — warns if shorter than one cycle.
+    2. Drive amplitude vs anharmonicity — warns if strong enough to
+       excite the 1→2 transition in a transmon.
+
+    The Rabi frequency is Ω = drive_amplitude (in angular frequency units).
+    One Rabi cycle = 1/Ω. If duration < one cycle, the pulse cannot
+    complete a full rotation.
+
+    For transmon qubits, the 0→1 drive should satisfy Ω << |α| where
+    α is the anharmonicity, otherwise leakage to |2⟩ occurs.
+
+    Ref: Koch et al. (2007), Phys. Rev. A 76, 042319.
+        DOI: 10.1103/PhysRevA.76.042319
+
+    Args:
+        duration_ns: Pulse duration in nanoseconds.
+        drive_amplitude_mhz: Drive amplitude in MHz.
+        frequency_ghz: Qubit frequency in GHz (default 5.0).
+        anharmonicity_mhz: Transmon anharmonicity in MHz (default -330).
+
+    Returns:
+        ValidationResult with physics-based warnings.
+    """
+    errors: list[str] = []
+    warnings: list[str] = []
+
+    if duration_ns <= 0:
+        errors.append(f"Pulse duration must be positive (got {duration_ns} ns)")
+        return ValidationResult(False, errors, warnings)
+
+    if drive_amplitude_mhz <= 0:
+        errors.append(f"Drive amplitude must be positive (got {drive_amplitude_mhz} MHz)")
+        return ValidationResult(False, errors, warnings)
+
+    # Check 1: Duration vs Rabi period
+    # Rabi period T_Rabi = 1/Ω (in ns, with Ω in GHz)
+    omega_ghz = drive_amplitude_mhz / 1000.0
+    if omega_ghz > 0:
+        rabi_period_ns = 1.0 / omega_ghz
+        if duration_ns < rabi_period_ns:
+            warnings.append(
+                f"Pulse duration ({duration_ns:.1f} ns) is shorter than one Rabi "
+                f"cycle ({rabi_period_ns:.1f} ns at {drive_amplitude_mhz:.1f} MHz "
+                f"drive). The pulse cannot complete a full rotation."
+            )
+
+    # Check 2: Drive amplitude vs anharmonicity (leakage risk)
+    # Rule of thumb: Ω should be < |α|/4 for < 1% leakage
+    abs_anharmonicity = abs(anharmonicity_mhz)
+    leakage_warn = abs_anharmonicity / 4.0
+    leakage_error = abs_anharmonicity / 2.0
+
+    if drive_amplitude_mhz > leakage_error:
+        warnings.append(
+            f"Drive amplitude ({drive_amplitude_mhz:.1f} MHz) exceeds "
+            f"|anharmonicity|/2 = {leakage_error:.1f} MHz. "
+            f"High probability of leakage to |2⟩. Consider DRAG correction."
+        )
+    elif drive_amplitude_mhz > leakage_warn:
+        warnings.append(
+            f"Drive amplitude ({drive_amplitude_mhz:.1f} MHz) exceeds "
+            f"|anharmonicity|/4 = {leakage_warn:.1f} MHz. "
+            f"Leakage to |2⟩ may be non-negligible."
+        )
+
+    # Check 3: Frequency sanity
+    if frequency_ghz < 1.0 or frequency_ghz > 20.0:
+        warnings.append(
+            f"Qubit frequency {frequency_ghz:.2f} GHz is outside typical "
+            f"superconducting qubit range (3-8 GHz)."
+        )
+
+    return ValidationResult(len(errors) == 0, errors, warnings)
+
+
 __all__ = [
     # Enums and types
     "Strictness",
@@ -500,6 +584,7 @@ __all__ = [
     "validate_hamiltonian",
     "validate_pulse",
     "validate_calibration",
+    "validate_pulse_physics",
     # Hellinger distance
     "hellinger_distance",
     "hellinger_distance_batch",

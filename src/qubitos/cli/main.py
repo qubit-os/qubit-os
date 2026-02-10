@@ -101,6 +101,52 @@ def _display_decoherence_budget(
     click.echo(f"  T2: {t2_us} us | consumed: {t2_frac:.2%} | {t2_status}")
 
 
+def _display_error_budget(
+    fidelity: float,
+    duration_ns: float,
+    qubit_index: int,
+    t1_us: float,
+    t2_us: float,
+) -> None:
+    """Display error budget summary after optimization.
+
+    Constructs an ErrorBudget, adds the gate contribution, and displays
+    the projected fidelity and breakdown.
+
+    Args:
+        fidelity: Achieved gate fidelity from GRAPE.
+        duration_ns: Pulse duration in nanoseconds.
+        qubit_index: Target qubit index.
+        t1_us: T1 relaxation time in microseconds.
+        t2_us: T2 dephasing time in microseconds.
+    """
+    from ..error_budget import ErrorBudget
+
+    budget = ErrorBudget(
+        target_fidelity=0.99,
+        t1_us={qubit_index: t1_us},
+        t2_us={qubit_index: t2_us},
+    )
+    budget.add_gate(
+        infidelity=1.0 - fidelity,
+        qubit=qubit_index,
+        duration_ns=duration_ns,
+        label=f"optimized_pulse q{qubit_index}",
+    )
+
+    s = budget.summary()
+    status = "PASS" if s["is_within_budget"] else "OVER BUDGET"
+
+    click.echo(f"\nError budget ({status}):")
+    click.echo(f"  Projected fidelity: {s['projected_fidelity']:.6f}")
+    click.echo(f"  Remaining budget:   {s['remaining_budget']:.6f}")
+    bd = s["breakdown"]
+    click.echo(f"  Gate infidelity:    {bd['gate_infidelity']:.2e}")
+    click.echo(f"  Decoherence:        {bd['decoherence']:.2e}")
+    if bd["leakage"] > 0:
+        click.echo(f"  Leakage:            {bd['leakage']:.2e}")
+
+
 def _load_sequence_yaml(sequence_file: str) -> dict:
     """Load and parse a sequence YAML file.
 
@@ -549,6 +595,13 @@ def generate(
                         t1_us=target_qubit_cal.t1_us,
                         t2_us=target_qubit_cal.t2_us,
                     )
+                    _display_error_budget(
+                        fidelity=result.fidelity,
+                        duration_ns=actual_duration,
+                        qubit_index=qubit,
+                        t1_us=target_qubit_cal.t1_us,
+                        t2_us=target_qubit_cal.t2_us,
+                    )
                 else:
                     click.echo(
                         f"\nNote: Qubit {qubit} not found in "
@@ -610,12 +663,22 @@ def generate(
     type=click.Choice(["text", "json", "yaml"]),
     help="Output format",
 )
+@click.option(
+    "--calibration",
+    "-c",
+    default=None,
+    type=click.Path(exists=True),
+    help="Calibration file for error budget display",
+)
+@click.option("--qubit", default=0, type=int, help="Target qubit for error budget")
 def execute(
     pulse_file: str,
     server: str,
     backend: str | None,
     shots: int,
     output_format: str,
+    calibration: str | None,
+    qubit: int,
 ) -> None:
     """Execute a pulse on a backend."""
     try:
@@ -652,6 +715,33 @@ def execute(
                 data["fidelity_estimate"] = result.fidelity_estimate
 
             _output(data, output_format)
+
+            # Display error budget if calibration provided and fidelity available
+            if calibration is not None and result.fidelity_estimate:
+                try:
+                    from ..calibrator import load_calibration
+
+                    cal = load_calibration(calibration)
+                    target_qubit_cal = None
+                    for q in cal.qubits:
+                        if q.index == qubit:
+                            target_qubit_cal = q
+                            break
+
+                    if target_qubit_cal is not None:
+                        duration_ns = pulse_data.get("duration_ns", 20)
+                        _display_error_budget(
+                            fidelity=result.fidelity_estimate,
+                            duration_ns=float(duration_ns),
+                            qubit_index=qubit,
+                            t1_us=target_qubit_cal.t1_us,
+                            t2_us=target_qubit_cal.t2_us,
+                        )
+                except Exception as cal_err:
+                    click.echo(
+                        f"\nNote: Error budget unavailable: {cal_err}",
+                        err=True,
+                    )
 
     except Exception as e:
         click.echo(f"Error ({type(e).__name__}): {e}", err=True)

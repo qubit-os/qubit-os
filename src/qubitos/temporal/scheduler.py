@@ -153,6 +153,70 @@ class ScheduleResult:
 
         return "\n".join(lines)
 
+    def estimate_error_budget(
+        self,
+        t1_us: dict[int, float],
+        t2_us: dict[int, float],
+        gate_infidelities: dict[str, float] | None = None,
+        target_fidelity: float = 0.99,
+    ) -> Any:
+        """Estimate error budget for the scheduled sequence.
+
+        Combines scheduling information with decoherence data to predict
+        total sequence fidelity. Accounts for both gate errors and idle
+        time decoherence.
+
+        Args:
+            t1_us: T1 relaxation times per qubit (microseconds).
+            t2_us: T2 dephasing times per qubit (microseconds).
+            gate_infidelities: Per-pulse infidelity overrides.
+                Keys are pulse IDs, values are gate infidelity.
+                Default: 0.001 per pulse.
+            target_fidelity: Target fidelity for budget assessment.
+
+        Returns:
+            ErrorBudget with accumulated errors from the schedule.
+        """
+        from ..error_budget import ErrorBudget
+
+        budget = ErrorBudget(
+            target_fidelity=target_fidelity,
+            t1_us=t1_us,
+            t2_us=t2_us,
+        )
+
+        gate_infidelities = gate_infidelities or {}
+
+        for pulse in self.sequence.pulses:
+            infidelity = gate_infidelities.get(pulse.pulse_id, 0.001)
+            duration = pulse.duration.quantized_ns
+
+            qubits = pulse.qubit_indices
+            if len(qubits) == 1:
+                budget.add_gate(
+                    infidelity=infidelity,
+                    qubit=qubits[0],
+                    duration_ns=duration,
+                    label=pulse.pulse_id,
+                )
+            elif len(qubits) >= 2:
+                budget.add_two_qubit_gate(
+                    infidelity=infidelity,
+                    qubit_a=qubits[0],
+                    qubit_b=qubits[1],
+                    duration_ns=duration,
+                    label=pulse.pulse_id,
+                )
+
+        # Add idle time for qubits not always active
+        for qubit, utilization in self.qubit_utilization.items():
+            idle_fraction = 1.0 - utilization
+            idle_ns = idle_fraction * self.makespan_ns
+            if idle_ns > 0:
+                budget.add_idle(qubit=qubit, duration_ns=idle_ns)
+
+        return budget
+
 
 class SchedulingError(Exception):
     """Raised when a valid schedule cannot be found."""

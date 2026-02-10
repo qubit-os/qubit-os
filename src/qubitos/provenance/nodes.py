@@ -32,6 +32,7 @@ class NodeType(Enum):
     SOFTWARE_VERSION = "software_version"
     DRIFT_EVENT = "drift_event"
     RECALIBRATION = "recalibration"
+    BENCHMARKING = "benchmarking"
 
 
 @dataclass(frozen=True)

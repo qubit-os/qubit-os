@@ -182,6 +182,8 @@ class CalibrationLoader:
                 data = yaml.safe_load(f)
         except yaml.YAMLError as e:
             raise CalibrationError(f"Failed to parse calibration file: {e}") from e
+        except OSError as e:
+            raise CalibrationError(f"Failed to read calibration file {path}: {e}") from e
 
         # Parse calibration
         calibration = self._parse_calibration(data)

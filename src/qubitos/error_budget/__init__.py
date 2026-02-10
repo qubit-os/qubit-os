@@ -170,6 +170,40 @@ class ErrorBudget:
         )
         self._qubit_time_ns[qubit] = self._qubit_time_ns.get(qubit, 0.0) + duration_ns
 
+    def add_two_qubit_gate(
+        self,
+        infidelity: float,
+        qubit_a: int,
+        qubit_b: int,
+        duration_ns: float,
+        label: str = "",
+    ) -> None:
+        """Record a two-qubit gate's error contribution.
+
+        Two-qubit gates contribute error to both qubits and typically
+        have ~10x higher infidelity than single-qubit gates. Both qubits
+        accumulate decoherence for the gate duration.
+
+        Args:
+            infidelity: Gate error (1 - fidelity).
+            qubit_a: First qubit index.
+            qubit_b: Second qubit index.
+            duration_ns: Gate duration in nanoseconds.
+            label: Human-readable description.
+        """
+        self.contributions.append(
+            ErrorContribution(
+                source=ErrorSource.GATE_INFIDELITY,
+                infidelity=infidelity,
+                qubit=qubit_a,
+                duration_ns=duration_ns,
+                label=label or f"2q gate q{qubit_a}q{qubit_b}",
+            )
+        )
+        # Both qubits accumulate decoherence
+        self._qubit_time_ns[qubit_a] = self._qubit_time_ns.get(qubit_a, 0.0) + duration_ns
+        self._qubit_time_ns[qubit_b] = self._qubit_time_ns.get(qubit_b, 0.0) + duration_ns
+
     def add_idle(self, qubit: int, duration_ns: float) -> None:
         """Record idle time on a qubit (decoherence without gate error).
 

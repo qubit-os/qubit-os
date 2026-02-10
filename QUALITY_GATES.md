@@ -88,9 +88,9 @@ except FileNotFoundError as e:
 ```
 
 **Known technical debt:**
-- 8 broad `except Exception:` in CLI (acceptable for user-facing errors)
-- 3 missing file I/O handlers in `calibrator/loader.py` (lines 177, 346)
-- 1 missing empty list guard in `hamiltonians.py:tensor_product`
+- 8 broad `except Exception:` in CLI (acceptable for user-facing errors — verified library/HAL layers use specific exceptions)
+- ~~3 missing file I/O handlers in `calibrator/loader.py`~~ **RESOLVED** (v0.2.0: OSError handler added)
+- ~~1 missing empty list guard in `hamiltonians.py:tensor_product`~~ **RESOLVED** (v0.2.0: ValueError raised on empty input)
 
 ### 4. Test Coverage
 
@@ -192,3 +192,4 @@ When adding new code:
 | Version | Date | Changes |
 |---------|------|---------|
 | 1.0 | 2026-02-05 | Initial quality gates from Phase 2 audit |
+| 1.1 | 2026-02-10 | Resolved loader I/O handlers, tensor_product guard. Verified CLI exceptions are intentional. |

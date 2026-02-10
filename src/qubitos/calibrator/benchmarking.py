@@ -18,7 +18,7 @@ Example:
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 import numpy as np
 from numpy.typing import NDArray
@@ -234,3 +234,265 @@ def fit_rb(
         survival_probabilities=list(survival_probs),
         fit=fit_result,
     )
+
+
+# =============================================================================
+# Interleaved Randomized Benchmarking (v0.3.0)
+# =============================================================================
+
+
+@dataclass(frozen=True)
+class InterleavedRBConfig:
+    """Configuration for interleaved randomized benchmarking.
+
+    Interleaved RB measures the error rate of a specific gate by
+    interleaving it between random Cliffords.
+
+    Ref: Magesan et al. (2012), Phys. Rev. Lett. 109, 080505.
+        DOI: 10.1103/PhysRevLett.109.080505
+
+    Attributes:
+        interleaved_gate: Unitary of the gate to characterize.
+        interleaved_gate_name: Human-readable name.
+        sequence_lengths: Clifford sequence lengths.
+        num_sequences_per_length: Random sequences per length.
+        num_shots: Measurement shots.
+        seed: RNG seed.
+    """
+
+    interleaved_gate: NDArray[np.complex128] = field(
+        default_factory=lambda: np.eye(2, dtype=np.complex128)
+    )
+    interleaved_gate_name: str = "I"
+    sequence_lengths: tuple[int, ...] = (1, 2, 4, 8, 16, 32)
+    num_sequences_per_length: int = 20
+    num_shots: int = 4096
+    seed: int | None = None
+
+
+@dataclass
+class InterleavedRBResult:
+    """Result of interleaved randomized benchmarking.
+
+    Attributes:
+        gate_error: Error rate of the interleaved gate.
+        gate_fidelity: Fidelity of the interleaved gate (1 - error).
+        reference_epc: Error per Clifford from reference RB.
+        interleaved_epc: Error per Clifford from interleaved RB.
+        gate_name: Name of the characterized gate.
+    """
+
+    gate_error: float
+    gate_fidelity: float
+    reference_epc: float
+    interleaved_epc: float
+    gate_name: str
+
+
+def generate_interleaved_rb_sequence(
+    length: int,
+    interleaved_gate: NDArray[np.complex128],
+    rng: np.random.Generator,
+) -> tuple[list[int], NDArray[np.complex128]]:
+    """Generate an interleaved RB sequence.
+
+    Between each random Clifford, the interleaved gate is applied.
+    The final inversion Clifford accounts for both.
+
+    Args:
+        length: Number of Clifford+interleaved pairs.
+        interleaved_gate: The gate to interleave.
+        rng: Random number generator.
+
+    Returns:
+        Tuple of (clifford_indices, total_unitary_before_inversion).
+    """
+    cliffords = _build_cliffords()
+    indices = []
+    accumulated = np.eye(2, dtype=np.complex128)
+
+    for _ in range(length):
+        idx = int(rng.integers(0, len(cliffords)))
+        indices.append(idx)
+        # Apply Clifford then interleaved gate
+        accumulated = interleaved_gate @ cliffords[idx] @ accumulated
+
+    # Find inversion Clifford
+    inv_idx = find_inverse_clifford(accumulated)
+    indices.append(inv_idx)
+
+    return indices, accumulated
+
+
+def estimate_interleaved_rb(
+    reference_epc: float,
+    interleaved_epc: float,
+    dim: int = 2,
+) -> float:
+    """Estimate gate error from reference and interleaved RB.
+
+    The gate error is bounded by:
+        r_gate ≤ (d-1)/d * |1 - p_interleaved/p_reference|
+
+    where p = 1 - d/(d-1) * EPC.
+
+    Ref: Magesan et al. (2012), Eq. (4).
+
+    Args:
+        reference_epc: Error per Clifford from standard RB.
+        interleaved_epc: Error per Clifford from interleaved RB.
+        dim: Hilbert space dimension (2 for single qubit).
+
+    Returns:
+        Estimated gate error rate.
+    """
+    p_ref = 1.0 - dim / (dim - 1.0) * reference_epc
+    p_int = 1.0 - dim / (dim - 1.0) * interleaved_epc
+
+    if abs(p_ref) < 1e-15:
+        return 1.0
+
+    return (dim - 1.0) / dim * abs(1.0 - p_int / p_ref)
+
+
+# =============================================================================
+# Process Tomography (v0.3.0)
+# =============================================================================
+
+
+@dataclass
+class ProcessTomographyResult:
+    """Result of quantum process tomography.
+
+    Stores the reconstructed process matrix (chi matrix) in the
+    Pauli basis.
+
+    Ref: Nielsen & Chuang, Ch. 8.4.2 (Process Tomography).
+        Chuang & Nielsen (1997), J. Mod. Opt. 44, 2455-2467.
+
+    Attributes:
+        chi_matrix: Process matrix in Pauli basis (4x4 for single qubit).
+        process_fidelity: Fidelity with respect to ideal process.
+        gate_fidelity: Average gate fidelity derived from process fidelity.
+        is_physical: Whether the reconstructed process is CPTP.
+        ideal_gate_name: Name of the ideal gate.
+    """
+
+    chi_matrix: NDArray[np.complex128]
+    process_fidelity: float
+    gate_fidelity: float
+    is_physical: bool
+    ideal_gate_name: str
+
+
+# Pauli basis for single qubit
+_PAULI_BASIS = [
+    np.eye(2, dtype=np.complex128),
+    np.array([[0, 1], [1, 0]], dtype=np.complex128),
+    np.array([[0, -1j], [1j, 0]], dtype=np.complex128),
+    np.array([[1, 0], [0, -1]], dtype=np.complex128),
+]
+
+
+def reconstruct_chi_matrix(
+    input_states: list[NDArray[np.complex128]],
+    output_states: list[NDArray[np.complex128]],
+) -> NDArray[np.complex128]:
+    """Reconstruct the chi (process) matrix from input/output states.
+
+    Uses linear inversion in the Pauli basis. For a single-qubit channel,
+    4 input states and their outputs are needed.
+
+    Args:
+        input_states: List of input density matrices.
+        output_states: List of output density matrices.
+
+    Returns:
+        4x4 chi matrix in the Pauli basis.
+
+    Raises:
+        ValueError: If insufficient states provided.
+    """
+    n = len(input_states)
+    if n < 4:
+        raise ValueError(f"Process tomography requires at least 4 input states (got {n})")
+
+    d = 2  # single qubit
+    num_paulis = d * d
+
+    # Build the measurement matrix
+    # λ_jk = Tr(E_j ρ_k) where E_j are Pauli operators and ρ_k input states
+    lambda_matrix = np.zeros((num_paulis, n), dtype=np.complex128)
+    for j, pauli in enumerate(_PAULI_BASIS):
+        for k, rho_in in enumerate(input_states):
+            lambda_matrix[j, k] = np.trace(pauli @ rho_in)
+
+    # Build output measurement vector for each Pauli pair
+    chi = np.zeros((num_paulis, num_paulis), dtype=np.complex128)
+
+    for m, _pauli_m in enumerate(_PAULI_BASIS):
+        for n_idx, pauli_n in enumerate(_PAULI_BASIS):
+            # β_mn = Σ_k (λ^-1)_mk Tr(E_n ρ_out_k)
+            rhs = np.zeros(n, dtype=np.complex128)
+            for k, rho_out in enumerate(output_states):
+                rhs[k] = np.trace(pauli_n @ rho_out)
+
+            # Solve lambda @ x = rhs (least squares for overdetermined)
+            x, *_ = np.linalg.lstsq(lambda_matrix.T, rhs, rcond=None)
+            chi[m, n_idx] = x[0] if len(x) > 0 else 0.0
+
+    # Normalize
+    chi /= d
+
+    return chi
+
+
+def process_fidelity(
+    chi: NDArray[np.complex128],
+    ideal_unitary: NDArray[np.complex128],
+) -> float:
+    """Compute process fidelity between a chi matrix and an ideal unitary.
+
+    F_process = Tr(chi_ideal @ chi) where chi_ideal is the chi matrix
+    of the ideal unitary channel.
+
+    For a unitary U, the ideal chi matrix has chi_ideal[m,n] =
+    Tr(σ_m U) Tr(U† σ_n) / d².
+
+    Args:
+        chi: Reconstructed process matrix.
+        ideal_unitary: Target unitary.
+
+    Returns:
+        Process fidelity in [0, 1].
+    """
+    d = 2
+    chi_ideal = np.zeros_like(chi)
+
+    for m, sigma_m in enumerate(_PAULI_BASIS):
+        for n, sigma_n in enumerate(_PAULI_BASIS):
+            chi_ideal[m, n] = (
+                np.trace(sigma_m @ ideal_unitary)
+                * np.trace(ideal_unitary.conj().T @ sigma_n)
+                / d**2
+            )
+
+    f = np.real(np.trace(chi_ideal.conj().T @ chi))
+    return float(np.clip(f, 0.0, 1.0))
+
+
+def average_gate_fidelity_from_process(process_fid: float, dim: int = 2) -> float:
+    """Convert process fidelity to average gate fidelity.
+
+    F_avg = (d * F_process + 1) / (d + 1)
+
+    Ref: Horodecki et al. (1999), Phys. Rev. A 60, 1888.
+
+    Args:
+        process_fid: Process fidelity.
+        dim: Hilbert space dimension (2 for single qubit).
+
+    Returns:
+        Average gate fidelity.
+    """
+    return (dim * process_fid + 1.0) / (dim + 1.0)

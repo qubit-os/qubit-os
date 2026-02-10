@@ -391,6 +391,46 @@ class ProvenanceBuilder:
         self._recal_nodes.append(node)
         return self
 
+    def add_benchmarking(
+        self,
+        gate_fidelity: float,
+        error_per_clifford: float,
+        sequence_lengths: list[int],
+        num_sequences: int,
+        gate_name: str = "",
+    ) -> ProvenanceBuilder:
+        """Add benchmarking results to the provenance tree.
+
+        Args:
+            gate_fidelity: Measured gate fidelity from RB.
+            error_per_clifford: Error per Clifford from fit.
+            sequence_lengths: Sequence lengths used.
+            num_sequences: Number of sequences per length.
+            gate_name: Name of the benchmarked gate (for interleaved RB).
+
+        Returns:
+            Self for chaining.
+        """
+        content = {
+            "gate_fidelity": str(canonicalize_float(gate_fidelity)),
+            "error_per_clifford": str(canonicalize_float(error_per_clifford)),
+            "sequence_lengths": str(sequence_lengths),
+            "num_sequences": str(num_sequences),
+        }
+        if gate_name:
+            content["gate_name"] = gate_name
+
+        node = ProvenanceNode(
+            node_type=NodeType.BENCHMARKING,
+            label=f"rb_{gate_name}" if gate_name else "rb",
+            content=content,
+            hash=_hash_leaf("benchmarking", content),
+        )
+        if not hasattr(self, "_bench_nodes"):
+            self._bench_nodes: list[ProvenanceNode] = []
+        self._bench_nodes.append(node)
+        return self
+
     def build(self) -> ProvenanceTree:
         """Construct the complete provenance tree.
 
@@ -464,6 +504,10 @@ class ProvenanceBuilder:
         # Include recalibration events if any
         recal_nodes = getattr(self, "_recal_nodes", [])
         root_children_list.extend(recal_nodes)
+
+        # Include benchmarking results if any
+        bench_nodes = getattr(self, "_bench_nodes", [])
+        root_children_list.extend(bench_nodes)
 
         root_children = tuple(root_children_list)
         root_hash = _hash_internal("root", [c.hash for c in root_children])

@@ -36,7 +36,7 @@ Example:
 from __future__ import annotations
 
 import re
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 import numpy as np
 
@@ -296,6 +296,47 @@ def build_hamiltonian(
                 Hc.append(ctrl)
 
     return H0, Hc
+
+
+def build_hamiltonian_sparse(
+    drift: str | None = None,
+    controls: list[str] | None = None,
+    num_qubits: int = 1,
+) -> tuple[Any, list[Any]]:
+    """Build drift and control Hamiltonians in sparse COO format.
+
+    For n >= 4 qubits, sparse representation is significantly more
+    memory-efficient since Pauli operators are inherently sparse
+    (each Pauli has at most one nonzero per row).
+
+    Args:
+        drift: Drift Hamiltonian as Pauli string (e.g., "0.5*Z0 + 0.3*Z1").
+        controls: Control Hamiltonians as Pauli strings.
+        num_qubits: Number of qubits.
+
+    Returns:
+        Tuple of (drift_hamiltonian_sparse, control_hamiltonians_sparse)
+        in scipy.sparse.coo_matrix format.
+
+    Raises:
+        ImportError: If scipy is not installed.
+    """
+    try:
+        import scipy.sparse
+    except ImportError as e:
+        raise ImportError(
+            "scipy is required for sparse Hamiltonian support. Install with: pip install scipy"
+        ) from e
+
+    # Build dense first, then convert (correct reference implementation)
+    # For production use with very large systems, direct sparse construction
+    # from Pauli strings would avoid the dense intermediate.
+    H0_dense, Hc_dense = build_hamiltonian(drift=drift, controls=controls, num_qubits=num_qubits)
+
+    H0_sparse = scipy.sparse.coo_matrix(H0_dense)
+    Hc_sparse = [scipy.sparse.coo_matrix(h) for h in Hc_dense]
+
+    return H0_sparse, Hc_sparse
 
 
 # =============================================================================
@@ -630,6 +671,7 @@ __all__ = [
     "pauli_string_to_matrix",
     "parse_pauli_string",
     "build_hamiltonian",
+    "build_hamiltonian_sparse",
     "build_drift_hamiltonian",
     "rotation_gate",
     "fsim_gate",

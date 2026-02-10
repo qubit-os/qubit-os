@@ -33,7 +33,7 @@ import logging
 import uuid
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 import grpc
 
@@ -109,6 +109,7 @@ class MeasurementResult:
         successful_shots: Number of successful shots
         fidelity_estimate: Estimated gate fidelity (if computed)
         state_vector: State vector as list of (real, imag) tuples (if requested)
+        provenance_hash: Provenance Merkle root hash (if tracking enabled)
     """
 
     request_id: str
@@ -118,6 +119,30 @@ class MeasurementResult:
     successful_shots: int
     fidelity_estimate: float | None = None
     state_vector: list[tuple[float, float]] | None = None
+    provenance_hash: str | None = None
+    _provenance_tree: Any = field(default=None, repr=False)
+
+    def provenance(self) -> Any:
+        """Return the full provenance tree, if available.
+
+        Returns:
+            ProvenanceTree or None if provenance tracking was not enabled.
+        """
+        return self._provenance_tree
+
+    def diff(self, other: MeasurementResult) -> Any:
+        """Compute provenance diff against another result.
+
+        Args:
+            other: Another MeasurementResult to compare against.
+
+        Returns:
+            ProvenanceDiff describing what changed, or None if either
+            result lacks provenance data.
+        """
+        if self._provenance_tree is None or other._provenance_tree is None:
+            return None
+        return self._provenance_tree.diff(other._provenance_tree)
 
 
 @dataclass
