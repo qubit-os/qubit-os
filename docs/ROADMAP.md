@@ -415,7 +415,7 @@ git push
 
 | Tool/Dependency | Minimum Version | Notes |
 |-----------------|-----------------|-------|
-| Rust | 1.83 | Required by dependencies |
+| Rust | 1.85 | MSRV bumped in v0.5.0 |
 | Python | 3.11 | Type hint syntax |
 | buf | 1.47 | Proto tooling |
 | tonic | 0.12 | gRPC server |

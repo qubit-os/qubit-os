@@ -3,11 +3,11 @@
 [![CI](https://github.com/qubit-os/qubit-os-core/actions/workflows/ci.yaml/badge.svg)](https://github.com/qubit-os/qubit-os-core/actions/workflows/ci.yaml)
 [![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 [![Python](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/downloads/)
-[![Version](https://img.shields.io/badge/version-0.4.0-purple.svg)](https://github.com/qubit-os/qubit-os-core/releases/tag/v0.4.0)
-[![Tests](https://img.shields.io/badge/tests-982_passing-brightgreen.svg)]()
-[![Coverage](https://img.shields.io/badge/coverage-91%25-brightgreen.svg)]()
+[![Version](https://img.shields.io/badge/version-0.5.0-purple.svg)](https://github.com/qubit-os/qubit-os-core/releases/tag/v0.5.0)
+[![Tests](https://img.shields.io/badge/tests-1006_passing-brightgreen.svg)]()
+[![Coverage](https://img.shields.io/badge/coverage-92%25-brightgreen.svg)]()
 
-Open-source quantum control system: pulse optimization, multi-qubit scheduling, calibration management, and hardware abstraction.
+Open-source quantum control system: pulse optimization, multi-qubit scheduling, calibration management, Lindblad simulation, and hardware abstraction with IBM/AWS/IQM backends.
 
 ## Why This Exists
 
@@ -31,6 +31,9 @@ Cumulative error tracking across sequences — gate infidelity, T1/T2 decoherenc
 
 ### Benchmarking
 Single and multi-qubit randomized benchmarking. Symplectic Clifford tableaux (Aaronson-Gottesman) for efficient n-qubit Clifford sampling, RB decay fitting, error-per-Clifford extraction.
+
+### Lindblad Simulation
+Full open quantum system solver: Lindblad master equation with T1/T2 decoherence (amplitude damping, phase damping). Matches QuTiP `mesolve()` to trace distance < 1e-6. 22 cross-validation tests.
 
 ### Experiment Provenance
 Merkle tree tracking with content-addressed storage, automatic diffing between optimization runs, and reproducibility verification.
@@ -95,6 +98,7 @@ qubit-os-core/src/qubitos/
 ├── calibrator/     # Calibration management, benchmarking, Cliffords
 ├── error_budget/   # Cumulative error tracking
 ├── provenance/     # Merkle tree experiment tracking
+├── lindblad/       # Open quantum system Lindblad solver
 ├── client/         # HAL gRPC client
 ├── validation/     # AgentBible integration
 ├── target_unitary.py  # Gate enum (X, Y, Z, H, CZ, CNOT, Toffoli, ...)
@@ -116,7 +120,7 @@ git clone https://github.com/qubit-os/qubit-os-core.git
 cd qubit-os-core
 pip install -e ".[dev]"
 
-# Run tests (947 passing)
+# Run tests (1006 passing)
 pytest tests/
 
 # Type checking

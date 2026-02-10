@@ -1,12 +1,14 @@
 # Custom Hamiltonians
 
-This tutorial explains how to build custom Hamiltonians in QubitOS for advanced quantum control scenarios beyond the standard single-qubit gates.
+This tutorial explains how to build system Hamiltonians in QubitOS for any
+quantum control scenario — from single transmons to multi-qubit coupled
+systems. Hamiltonians are the foundation of QubitOS: every pulse
+optimization starts from the physics of your system.
 
 ## Prerequisites
 
-- Completed [Pulse Generation Tutorial](pulse-generation.md)
-- Completed [GRAPE Optimizer Deep Dive](grape-optimizer.md)
-- Understanding of quantum Hamiltonians
+- Completed [Quickstart Guide](../guides/quickstart.md)
+- Understanding of Pauli operators ($\sigma_x, \sigma_y, \sigma_z$)
 
 ---
 

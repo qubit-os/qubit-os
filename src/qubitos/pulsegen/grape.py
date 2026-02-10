@@ -40,6 +40,7 @@ from dataclasses import dataclass, field
 import numpy as np
 from numpy.typing import NDArray
 from scipy import linalg as scipy_linalg
+from scipy import sparse as scipy_sparse
 
 from qubitos.target_unitary import TargetUnitary
 from qubitos.temporal import AWGClockConfig, TimePoint
@@ -51,6 +52,34 @@ MIN_DT_SECONDS = 1e-15
 
 # Minimum number of time steps
 MIN_TIME_STEPS = 1
+
+# Memory threshold: when Hilbert space dimension exceeds this, log warnings
+# and use memory-optimized paths. At dim=256 (8 qubits), propagator storage
+# for 100 time steps is ~100 MB.
+_LARGE_SYSTEM_DIM = 128  # 7+ qubits
+
+# Above this dimension, use sparse matrix representation automatically
+_SPARSE_THRESHOLD_DIM = 64  # 6+ qubits
+
+
+def _is_sparse_beneficial(A: NDArray[np.complex128], threshold: float = 0.5) -> bool:
+    """Check if sparse representation would save memory.
+
+    Returns True if the fraction of nonzero elements is below threshold.
+    """
+    nnz = np.count_nonzero(A)
+    total = A.shape[0] * A.shape[1]
+    return (nnz / total) < threshold
+
+
+def _estimate_memory_bytes(dim: int, n_steps: int) -> int:
+    """Estimate peak memory for GRAPE propagator storage.
+
+    Each propagator and forward/backward chain element is dim×dim complex128.
+    Total: ~3 × n_steps matrices (propagators + forward + backward).
+    """
+    bytes_per_matrix = dim * dim * 16  # complex128 = 16 bytes
+    return 3 * n_steps * bytes_per_matrix
 
 
 @dataclass
@@ -189,6 +218,17 @@ class GrapeOptimizer:
         """
         dim = 2**num_qubits
         n_steps = self.config.num_time_steps
+
+        # Memory estimation and warning for large systems
+        mem_est = _estimate_memory_bytes(dim, n_steps)
+        if dim >= _LARGE_SYSTEM_DIM:
+            logger.warning(
+                "Large system: dim=%d (%d qubits), ~%.1f MB estimated peak memory. "
+                "Consider reducing num_time_steps or using Rust GRAPE for >5 qubits.",
+                dim,
+                num_qubits,
+                mem_est / 1e6,
+            )
 
         # When a TimePoint with AWG config is provided, derive n_steps from
         # num_samples so each GRAPE step corresponds to one AWG sample.
@@ -530,7 +570,18 @@ class GrapeOptimizer:
         return grad_i, grad_q
 
     def _matrix_exp(self, A: NDArray[np.complex128]) -> NDArray[np.complex128]:
-        """Compute matrix exponential using scipy's numerically stable implementation."""
+        """Compute matrix exponential.
+
+        For large matrices (dim >= SPARSE_THRESHOLD), uses sparse expm
+        from scipy.sparse.linalg which leverages sparsity structure.
+        For small matrices, uses dense scipy.linalg.expm.
+
+        Reference: Al-Mohy & Higham, SIAM J. Sci. Comput. 33, 488-511 (2011).
+        """
+        dim = A.shape[0]
+        if dim >= _SPARSE_THRESHOLD_DIM and _is_sparse_beneficial(A):
+            A_sparse = scipy_sparse.csc_matrix(A)
+            return scipy_sparse.linalg.expm(A_sparse).toarray()
         return scipy_linalg.expm(A)
 
     def _adaptive_learning_rate(self, iteration: int, history: list[float], dim: int = 2) -> float:

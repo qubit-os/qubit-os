@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-02-09
+
+### Added
+
+#### Lindblad Simulation (v0.5.2)
+- **Lindblad solver** (`qubitos.lindblad`): Full Python mirror of Rust Lindblad API
+  - Open quantum system simulation: ρ̇ = -i[H,ρ] + Σ D[Lk](ρ)
+  - T1/T2 decoherence: amplitude damping and phase damping collapse operators
+  - State fidelity, trace distance, Hellinger distance metrics
+  - 22 tests including 4 cross-validation tests against QuTiP mesolve()
+
 ## [0.4.0] - 2026-02-09
 
 ### Added

@@ -56,8 +56,16 @@ where $d$ is the Hilbert space dimension.
 
 ```python
 from qubitos.pulsegen import GrapeOptimizer, GrapeConfig
-from qubitos.pulsegen.hamiltonians import get_target_unitary
+from qubitos.pulsegen.hamiltonians import build_hamiltonian, get_target_unitary
 
+# Define your physical system
+H0, Hc = build_hamiltonian(
+    drift="5.0 * Z0",        # Transmon qubit frequency
+    controls=["X0", "Y0"],   # Microwave drives
+    num_qubits=1,
+)
+
+# Configure the optimizer
 config = GrapeConfig(
     num_time_steps=100,      # Time discretization
     duration_ns=50,          # Total pulse duration
@@ -66,6 +74,7 @@ config = GrapeConfig(
     learning_rate=0.1,       # Gradient step size
 )
 
+# Optimize: Hamiltonian + target → pulse
 optimizer = GrapeOptimizer(config)
 target = get_target_unitary("X", num_qubits=1)
 result = optimizer.optimize(target, num_qubits=1)
