@@ -8,6 +8,7 @@ package quantum.backend.v1;
 
 import "quantum/common/v1/common.proto";
 import "quantum/error/v1/error_budget.proto";
+import "quantum/provenance/v1/provenance.proto";
 import "quantum/pulse/v1/pulse.proto";
 import "quantum/pulse/v1/temporal.proto";
 
@@ -172,6 +173,17 @@ message MeasurementResult {
 
   // Full error budget analysis (if requested).
   quantum.error.v1.ErrorBudgetSummary error_budget = 14;
+
+  // --- Provenance (v0.2.0) ---
+
+  // Provenance hash identifying the full experimental context.
+  // SHA-256 Merkle root covering calibration, pulse, GRAPE config, and software.
+  // Empty string if provenance tracking was not enabled.
+  string provenance_hash = 15;
+
+  // Full provenance tree (if requested).
+  // Omitted by default to reduce message size; set include_provenance=true on request.
+  quantum.provenance.v1.ProvenanceTree provenance_tree = 16;
 
   // Reserved for future use.
   reserved 50 to 100;
