@@ -749,3 +749,45 @@ class TestErrorSource:
 
     def test_enum_count(self):
         assert len(ErrorSource) == 8
+
+
+class TestBudgetFromCalibration:
+    """Test the bridge function from CalibrationFingerprint to ErrorBudget."""
+
+    def test_creates_budget_from_fingerprint(self):
+        """budget_from_calibration extracts T1/T2/readout from fingerprint."""
+        from qubitos.calibrator.fingerprint import CalibrationFingerprint
+        from qubitos.error_budget.helpers import budget_from_calibration
+
+        fp = CalibrationFingerprint(
+            backend_name="test",
+            timestamp="2026-02-09T00:00:00",
+            num_qubits=2,
+            qubit_fingerprints=[
+                {"index": 0, "t1_us": 50.0, "t2_us": 30.0, "readout_fidelity": 0.98},
+                {"index": 1, "t1_us": 60.0, "t2_us": 40.0, "readout_fidelity": 0.97},
+            ],
+            coupler_fingerprints=[],
+        )
+        budget = budget_from_calibration(fp, target_fidelity=0.995)
+        assert budget.t1_us == {0: 50.0, 1: 60.0}
+        assert budget.t2_us == {0: 30.0, 1: 40.0}
+        assert budget.readout_fidelity == {0: 0.98, 1: 0.97}
+        assert budget.target_fidelity == 0.995
+
+    def test_default_target_fidelity(self):
+        """Default target fidelity is 0.99."""
+        from qubitos.calibrator.fingerprint import CalibrationFingerprint
+        from qubitos.error_budget.helpers import budget_from_calibration
+
+        fp = CalibrationFingerprint(
+            backend_name="test",
+            timestamp="2026-02-09T00:00:00",
+            num_qubits=1,
+            qubit_fingerprints=[
+                {"index": 0, "t1_us": 50.0, "t2_us": 30.0, "readout_fidelity": 0.99},
+            ],
+            coupler_fingerprints=[],
+        )
+        budget = budget_from_calibration(fp)
+        assert budget.target_fidelity == 0.99
