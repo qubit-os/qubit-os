@@ -7,13 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-02-09
+
 ### Added
-- Initial protocol buffer definitions for QubitOS v0.1-alpha
-- `quantum.common.v1`: TraceContext, Timestamp, Error, Complex
-- `quantum.pulse.v1`: HamiltonianSpec, PulseShape, GateType, GRAPE messages
-- `quantum.backend.v1`: QuantumBackend service, ExecutePulse, Health, HardwareInfo
-- Buf configuration for linting and code generation
-- GitHub Actions CI workflow
+- `quantum.pulse.v1/temporal.proto`: TimePoint, AWGClockConfig, TemporalConstraint, PulseSequence, DecoherenceBudget messages
+- `quantum.error.v1/error_budget.proto`: ErrorBudget tracking and analysis messages
 
 ## [0.1.0] - 2026-02-07
 
