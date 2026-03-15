@@ -44,11 +44,13 @@
 //! - Breuer, H.-P. & Petruccione, F. (2002). "The Theory of Open Quantum Systems." Oxford.
 
 pub mod dissipator;
+pub mod ffi;
 pub mod integrate;
 pub mod open_grape;
 pub mod pyo3_bindings;
 pub mod types;
 
+pub use ffi::{c_solver_available, C_SOLVER_MAX_DIM};
 pub use integrate::{hellinger_distance, solve_lindblad, state_fidelity, trace_distance};
 pub use open_grape::{OpenSystemGrapeConfig, OpenSystemGrapeResult, OpenSystemOptimizer};
 pub use types::{CollapseOperator, LindbladConfig, LindbladResult};

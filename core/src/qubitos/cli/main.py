@@ -51,6 +51,18 @@ def cli() -> None:
     pass
 
 
+def _get_backend(local: bool, server: str):
+    """Return a LocalBackend (if --local) or HALClientSync (if --server)."""
+    if local:
+        from ..client import LocalBackend
+
+        return LocalBackend()
+    else:
+        from ..client import HALClientSync
+
+        return HALClientSync(server)
+
+
 def _output(data: dict, output_format: str) -> None:
     """Output data in the specified format."""
     if output_format == "json":
@@ -282,6 +294,7 @@ def hal() -> None:
 
 @hal.command()
 @click.option("--server", "-s", default="localhost:50051", help="HAL server address")
+@click.option("--local", "-l", is_flag=True, default=False, help="Use local QuTiP (no HAL server)")
 @click.option("--backend", "-b", default=None, help="Specific backend to check")
 @click.option(
     "--format",
@@ -291,12 +304,12 @@ def hal() -> None:
     type=click.Choice(["text", "json", "yaml"]),
     help="Output format",
 )
-def health(server: str, backend: str | None, output_format: str) -> None:
+def health(server: str, local: bool, backend: str | None, output_format: str) -> None:
     """Check backend health status."""
     try:
-        from ..client import HALClientSync, HealthStatus
+        from ..client import HealthStatus
 
-        with HALClientSync(server) as client:
+        with _get_backend(local, server) as client:
             result = client.health_check(backend)
 
             data = {
@@ -317,6 +330,7 @@ def health(server: str, backend: str | None, output_format: str) -> None:
 
 @hal.command()
 @click.option("--server", "-s", default="localhost:50051", help="HAL server address")
+@click.option("--local", "-l", is_flag=True, default=False, help="Use local QuTiP (no HAL server)")
 @click.option("--backend", "-b", default=None, help="Specific backend")
 @click.option(
     "--format",
@@ -326,12 +340,10 @@ def health(server: str, backend: str | None, output_format: str) -> None:
     type=click.Choice(["text", "json", "yaml"]),
     help="Output format",
 )
-def info(server: str, backend: str | None, output_format: str) -> None:
+def info(server: str, local: bool, backend: str | None, output_format: str) -> None:
     """Get backend hardware information."""
     try:
-        from ..client import HALClientSync
-
-        with HALClientSync(server) as client:
+        with _get_backend(local, server) as client:
             hw_info = client.get_hardware_info(backend)
 
             data = {
@@ -653,6 +665,7 @@ def generate(
 @pulse.command()
 @click.argument("pulse_file", type=click.Path(exists=True))
 @click.option("--server", "-s", default="localhost:50051", help="HAL server address")
+@click.option("--local", "-l", is_flag=True, default=False, help="Use local QuTiP (no HAL server)")
 @click.option("--backend", "-b", default=None, help="Backend to use")
 @click.option("--shots", type=int, default=1000, help="Number of measurement shots")
 @click.option(
@@ -674,6 +687,7 @@ def generate(
 def execute(
     pulse_file: str,
     server: str,
+    local: bool,
     backend: str | None,
     shots: int,
     output_format: str,
@@ -682,8 +696,6 @@ def execute(
 ) -> None:
     """Execute a pulse on a backend."""
     try:
-        from ..client import HALClientSync
-
         # Load pulse file
         with open(pulse_file) as f:
             if pulse_file.endswith((".yaml", ".yml")):
@@ -693,7 +705,7 @@ def execute(
 
         click.echo(f"Executing pulse from {pulse_file}...")
 
-        with HALClientSync(server) as client:
+        with _get_backend(local, server) as client:
             result = client.execute_pulse(
                 i_envelope=pulse_data["i_envelope"],
                 q_envelope=pulse_data["q_envelope"],
@@ -935,6 +947,7 @@ def sequence_validate(sequence_file: str, output_format: str) -> None:
 @sequence.command("execute")
 @click.argument("sequence_file", type=click.Path(exists=True))
 @click.option("--server", "-s", default="localhost:50051", help="HAL server address")
+@click.option("--local", "-l", is_flag=True, default=False, help="Use local QuTiP (no HAL server)")
 @click.option("--backend", "-b", default=None, help="Backend to use")
 @click.option("--shots", type=int, default=1000, help="Number of measurement shots")
 @click.option(
@@ -948,6 +961,7 @@ def sequence_validate(sequence_file: str, output_format: str) -> None:
 def sequence_execute(
     sequence_file: str,
     server: str,
+    local: bool,
     backend: str | None,
     shots: int,
     output_format: str,
@@ -994,9 +1008,7 @@ def sequence_execute(
 
         click.echo("\nExecuting...")
 
-        from ..client import HALClientSync
-
-        with HALClientSync(server) as client:
+        with _get_backend(local, server) as client:
             for p in seq.pulses:
                 if p.pulse_data is None:
                     click.echo(

@@ -39,6 +39,7 @@ from .hal import (
     HealthStatus,
     MeasurementResult,
 )
+from .local import LocalBackend
 
 __all__ = [
     # Types
@@ -52,4 +53,5 @@ __all__ = [
     # Clients
     "HALClient",
     "HALClientSync",
+    "LocalBackend",
 ]

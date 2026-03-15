@@ -3,13 +3,20 @@
 
 """Lindblad master equation solver for open quantum systems.
 
+.. deprecated:: 0.6.0
+    This pure-Python solver is maintained as a reference implementation only.
+    For production use, prefer the Rust solver (via PyO3 bindings in
+    ``qubit_os_hardware.lindblad``) or the upcoming C fast-path solver
+    (LANL QCSS 2026, see ROADMAP.md §0.6.1–0.6.4).
+
+    The Rust solver is validated to match this implementation to trace
+    distance < 1e-6 (see ``hal/tests/golden_lindblad.rs``).
+
 Implements the Gorini-Kossakowski-Sudarshan-Lindblad (GKSL) equation:
 
     dρ/dt = -i[H(t), ρ] + Σ_k γ_k (L_k ρ L_k† - ½{L_k†L_k, ρ})
 
 Provides collapse operators for T1/T2 decoherence and an RK4 integrator.
-When the Rust extension is available, delegates to the compiled solver
-for ~10x speedup.
 
 References:
     - Lindblad (1976), Commun. Math. Phys. 48, 119.
@@ -27,6 +34,7 @@ Example:
 from __future__ import annotations
 
 import logging
+import warnings
 from dataclasses import dataclass
 
 import numpy as np
@@ -130,6 +138,13 @@ class LindbladSolver:
     """
 
     def __init__(self, config: LindbladConfig) -> None:
+        warnings.warn(
+            "Python LindbladSolver is deprecated. Use the Rust solver "
+            "(qubit_os_hardware.lindblad) or the upcoming C fast-path. "
+            "This implementation is retained as a reference only.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
         config.validate()
         self._config = config
 
