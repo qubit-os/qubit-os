@@ -1,0 +1,31 @@
+[build-system]
+requires = ["setuptools>=61.0", "grpcio-tools>=1.60.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "qubit-os-proto"
+version = "0.1.0"
+description = "Protocol Buffers for QubitOS quantum control kernel"
+readme = "README.md"
+license = "Apache-2.0"
+requires-python = ">=3.11"
+dependencies = [
+    "grpcio>=1.60.0",
+    "protobuf>=4.25.0",
+]
+keywords = ["quantum", "grpc", "protobuf"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+]
+
+[project.urls]
+Repository = "https://github.com/qubit-os/qubit-os-proto"
+
+[tool.setuptools.packages.find]
+where = ["python"]
+include = ["quantum*"]
+
+[tool.setuptools.package-data]
+"*" = ["*.pyi", "py.typed"]

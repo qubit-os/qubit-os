@@ -1,0 +1,78 @@
+// Copyright 2026 QubitOS Contributors
+// SPDX-License-Identifier: Apache-2.0
+
+syntax = "proto3";
+
+package quantum.provenance.v1;
+
+// ProvenanceTree captures the full experimental context as a Merkle tree.
+// Each leaf node is hashed; internal nodes combine child hashes.
+// The root hash uniquely identifies the experimental configuration.
+//
+// Ref: EXPERIMENT-PROVENANCE-SPEC.md §3
+message ProvenanceTree {
+  // Root hash (SHA-256 of combined child hashes).
+  string root_hash = 1;
+
+  // Short hash (first 12 hex characters of root_hash).
+  string short_hash = 2;
+
+  // Root node of the tree.
+  ProvenanceNode root = 3;
+}
+
+// ProvenanceNode is a node in the Merkle tree.
+message ProvenanceNode {
+  // Node type (e.g., "root", "calibration", "pulse_sequence", "grape_config", "software").
+  string node_type = 1;
+
+  // Human-readable label for this node.
+  string label = 2;
+
+  // SHA-256 hash of this node's content (leaf) or children (internal).
+  string hash = 3;
+
+  // Child nodes (empty for leaf nodes).
+  repeated ProvenanceNode children = 4;
+
+  // Key-value content for leaf nodes.
+  map<string, string> content = 5;
+}
+
+// ProvenanceDiff describes changes between two ProvenanceTrees.
+message ProvenanceDiff {
+  // Whether the two trees are identical.
+  bool is_identical = 1;
+
+  // Number of changed nodes.
+  int32 num_changes = 2;
+
+  // List of individual changes.
+  repeated ProvenanceChange changes = 3;
+}
+
+// ProvenanceChange describes a single change between two provenance trees.
+message ProvenanceChange {
+  // Type of change.
+  enum ChangeType {
+    CHANGE_TYPE_UNSPECIFIED = 0;
+    CHANGE_TYPE_MODIFIED = 1;
+    CHANGE_TYPE_ADDED = 2;
+    CHANGE_TYPE_REMOVED = 3;
+  }
+
+  // Path to the changed node (e.g., "calibration/qubit_0/t1_us").
+  string path = 1;
+
+  // Type of change.
+  ChangeType change_type = 2;
+
+  // Previous value (empty for additions).
+  string old_value = 3;
+
+  // New value (empty for removals).
+  string new_value = 4;
+
+  // Human-readable description.
+  string description = 5;
+}

@@ -1,0 +1,292 @@
+// QubitOS GRAPE Optimization Protocol
+// Copyright 2026 QubitOS Contributors
+// SPDX-License-Identifier: Apache-2.0
+
+syntax = "proto3";
+
+package quantum.pulse.v1;
+
+import "quantum/common/v1/common.proto";
+import "quantum/pulse/v1/hamiltonian.proto";
+import "quantum/pulse/v1/pulse.proto";
+
+option java_multiple_files = true;
+option java_package = "io.qubitos.pulse.v1";
+
+// OptimizeRequest initiates a GRAPE (Gradient Ascent Pulse Engineering) optimization.
+//
+// GRAPE finds optimal control pulses by iteratively improving an initial guess
+// using gradient information. The optimization maximizes gate fidelity while
+// respecting amplitude and bandwidth constraints.
+//
+// Typical workflow:
+// 1. Define system Hamiltonian and control operators
+// 2. Specify target gate and fidelity threshold
+// 3. Set time discretization (duration, steps)
+// 4. Configure optimizer (learning rate, regularization)
+// 5. Run optimization and receive optimized pulse
+message OptimizeRequest {
+  // Trace context for distributed tracing.
+  quantum.common.v1.TraceContext trace = 1;
+
+  // --- System Definition ---
+
+  // System (drift) Hamiltonian.
+  // This describes the time-independent part of the Hamiltonian.
+  HamiltonianSpec system_hamiltonian = 2;
+
+  // Target gate to implement.
+  GateType target_gate = 3;
+
+  // Qubit indices the gate acts on.
+  repeated int32 target_qubit_indices = 4;
+
+  // For rotation gates: the rotation angle in radians.
+  double rotation_angle = 5;
+
+  // For custom gates: the target unitary as JSON.
+  string custom_unitary_json = 6;
+
+  // --- Optimization Targets ---
+
+  // Target gate fidelity.
+  // Optimization stops when this fidelity is reached.
+  // Typical: 0.999 for single-qubit, 0.99 for two-qubit.
+  double target_fidelity = 7;
+
+  // Maximum number of iterations.
+  // Optimization stops if target fidelity not reached within this limit.
+  // Typical: 500-5000
+  int32 max_iterations = 8;
+
+  // --- Time Structure ---
+
+  // Number of time steps for pulse discretization.
+  // More steps = finer control but longer optimization.
+  // Typical: 50-200
+  int32 num_time_steps = 9;
+
+  // Total pulse duration in nanoseconds.
+  // DEPRECATED in v0.2.0: Use TimePoint duration (field 17) for new code.
+  // Maintained for backward compatibility; will be removed in v0.4.0.
+  // Typical: 20-100 ns for single-qubit, 40-200 ns for two-qubit.
+  int32 duration_ns = 10;
+
+  // --- Optimizer Configuration ---
+
+  // Initial learning rate.
+  // Typical: 0.01-0.1 for Adam, 1.0 for L-BFGS
+  double learning_rate = 11;
+
+  // Random seed for reproducibility.
+  // Same seed + same inputs = identical output.
+  int32 random_seed = 12;
+
+  // Advanced optimizer options.
+  GRAPEOptions options = 13;
+
+  // --- Constraints ---
+
+  // Maximum pulse amplitude in MHz.
+  // All control values will be bounded by this.
+  // Typical: 50-200 MHz
+  double max_amplitude_mhz = 14;
+
+  // --- Request Metadata ---
+
+  // Request timeout in milliseconds.
+  // 0 = use server default (typically 5 minutes).
+  int32 timeout_ms = 15;
+
+  // Required calibration fingerprint.
+  // If specified, optimization uses this calibration's noise parameters.
+  string calibration_fingerprint = 16;
+
+  // --- Temporal (v0.2.0) ---
+
+  // AWG-aware duration. If set, takes precedence over duration_ns (field 10).
+  TimePoint duration = 17;
+
+  // AWG configuration for the target hardware.
+  AWGClockConfig awg_config = 18;
+
+  // Reserved for future use.
+  reserved 50 to 100;
+}
+
+// GRAPEOptions contains advanced optimizer configuration.
+message GRAPEOptions {
+  // --- Optimizer Selection ---
+
+  // Optimizer algorithm.
+  // Values: "adam" (default), "lbfgs", "sgd", "rmsprop"
+  string optimizer = 1;
+
+  // Memory size for L-BFGS optimizer.
+  // Only used when optimizer = "lbfgs".
+  // Default: 10
+  int32 lbfgs_memory = 2;
+
+  // --- Learning Rate Schedule ---
+
+  // Learning rate decay factor.
+  // Applied every decay_interval iterations.
+  // Example: 0.95 means lr = lr * 0.95 every decay_interval steps.
+  // Default: 1.0 (no decay)
+  double learning_rate_decay = 3;
+
+  // Iterations between learning rate decay steps.
+  // Default: 50
+  int32 decay_interval = 4;
+
+  // --- Regularization ---
+
+  // L2 penalty on control amplitudes.
+  // Encourages smaller pulse amplitudes.
+  // Default: 0.0
+  double l2_amplitude_penalty = 5;
+
+  // Smoothness penalty (penalizes rapid amplitude changes).
+  // Encourages bandwidth-limited pulses.
+  // Default: 0.0
+  double smoothness_penalty = 6;
+
+  // Hard bandwidth limit in MHz.
+  // Pulses are filtered to remove components above this frequency.
+  // 0 = no filtering.
+  // Default: 0
+  double bandwidth_limit_mhz = 7;
+
+  // --- Convergence Criteria ---
+
+  // Fidelity improvement threshold for convergence.
+  // Optimization is "stalled" if improvement over convergence_window
+  // iterations is less than this value.
+  // Default: 1e-8
+  double convergence_threshold = 8;
+
+  // Number of iterations to check for convergence.
+  // Default: 10
+  int32 convergence_window = 9;
+
+  // Maximum gradient norm (for gradient clipping).
+  // Prevents divergence on stiff optimization problems.
+  // Default: 1.0
+  double gradient_clip_norm = 10;
+
+  // --- Initial Guess ---
+
+  // Pulse ID to use as initial guess (optional).
+  // If empty, starts from random or standard initial guess.
+  string initial_pulse_id = 11;
+
+  // Type of initial guess if not using existing pulse.
+  // Values: "random", "gaussian", "zeros"
+  // Default: "random"
+  string initial_guess_type = 12;
+
+  // --- Noise Modeling ---
+
+  // Include T1/T2 decoherence in optimization.
+  // Uses values from calibration.
+  // Default: false
+  bool include_decoherence = 13;
+
+  // Include leakage to non-computational states.
+  // Requires anharmonicity in calibration.
+  // Default: false
+  bool include_leakage = 14;
+
+  // Number of transmon levels to include (for leakage modeling).
+  // Default: 3
+  int32 transmon_levels = 15;
+
+  // Reserved for future use.
+  reserved 50 to 100;
+}
+
+// OptimizeResponse contains the result of a GRAPE optimization.
+message OptimizeResponse {
+  // Trace context echoed back.
+  quantum.common.v1.TraceContext trace = 1;
+
+  // Whether optimization succeeded.
+  bool success = 2;
+
+  // Error details if success = false.
+  quantum.common.v1.Error error = 3;
+
+  // --- Result ---
+
+  // The optimized pulse.
+  PulseShape optimized_pulse = 4;
+
+  // Achieved gate fidelity.
+  double achieved_fidelity = 5;
+
+  // --- Convergence Info ---
+
+  // Number of iterations actually used.
+  int32 iterations_used = 6;
+
+  // Why optimization stopped.
+  // Values: "target_reached", "max_iterations", "stalled", "timeout", "cancelled", "error"
+  string convergence_reason = 7;
+
+  // --- Diagnostics ---
+
+  // Fidelity at each iteration.
+  // Length = iterations_used + 1 (includes initial fidelity).
+  repeated double fidelity_history = 8;
+
+  // Gradient norm at each iteration.
+  // Useful for debugging convergence issues.
+  repeated double gradient_norms = 9;
+
+  // Final regularization cost (if regularization was used).
+  double final_regularization_cost = 10;
+
+  // Wall-clock time for optimization in milliseconds.
+  int64 wall_time_ms = 11;
+
+  // --- Warnings ---
+
+  // Non-fatal warnings generated during optimization.
+  // Example: "Gradient clipping applied 15 times"
+  repeated string warnings = 12;
+
+  // Reserved for future use.
+  reserved 50 to 100;
+}
+
+// CancelRequest requests cancellation of a running optimization.
+message CancelRequest {
+  // Trace ID of the optimization to cancel.
+  string trace_id = 1;
+
+  // Reserved for future use.
+  reserved 50 to 100;
+}
+
+// CancelResponse confirms cancellation.
+message CancelResponse {
+  // Whether cancellation was successful.
+  // May be false if optimization already completed.
+  bool cancelled = 1;
+
+  // Partial result if available.
+  // Contains best pulse found before cancellation.
+  OptimizeResponse partial_result = 2;
+
+  // Reserved for future use.
+  reserved 50 to 100;
+}
+
+// GRAPE service definition.
+service GRAPEService {
+  // Run GRAPE optimization.
+  rpc Optimize(OptimizeRequest) returns (OptimizeResponse);
+
+  // Cancel a running optimization.
+  rpc Cancel(CancelRequest) returns (CancelResponse);
+}

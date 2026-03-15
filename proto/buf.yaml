@@ -1,0 +1,19 @@
+# buf.yaml - Buf configuration for QubitOS Protocol Buffers
+# https://buf.build/docs/configuration/v1/buf-yaml
+
+version: v1
+
+name: buf.build/qubit-os/qubit-os-proto
+
+lint:
+  use:
+    - DEFAULT
+  except:
+    # Allow streaming RPCs without request/response suffix
+    - RPC_REQUEST_RESPONSE_UNIQUE
+  enum_zero_value_suffix: _UNSPECIFIED
+  service_suffix: Service
+
+breaking:
+  use:
+    - FILE

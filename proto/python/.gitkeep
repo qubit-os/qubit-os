@@ -1,0 +1,6 @@
+# This directory is populated with generated Python proto stubs during build.
+# The structure is required by setuptools at config time.
+# Generated files:
+#   - quantum/common/v1/*_pb2.py
+#   - quantum/pulse/v1/*_pb2.py
+#   - quantum/backend/v1/*_pb2.py

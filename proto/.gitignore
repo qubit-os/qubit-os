@@ -1,0 +1,29 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+dist/
+*.egg-info/
+*.egg
+.eggs/
+
+# Generated proto files (created at build time)
+python/quantum/
+python/py.typed
+python/*.egg-info/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Rust
+/target/
+
+# OS
+.DS_Store
+Thumbs.db

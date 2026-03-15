@@ -1,0 +1,20 @@
+[package]
+name = "qubit-os-proto"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.82"
+description = "Protocol Buffers for QubitOS quantum control kernel"
+license = "Apache-2.0"
+repository = "https://github.com/qubit-os/qubit-os-proto"
+keywords = ["quantum", "grpc", "protobuf"]
+
+[dependencies]
+prost = "0.13"
+prost-types = "0.13"
+tonic = "0.12"
+
+[build-dependencies]
+tonic-build = "0.12"
+
+[lib]
+path = "src/lib.rs"

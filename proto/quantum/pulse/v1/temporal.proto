@@ -1,0 +1,79 @@
+// QubitOS Temporal Types for Pulse Sequences
+// Copyright 2026 QubitOS Contributors
+// SPDX-License-Identifier: Apache-2.0
+
+syntax = "proto3";
+
+package quantum.pulse.v1;
+
+import "quantum/pulse/v1/pulse.proto";
+
+option java_multiple_files = true;
+option java_package = "io.qubitos.pulse.v1";
+
+// Types of temporal relationships between pulses.
+enum ConstraintKind {
+  CONSTRAINT_KIND_UNSPECIFIED = 0;
+  CONSTRAINT_KIND_SIMULTANEOUS = 1;
+  CONSTRAINT_KIND_SEQUENTIAL = 2;
+  CONSTRAINT_KIND_ALIGNED = 3;
+  CONSTRAINT_KIND_MAX_DELAY = 4;
+  CONSTRAINT_KIND_MIN_GAP = 5;
+}
+
+// A temporal constraint between two pulses.
+message TemporalConstraint {
+  ConstraintKind kind = 1;
+
+  // Pulse identifiers (must match pulse_id in ScheduledPulse).
+  string pulse_a_id = 2;
+  string pulse_b_id = 3;
+
+  // Meaning depends on constraint kind (see TIME-MODEL-SPEC.md section 6).
+  double tolerance_ns = 4;
+
+  // For ALIGNED constraints: fraction of pulse_a duration at which
+  // pulse_b should be centered. Must be in (0, 1). Default 0.5.
+  double alignment_fraction = 5;
+}
+
+// A pulse with an assigned position in a sequence.
+message ScheduledPulse {
+  string pulse_id = 1;
+  repeated int32 qubit_indices = 2;
+  TimePoint start_time = 3;
+  TimePoint duration = 4;
+
+  // The pulse envelope. Optional — may be populated later by the
+  // optimizer or loaded from a library.
+  PulseShape pulse_data = 5;
+}
+
+// Per-qubit decoherence budget tracking.
+message DecoherenceBudget {
+  // Per-qubit T1 relaxation time in microseconds.
+  map<int32, double> t1_us = 1;
+
+  // Per-qubit T2 dephasing time in microseconds.
+  map<int32, double> t2_us = 2;
+
+  // Warning threshold: fraction of T2 consumed before warning.
+  double warn_fraction = 3;
+
+  // Blocking threshold: fraction of T2 consumed before rejection.
+  double block_fraction = 4;
+
+  // Accumulated time per qubit in nanoseconds.
+  map<int32, double> qubit_time_ns = 5;
+}
+
+// An ordered sequence of pulses with temporal constraints.
+message PulseSequence {
+  repeated ScheduledPulse pulses = 1;
+  repeated TemporalConstraint constraints = 2;
+  DecoherenceBudget decoherence_budget = 3;
+  AWGClockConfig awg_config = 4;
+
+  // Total sequence duration in nanoseconds (computed, informational).
+  double total_duration_ns = 5;
+}

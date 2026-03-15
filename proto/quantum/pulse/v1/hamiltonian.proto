@@ -1,0 +1,78 @@
+// QubitOS Hamiltonian Specification
+// Copyright 2026 QubitOS Contributors
+// SPDX-License-Identifier: Apache-2.0
+
+syntax = "proto3";
+
+package quantum.pulse.v1;
+
+option java_multiple_files = true;
+option java_package = "io.qubitos.pulse.v1";
+
+// HamiltonianSpec defines the system Hamiltonian for pulse optimization.
+//
+// The Hamiltonian describes the quantum system's energy structure and is
+// essential for GRAPE optimization. QubitOS supports multiple representation
+// formats for flexibility.
+//
+// Example (Pauli string for transmon):
+//   format: PAULI_STRING
+//   content: "4.8734*Z0 - 0.1*Z0*Z0 + 5.1023*Z1 - 0.0975*Z1*Z1 + 0.025*Z0*Z1"
+//   hilbert_space_dim: 4
+//   num_qubits: 2
+message HamiltonianSpec {
+  // Representation format for the Hamiltonian.
+  enum RepresentationFormat {
+    REPRESENTATION_FORMAT_UNSPECIFIED = 0;
+
+    // Pauli string representation.
+    // Format: "coeff*P0*P1*... + coeff*P0*P1*..."
+    // where P is I, X, Y, or Z and the number is the qubit index.
+    // See docs/specs/pauli-string-grammar.md for full grammar.
+    REPRESENTATION_FORMAT_PAULI_STRING = 1;
+
+    // Sparse matrix in COO format (JSON).
+    // See docs/specs/matrix-formats.md for schema.
+    REPRESENTATION_FORMAT_MATRIX_SPARSE = 2;
+
+    // Dense matrix as row-major array of complex numbers (JSON).
+    REPRESENTATION_FORMAT_MATRIX_DENSE = 3;
+  }
+
+  // The format of the content field.
+  RepresentationFormat format = 1;
+
+  // The Hamiltonian specification in the chosen format.
+  // For PAULI_STRING: the Pauli string expression.
+  // For MATRIX_SPARSE: JSON object with COO data.
+  // For MATRIX_DENSE: JSON array of complex numbers.
+  string content = 2;
+
+  // Dimension of the Hilbert space.
+  // Must equal 2^num_qubits for qubit systems.
+  // Example: 4 for 2 qubits, 8 for 3 qubits.
+  int32 hilbert_space_dim = 3;
+
+  // Number of qubits in the system.
+  int32 num_qubits = 4;
+
+  // Tolerance for Hermiticity validation.
+  // The Hamiltonian must satisfy: ||H - H^dag|| < validation_tolerance
+  // Default: 1e-10
+  double validation_tolerance = 5;
+
+  // Control Hamiltonians for GRAPE optimization.
+  // These are the operators that get multiplied by the control amplitudes.
+  // Typically: ["X0", "Y0"] for single-qubit or ["X0", "Y0", "X1", "Y1", "X0*X1"] for two-qubit.
+  repeated string control_operators = 6;
+
+  // Whether this Hamiltonian has been validated.
+  // Set by the validation layer after checking Hermiticity and dimensions.
+  bool validated = 7;
+
+  // If validation failed, this contains the error message.
+  string validation_error = 8;
+
+  // Reserved for future use.
+  reserved 50 to 100;
+}

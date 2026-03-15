@@ -1,0 +1,286 @@
+// QubitOS Pulse Execution Protocol
+// Copyright 2026 QubitOS Contributors
+// SPDX-License-Identifier: Apache-2.0
+
+syntax = "proto3";
+
+package quantum.backend.v1;
+
+import "quantum/common/v1/common.proto";
+import "quantum/error/v1/error_budget.proto";
+import "quantum/provenance/v1/provenance.proto";
+import "quantum/pulse/v1/pulse.proto";
+import "quantum/pulse/v1/temporal.proto";
+
+option java_multiple_files = true;
+option java_package = "io.qubitos.backend.v1";
+
+// ExecutePulseRequest specifies a pulse execution job.
+message ExecutePulseRequest {
+  // Trace context for distributed tracing.
+  quantum.common.v1.TraceContext trace = 1;
+
+  // Name of the backend to use.
+  // Values: "qutip_simulator", "iqm_garnet"
+  string backend_name = 2;
+
+  // The pulse to execute.
+  quantum.pulse.v1.PulseShape pulse = 3;
+
+  // Number of measurement shots.
+  // Each shot gives one bitstring outcome.
+  // Typical: 1000-10000
+  // Limit: 1,000,000 (enforced by server)
+  int32 num_shots = 4;
+
+  // Measurement basis.
+  // Values: "z" (computational basis), "x", "y"
+  // Default: "z"
+  string measurement_basis = 5;
+
+  // Which qubits to measure.
+  // If empty, measures all qubits the pulse acts on.
+  repeated int32 measurement_qubits = 6;
+
+  // --- Simulator Options ---
+
+  // Return the final state vector (simulator only).
+  // Useful for debugging but not available on real hardware.
+  bool return_state_vector = 7;
+
+  // Include calibrated noise model in simulation.
+  // If true, uses T1/T2/readout error from calibration.
+  bool include_noise = 8;
+
+  // --- Request Options ---
+
+  // Request timeout in milliseconds.
+  // 0 = use backend default.
+  int32 timeout_ms = 9;
+
+  // Allow execution even if calibration fingerprint doesn't match.
+  // If true, executes with WARNING; if false, rejects with FAILED_PRECONDITION.
+  bool allow_calibration_mismatch = 10;
+
+  // --- Temporal (v0.2.0) ---
+
+  // Full pulse sequence with temporal constraints.
+  // If set, the server executes the sequence rather than a single pulse.
+  quantum.pulse.v1.PulseSequence pulse_sequence = 11;
+
+  // Reserved for future use.
+  reserved 50 to 100;
+}
+
+// ExecutePulseResponse contains the execution result.
+message ExecutePulseResponse {
+  // Trace context echoed back.
+  quantum.common.v1.TraceContext trace = 1;
+
+  // Whether execution succeeded.
+  bool success = 2;
+
+  // Error details if success = false.
+  quantum.common.v1.Error error = 3;
+
+  // The measurement result.
+  MeasurementResult result = 4;
+
+  // Non-fatal warnings.
+  repeated string warnings = 5;
+
+  // Reserved for future use.
+  reserved 50 to 100;
+}
+
+// MeasurementResult contains the outcome of pulse execution.
+message MeasurementResult {
+  // Quality indicator for the result.
+  enum Quality {
+    QUALITY_UNSPECIFIED = 0;
+
+    // All shots completed successfully.
+    QUALITY_FULL_SUCCESS = 1;
+
+    // Most shots succeeded but some failed.
+    // Result is usable but may have slightly higher noise.
+    QUALITY_DEGRADED = 2;
+
+    // Significant number of shots failed.
+    // Result should be interpreted with caution.
+    QUALITY_PARTIAL_FAILURE = 3;
+
+    // No usable data obtained.
+    QUALITY_TOTAL_FAILURE = 4;
+  }
+
+  // --- Measurement Counts ---
+
+  // Bitstring counts from measurement.
+  // Key: bitstring (e.g., "00", "01", "10", "11" for 2 qubits)
+  // Value: number of times this bitstring was observed
+  // Bitstring order: qubit 0 is rightmost (little-endian).
+  map<string, int32> bitstring_counts = 1;
+
+  // Total number of shots requested.
+  int32 total_shots = 2;
+
+  // Number of shots that succeeded.
+  // May be less than total_shots if some failed.
+  int32 successful_shots = 3;
+
+  // Quality indicator.
+  Quality quality = 4;
+
+  // --- Fidelity Estimate ---
+
+  // Estimated gate fidelity from this measurement.
+  // Only meaningful for certain pulse types and measurement configurations.
+  // 0.0 if fidelity estimation is not applicable.
+  double fidelity_estimate = 5;
+
+  // Method used for fidelity estimation.
+  // Values: "direct_comparison", "state_tomography", "not_computed"
+  string fidelity_method = 6;
+
+  // --- Metadata ---
+
+  // Backend that executed this pulse.
+  string backend_name = 7;
+
+  // When measurement completed.
+  quantum.common.v1.Timestamp measured_at = 8;
+
+  // Calibration fingerprint used.
+  string calibration_fingerprint = 9;
+
+  // --- Optional Data ---
+
+  // Final state vector (if requested and available).
+  StateVector state_vector = 10;
+
+  // Noise parameters applied during simulation.
+  NoiseParameters noise_applied = 11;
+
+  // Execution timing statistics.
+  ExecutionTiming timing = 12;
+
+  // --- Error Budget (v0.2.0) ---
+
+  // Predicted fidelity from error budget analysis (if computed).
+  // 0.0 if not computed.
+  double predicted_fidelity = 13;
+
+  // Full error budget analysis (if requested).
+  quantum.error.v1.ErrorBudgetSummary error_budget = 14;
+
+  // --- Provenance (v0.2.0) ---
+
+  // Provenance hash identifying the full experimental context.
+  // SHA-256 Merkle root covering calibration, pulse, GRAPE config, and software.
+  // Empty string if provenance tracking was not enabled.
+  string provenance_hash = 15;
+
+  // Full provenance tree (if requested).
+  // Omitted by default to reduce message size; set include_provenance=true on request.
+  quantum.provenance.v1.ProvenanceTree provenance_tree = 16;
+
+  // Reserved for future use.
+  reserved 50 to 100;
+}
+
+// StateVector represents the quantum state (simulator only).
+message StateVector {
+  // Complex amplitudes as [re_0, im_0, re_1, im_1, ...].
+  // Length = 2 * 2^num_qubits
+  repeated double amplitudes = 1;
+
+  // Number of qubits.
+  int32 num_qubits = 2;
+
+  // Reserved for future use.
+  reserved 50 to 100;
+}
+
+// NoiseParameters describes the noise model used.
+message NoiseParameters {
+  // T1 relaxation time in microseconds.
+  double t1_us = 1;
+
+  // T2 dephasing time in microseconds.
+  double t2_us = 2;
+
+  // Readout error probability (average of 0->1 and 1->0 errors).
+  double readout_error = 3;
+
+  // Single-qubit gate error (from randomized benchmarking).
+  double single_gate_error = 4;
+
+  // Two-qubit gate error.
+  double two_gate_error = 5;
+
+  // Thermal equilibrium excited state population.
+  double thermal_population = 6;
+
+  // Reserved for future use.
+  reserved 50 to 100;
+}
+
+// ExecutionTiming provides timing breakdown.
+message ExecutionTiming {
+  // Time spent in queue (hardware backends).
+  int64 queue_time_ms = 1;
+
+  // Time for actual pulse execution.
+  int64 execution_time_ms = 2;
+
+  // Time for readout and processing.
+  int64 readout_time_ms = 3;
+
+  // Total wall-clock time.
+  int64 total_time_ms = 4;
+
+  // Reserved for future use.
+  reserved 50 to 100;
+}
+
+// ExecutePulseBatchRequest executes multiple pulses.
+message ExecutePulseBatchRequest {
+  // Trace context for the batch.
+  quantum.common.v1.TraceContext trace = 1;
+
+  // Individual pulse requests.
+  repeated ExecutePulseRequest requests = 2;
+
+  // Stop batch on first error.
+  // If true, subsequent pulses are skipped after a failure.
+  // If false, all pulses are attempted regardless of earlier failures.
+  bool stop_on_first_error = 3;
+
+  // Reserved for future use.
+  reserved 50 to 100;
+}
+
+// ExecutePulseBatchResponse contains batch results.
+message ExecutePulseBatchResponse {
+  // Trace context echoed back.
+  quantum.common.v1.TraceContext trace = 1;
+
+  // Individual responses (same order as requests).
+  repeated ExecutePulseResponse responses = 2;
+
+  // Count of successful executions.
+  int32 successful_count = 3;
+
+  // Count of failed executions.
+  int32 failed_count = 4;
+
+  // Count of skipped executions (if stop_on_first_error was true).
+  int32 skipped_count = 5;
+
+  // Total batch execution time in milliseconds.
+  int64 total_time_ms = 6;
+
+  // Reserved for future use.
+  reserved 50 to 100;
+}

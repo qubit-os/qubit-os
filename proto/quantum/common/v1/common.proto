@@ -1,0 +1,92 @@
+// QubitOS Common Types
+// Copyright 2026 QubitOS Contributors
+// SPDX-License-Identifier: Apache-2.0
+
+syntax = "proto3";
+
+package quantum.common.v1;
+
+option java_multiple_files = true;
+option java_package = "io.qubitos.common.v1";
+
+// TraceContext provides distributed tracing information.
+// Every request should include a trace context for end-to-end correlation.
+message TraceContext {
+  // Unique identifier for the entire trace (UUID format).
+  // Generated at the request origin and propagated through all services.
+  string trace_id = 1;
+
+  // Identifier for the current span within the trace.
+  // Optional; used for more detailed distributed tracing.
+  string span_id = 2;
+
+  // Identifier of the parent span.
+  // Empty for root spans.
+  string parent_span_id = 3;
+
+  // Reserved for future use.
+  reserved 50 to 100;
+}
+
+// Timestamp represents a point in time with nanosecond precision.
+message Timestamp {
+  // Seconds since Unix epoch (1970-01-01T00:00:00Z).
+  int64 seconds = 1;
+
+  // Non-negative fractions of a second at nanosecond resolution.
+  // Must be from 0 to 999,999,999.
+  int32 nanos = 2;
+
+  // Reserved for future use.
+  reserved 50 to 100;
+}
+
+// Error represents a structured error with severity and trace information.
+message Error {
+  // Severity level of the error.
+  enum Severity {
+    SEVERITY_UNSPECIFIED = 0;
+
+    // Informational message, not an actual error.
+    SEVERITY_INFO = 1;
+
+    // Warning that may indicate a problem but doesn't prevent operation.
+    SEVERITY_WARNING = 2;
+
+    // Operation completed but with degraded quality or partial results.
+    SEVERITY_DEGRADED = 3;
+
+    // Fatal error that prevented the operation from completing.
+    SEVERITY_FATAL = 4;
+  }
+
+  // gRPC status code (see https://grpc.io/docs/guides/status-codes/).
+  int32 code = 1;
+
+  // Severity of the error.
+  Severity severity = 2;
+
+  // Human-readable error message.
+  string message = 3;
+
+  // Additional details about the error (may contain structured data).
+  string details = 4;
+
+  // Trace ID for correlation with logs.
+  string trace_id = 5;
+
+  // When the error occurred.
+  Timestamp timestamp = 6;
+
+  // Reserved for future use.
+  reserved 50 to 100;
+}
+
+// Complex number representation.
+message Complex {
+  double real = 1;
+  double imag = 2;
+
+  // Reserved for future use.
+  reserved 50 to 100;
+}

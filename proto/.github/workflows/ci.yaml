@@ -1,0 +1,82 @@
+# CI workflow for qubit-os-proto
+# Protos are built at compile time - no committed generated code
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  lint:
+    name: Lint Protos
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: bufbuild/buf-setup-action@v1
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Lint
+        run: buf lint
+
+      - name: Format check
+        run: buf format -d --exit-code
+
+  breaking:
+    name: Check Breaking Changes
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: bufbuild/buf-setup-action@v1
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Check for breaking changes
+        run: buf breaking --against 'https://github.com/${{ github.repository }}.git#branch=main'
+
+  build-rust:
+    name: Build Rust
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Install protoc
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y protobuf-compiler
+
+      - name: Build
+        run: cargo build
+
+      - name: Test
+        run: cargo test
+
+  build-python:
+    name: Build Python
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+
+      - name: Install build deps
+        run: pip install build grpcio-tools
+
+      - name: Build package
+        run: python -m build
+
+      - name: Test import
+        run: |
+          pip install dist/*.whl
+          python -c "from quantum.common.v1 import common_pb2; print('Import OK')"

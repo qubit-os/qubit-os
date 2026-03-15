@@ -1,0 +1,140 @@
+// QubitOS Error Budget Protocol
+// Copyright 2026 QubitOS Contributors
+// SPDX-License-Identifier: Apache-2.0
+//
+// Error budget tracking for pulse sequences. Accumulates error from
+// multiple sources (gate infidelity, decoherence, leakage, crosstalk,
+// readout) and predicts total sequence fidelity.
+//
+// References:
+//   - Wallman & Emerson (2016), Phys. Rev. A 94, 052325
+//   - Nielsen (2002), Phys. Lett. A 303, 249-252
+//
+// See ERROR-BUDGET-SPEC.md §7 for design rationale.
+
+syntax = "proto3";
+
+package quantum.error.v1;
+
+option java_multiple_files = true;
+option java_package = "io.qubitos.error.v1";
+
+// Classification of error sources.
+//
+// Each source corresponds to a distinct physical mechanism.
+// See ERROR-BUDGET-SPEC.md §5.1 for formulas.
+enum ErrorSource {
+  ERROR_SOURCE_UNSPECIFIED = 0;
+  ERROR_SOURCE_GATE_INFIDELITY = 1;
+  ERROR_SOURCE_T1_RELAXATION = 2;
+  ERROR_SOURCE_T2_DEPHASING = 3;
+  ERROR_SOURCE_LEAKAGE = 4;
+  ERROR_SOURCE_CROSSTALK = 5;
+  ERROR_SOURCE_READOUT = 6;
+  ERROR_SOURCE_IDLE = 7;
+  ERROR_SOURCE_OTHER = 8;
+}
+
+// A single error contribution to the budget.
+//
+// Immutable record of one error event (e.g., one gate on one qubit).
+message ErrorContribution {
+  // Which error mechanism produced this contribution.
+  ErrorSource source = 1;
+
+  // Error magnitude. For gates: 1 - fidelity. Must be >= 0.
+  double infidelity = 2;
+
+  // Which qubit this error acts on.
+  int32 qubit = 3;
+
+  // Duration of this operation in nanoseconds. 0 for instantaneous
+  // operations (e.g., readout classification).
+  double duration_ns = 4;
+
+  // Human-readable label (e.g., "X gate on q0").
+  string label = 5;
+}
+
+// Error budget summary for a pulse sequence.
+//
+// Contains the projected fidelity, breakdown by source, and per-qubit
+// time accounting. Suitable for inclusion in MeasurementResult as a
+// pre-execution prediction.
+message ErrorBudgetSummary {
+  // --- Target and projections ---
+
+  // Target sequence fidelity (e.g., 0.99).
+  double target_fidelity = 1;
+
+  // Predicted fidelity: max(0, 1 - projected_infidelity).
+  double projected_fidelity = 2;
+
+  // Total projected infidelity from all sources.
+  double projected_infidelity = 3;
+
+  // Error budget remaining: max(0, (1 - target_fidelity) - projected_infidelity).
+  double remaining_budget = 4;
+
+  // Whether the sequence meets the target fidelity.
+  bool is_within_budget = 5;
+
+  // Number of operations (gates + idles + readouts) in the sequence.
+  int32 num_operations = 6;
+
+  // The error source contributing the most infidelity.
+  ErrorSource dominant_source = 7;
+
+  // --- Breakdown by source ---
+
+  // Sum of gate infidelities (stochastic component).
+  double gate_infidelity = 10;
+
+  // Coherent noise correction: kappa * (sum(sqrt(epsilon_i)))^2.
+  double coherent_correction = 11;
+
+  // Total decoherence error from T1/T2 decay.
+  double decoherence = 12;
+
+  // Total readout error.
+  double readout_error = 13;
+
+  // Total crosstalk error.
+  double crosstalk_error = 14;
+
+  // Total leakage error.
+  double leakage_error = 15;
+
+  // --- Per-qubit accounting ---
+
+  // Accumulated time per qubit in nanoseconds.
+  // Key: qubit index, Value: total time (gate + idle) on that qubit.
+  map<int32, double> per_qubit_time_ns = 20;
+
+  // All individual contributions (optional, may be large for long sequences).
+  repeated ErrorContribution contributions = 21;
+
+  // Reserved for future extensions (QEC overhead, correlated noise).
+  reserved 50 to 100;
+}
+
+// Sequence analysis with quality grade and recommendations.
+//
+// Wraps an ErrorBudgetSummary with human-readable guidance.
+message SequenceAnalysis {
+  // The error budget summary.
+  ErrorBudgetSummary budget = 1;
+
+  // Quality grade: "A" (F >= 0.999), "B" (>= 0.99), "C" (>= 0.95),
+  // "D" (>= 0.90), "F" (< 0.90).
+  string grade = 2;
+
+  // Actionable recommendations based on dominant error source.
+  repeated string recommendations = 3;
+
+  // Warnings about budget exhaustion or physics issues.
+  repeated string warnings = 4;
+
+  // Reserved for future extensions.
+  reserved 50 to 100;
+}
