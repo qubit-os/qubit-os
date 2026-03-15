@@ -1,0 +1,655 @@
+# Stochastic Master Equation & Feedback Control Specification
+## QubitOS v0.6.0–v0.8.0 — Technical Design for Quantum Feedback Control
+
+**Status:** Design Phase  
+**Author:** Rylan Malarchick  
+**Date:** February 2026  
+**Purpose:** Extend QubitOS from open-loop optimal control (GRAPE/Lindblad) to closed-loop measurement-based quantum feedback control. This is the core technical contribution for the MS thesis.
+
+---
+
+## 0. Motivation and Context
+
+### 0.1 Where We Are
+
+QubitOS v0.5.0 provides a complete open-loop quantum control stack:
+
+```
+HamiltonianSpec → GRAPE Optimizer → PulseShape → Backend → MeasurementResult
+                                         ↓
+                                  Lindblad Solver (ensemble dynamics)
+                                  Calibration + Drift Detection
+                                  Error Budgets + Provenance
+```
+
+The Lindblad solver computes *ensemble-averaged* dynamics: what happens to the density matrix ρ when you average over all possible measurement outcomes. This is the right model for characterizing gates, but it ignores a fundamental resource: **information gained from measurement**.
+
+### 0.2 The Gap
+
+In a real experiment, you *do* get measurement outcomes. Continuous weak measurement of a superconducting qubit yields a noisy photocurrent I(t) that contains information about the qubit state. The Lindblad equation throws this information away by averaging over it.
+
+The **stochastic master equation (SME)** conditions the state evolution on the measurement record, producing a *conditional* density matrix ρ_c(t) that represents our best knowledge of the quantum state given everything we've measured so far. This conditional state can be fed to a **feedback controller** that adapts the drive pulse in real time.
+
+### 0.3 Why This Matters
+
+The thesis question: *At what noise strength does closed-loop measurement-based feedback outperform open-loop optimal control (GRAPE) for single-qubit gate stabilization?*
+
+This is a quantitative, answerable question with a clear experimental protocol. The answer has practical implications for quantum error mitigation and calibration.
+
+### 0.4 Connection to Existing Code
+
+| Existing Module | Extension |
+|----------------|-----------|
+| `lindblad/` (Rust + Python) | SME adds measurement term to Lindblad RHS |
+| `lindblad/integrate.rs` (RK4) | Euler-Maruyama integrator for stochastic DEs |
+| `lindblad/types.rs` (CollapseOperator) | Same collapse operators used in SME |
+| `lindblad/open_grape.rs` | Feedback-aware GRAPE (future: optimize open-loop pulse + feedback gain jointly) |
+| `pulsegen/grape.py` | Open-loop baseline for comparison |
+| `temporal/` | Feedback latency as a temporal constraint |
+| `error_budget/` | Feedback corrections tracked in error budget |
+| `provenance/` | Feedback parameters in Merkle tree |
+
+---
+
+## 1. Mathematical Framework
+
+### 1.1 The Stochastic Master Equation (Homodyne Detection)
+
+For a qubit subject to continuous homodyne measurement of observable c + c†, the conditional density matrix evolves as:
+
+```
+dρ_c = -i[H(t), ρ_c] dt                         (unitary evolution)
+     + D[c]ρ_c dt                                 (Lindblad dissipation)
+     + √η · H[c]ρ_c · dW                          (measurement backaction)
+```
+
+where:
+- **ρ_c** is the conditional density matrix (state of knowledge given measurement record)
+- **H(t)** is the (possibly feedback-modified) Hamiltonian
+- **D[c]ρ = c ρ c† − ½{c†c, ρ}** is the standard Lindblad dissipator (already implemented)
+- **H[c]ρ = c ρ + ρ c† − Tr[(c + c†)ρ] ρ** is the measurement superoperator (innovation term)
+- **η ∈ [0,1]** is the measurement efficiency (η=0 → Lindblad, η=1 → perfect measurement)
+- **dW** is a Wiener increment: dW ~ N(0, dt)
+
+The corresponding measurement record (homodyne photocurrent):
+
+```
+I(t) dt = √η · Tr[(c + c†) ρ_c] dt + dW
+```
+
+**Key property:** When η=0, the SME reduces exactly to the Lindblad equation. This means our existing Lindblad solver is a special case of the SME solver — a natural consistency check.
+
+### 1.2 Heterodyne Detection (Future Extension)
+
+For heterodyne detection (simultaneous measurement of two quadratures):
+
+```
+dρ_c = -i[H(t), ρ_c] dt + D[c]ρ_c dt + √(η/2) · H[c]ρ_c · dW_1 + √(η/2) · H[-ic]ρ_c · dW_2
+```
+
+where dW_1, dW_2 are independent Wiener increments. This is a straightforward extension but adds complexity. **Not in scope for v0.6.0**; noted here for completeness.
+
+### 1.3 The Measurement Superoperator H[c]
+
+For an operator c and density matrix ρ:
+
+```python
+def measurement_superoperator(c: NDArray, rho: NDArray) -> NDArray:
+    """H[c]ρ = c ρ + ρ c† − Tr[(c + c†)ρ] ρ"""
+    c_dag = c.conj().T
+    signal = np.trace((c + c_dag) @ rho).real
+    return c @ rho + rho @ c_dag - signal * rho
+```
+
+**Critical properties to validate:**
+- H[c]ρ preserves trace: Tr[H[c]ρ] = 0 ✓
+- H[c]ρ preserves Hermiticity: (H[c]ρ)† = H[c]ρ ✓
+- H[c]ρ does NOT preserve positivity (the stochastic term can temporarily violate positivity; this is physical and expected for individual trajectories)
+
+### 1.4 Lyapunov Feedback Controller
+
+Given a target state ρ_target, define the Lyapunov function:
+
+```
+V(ρ_c) = 1 − Tr[ρ_target · ρ_c]
+```
+
+**Properties:**
+- V ≥ 0 (since Tr[ρ_target · ρ_c] ≤ 1 for density matrices)
+- V = 0 iff ρ_c = ρ_target (for pure target states)
+- V is smooth on the space of density matrices
+
+**Feedback law:** Choose the control correction δΩ(t) to make V̇ < 0:
+
+For a single qubit with Hamiltonian H(t) = H_0 + [Ω + δΩ(t)] σ_x/2, the feedback is:
+
+```
+δΩ(t) = -K · Tr[ρ_target · [iσ_x/2, ρ_c]]
+```
+
+where K > 0 is the feedback gain. This ensures:
+
+```
+dV/dt|_feedback = -K · |Tr[ρ_target · [iσ_x/2, ρ_c]]|² ≤ 0
+```
+
+The feedback drives ρ_c toward ρ_target along the Bloch sphere geodesic controlled by σ_x.
+
+**Multi-axis feedback:** For full SU(2) control, extend to three generators:
+
+```
+δΩ_k(t) = -K_k · Tr[ρ_target · [iσ_k/2, ρ_c]]    for k ∈ {x, y, z}
+```
+
+This provides asymptotic stability to ρ_target (modulo the LaSalle invariance principle — see Mirrahimi & van Handel 2007 for the full stability proof on the Bloch sphere).
+
+### 1.5 Itô vs. Stratonovich
+
+The SME above is in **Itô** form. QuTiP uses Itô. We use Itô. This matters for:
+- Numerical integration: Euler-Maruyama is the natural scheme for Itô SDEs
+- The chain rule: Itô's lemma (not the ordinary chain rule) must be used for V̇
+- Stratonovich form exists but requires a drift correction term
+
+**Convention:** All QubitOS stochastic equations are in Itô form. Document this explicitly in code.
+
+---
+
+## 2. Module Architecture
+
+### 2.1 New Modules
+
+```
+qubit-os-core/src/qubitos/
+├── sme/                          # v0.6.0: Stochastic Master Equation
+│   ├── __init__.py               # Public API: SMESolver, SMEResult, SMEConfig
+│   ├── integrator.py             # Euler-Maruyama + Milstein integrators
+│   ├── measurement.py            # Measurement superoperator H[c], measurement record
+│   ├── trajectory.py             # Single trajectory simulation
+│   └── ensemble.py               # Monte Carlo trajectory ensemble + statistics
+│
+├── feedback/                     # v0.7.0: Feedback Controllers
+│   ├── __init__.py               # Public API: LyapunovController, FeedbackConfig
+│   ├── lyapunov.py               # Lyapunov function + feedback law
+│   ├── controller.py             # Real-time feedback loop integration
+│   └── analysis.py               # Stability analysis tools, fidelity vs noise plots
+│
+└── lindblad/                     # Existing (v0.5.0) — minor extensions
+    └── __init__.py               # Add: from_sme_ensemble() convergence check
+
+qubit-os-hardware/src/
+├── sme/                          # v0.6.0: Rust SME solver
+│   ├── mod.rs                    # Public API
+│   ├── measurement.rs            # H[c] superoperator
+│   ├── integrate.rs              # Euler-Maruyama in Rust
+│   ├── trajectory.rs             # Single trajectory
+│   └── pyo3_bindings.rs          # RustSMESolver Python class
+│
+├── feedback/                     # v0.7.0: Rust feedback controller
+│   ├── mod.rs
+│   ├── lyapunov.rs               # Feedback law computation
+│   └── pyo3_bindings.rs
+│
+└── lindblad/                     # Existing — unchanged
+```
+
+### 2.2 Data Types
+
+```protobuf
+// quantum/pulse/v1/sme.proto (new)
+
+message SMEConfig {
+  int32 num_time_steps = 1;
+  double duration_ns = 2;
+  double measurement_efficiency = 3;  // η ∈ [0, 1]
+  int32 random_seed = 4;
+  bool store_trajectory = 5;          // store full ρ_c(t) history
+  bool store_measurement_record = 6;  // store I(t) history
+
+  // Collapse operators same as Lindblad config
+  repeated CollapseOperatorSpec collapse_ops = 7;
+
+  // Measurement operator (defaults to first collapse op if not specified)
+  optional MatrixSpec measurement_operator = 8;
+}
+
+message SMEResult {
+  // Final conditional state
+  bytes final_rho_real = 1;    // flattened real parts
+  bytes final_rho_imag = 2;    // flattened imaginary parts
+  int32 hilbert_dim = 3;
+
+  double final_fidelity = 4;   // Tr[ρ_target · ρ_c(T)]
+  double final_purity = 5;     // Tr[ρ_c²]
+
+  // Trajectory (if stored)
+  repeated double fidelity_trajectory = 6;
+  repeated double purity_trajectory = 7;
+  repeated double measurement_record = 8;
+
+  // Diagnostics
+  double max_trace_deviation = 9;   // max |Tr(ρ) - 1| over trajectory
+  int32 positivity_violations = 10; // count of eigenvalue < -ε events
+}
+
+message FeedbackConfig {
+  string controller_type = 1;  // "lyapunov" (v0.7.0), future: "bayesian", "rl"
+  double feedback_gain = 2;    // K > 0
+  double feedback_delay_ns = 3;     // realistic delay (0 = instantaneous)
+  double max_correction_amplitude = 4;  // δΩ bound
+  repeated string control_axes = 5;     // ["x", "y", "z"] — which generators
+}
+
+message FeedbackResult {
+  SMEResult sme_result = 1;
+  repeated double correction_history = 2;  // δΩ(t) applied
+  double feedback_energy_cost = 3;         // ∫|δΩ(t)|² dt
+  double crossover_noise_strength = 4;     // γ/γ₀ where feedback beats GRAPE
+}
+```
+
+### 2.3 Python API Design
+
+```python
+# === v0.6.0: SME Solver ===
+
+from qubitos.sme import SMESolver, SMEConfig
+
+config = SMEConfig(
+    num_steps=1000,
+    duration_ns=20.0,
+    measurement_efficiency=0.5,  # η = 0.5
+    seed=42,
+)
+
+# Collapse operators (reuse Lindblad types)
+from qubitos.lindblad import CollapseOperator
+ops = CollapseOperator.from_t1_t2(t1_us=45.0, t2_us=35.0)
+
+solver = SMESolver(config=config, collapse_ops=ops)
+
+# Single trajectory
+result = solver.solve_trajectory(
+    initial_rho=rho0,
+    hamiltonians=h_list,
+    target_rho=rho_target,  # for fidelity tracking
+)
+print(f"Final fidelity: {result.final_fidelity:.4f}")
+print(f"Max trace deviation: {result.max_trace_deviation:.2e}")
+
+# Monte Carlo ensemble
+ensemble = solver.solve_ensemble(
+    initial_rho=rho0,
+    hamiltonians=h_list,
+    target_rho=rho_target,
+    num_trajectories=1000,
+)
+print(f"Mean fidelity: {ensemble.mean_fidelity:.4f} ± {ensemble.std_fidelity:.4f}")
+
+# Consistency check: ensemble average → Lindblad
+assert ensemble.converges_to_lindblad(lindblad_result, tol=0.01)
+
+
+# === v0.7.0: Feedback Controller ===
+
+from qubitos.feedback import LyapunovController, FeedbackConfig
+
+fb_config = FeedbackConfig(
+    gain=10.0,
+    delay_ns=0.0,        # instantaneous (ideal case first)
+    max_correction=50.0,  # MHz
+    control_axes=["x", "y"],
+)
+
+controller = LyapunovController(config=fb_config, target_rho=rho_target)
+
+# Feedback-controlled trajectory
+fb_result = solver.solve_with_feedback(
+    initial_rho=rho0,
+    drift_hamiltonian=h_drift,
+    control_hamiltonians=[h_x, h_y],
+    baseline_pulse=grape_pulse,  # open-loop GRAPE solution
+    controller=controller,
+)
+print(f"Feedback fidelity: {fb_result.final_fidelity:.4f}")
+print(f"Feedback energy: {fb_result.feedback_energy_cost:.2f}")
+
+
+# === Comparison Plot (THE thesis figure) ===
+
+from qubitos.feedback.analysis import noise_sweep_comparison
+
+results = noise_sweep_comparison(
+    target_unitary=TargetUnitary.X,
+    noise_range=np.linspace(0.1, 10.0, 50),  # γ/γ₀
+    methods=["grape", "drag", "gaussian", "lyapunov_feedback"],
+    num_trajectories=1000,
+    hardware_params=IQM_GARNET_PARAMS,
+)
+results.plot()  # fidelity vs noise strength, 4 curves
+results.crossover_point()  # γ/γ₀ where feedback > GRAPE
+```
+
+---
+
+## 3. Numerical Methods
+
+### 3.1 Euler-Maruyama Integrator
+
+For the Itô SDE dρ = f(ρ)dt + g(ρ)dW:
+
+```
+ρ_{n+1} = ρ_n + f(ρ_n) · Δt + g(ρ_n) · ΔW_n
+```
+
+where ΔW_n ~ N(0, Δt).
+
+**Implementation:**
+
+```python
+def euler_maruyama_step(
+    rho: NDArray,
+    hamiltonian: NDArray,
+    collapse_ops: list[CollapseOperator],
+    measurement_op: NDArray,
+    eta: float,
+    dt: float,
+    rng: np.random.Generator,
+) -> tuple[NDArray, float]:
+    """Single Euler-Maruyama step. Returns (new_rho, measurement_signal)."""
+    # Deterministic part (same as Lindblad RHS)
+    drift = lindblad_rhs(rho, hamiltonian, collapse_ops)
+
+    # Stochastic part (measurement backaction)
+    dW = rng.normal(0, np.sqrt(dt))
+    innovation = np.sqrt(eta) * measurement_superoperator(measurement_op, rho)
+
+    # Update
+    rho_new = rho + drift * dt + innovation * dW
+
+    # Measurement record
+    signal = np.sqrt(eta) * np.trace(
+        (measurement_op + measurement_op.conj().T) @ rho
+    ).real + dW / dt
+
+    # Renormalize (trace preservation under finite timestep)
+    rho_new = (rho_new + rho_new.conj().T) / 2  # enforce Hermiticity
+    rho_new /= np.trace(rho_new).real             # enforce trace 1
+
+    return rho_new, signal
+```
+
+### 3.2 Milstein Method (Higher-Order, Optional)
+
+For improved convergence (strong order 1.0 vs 0.5 for Euler-Maruyama):
+
+```
+ρ_{n+1} = ρ_n + f(ρ_n)Δt + g(ρ_n)ΔW_n + ½ g'(ρ_n)g(ρ_n)(ΔW_n² − Δt)
+```
+
+The Milstein correction requires computing the derivative of the diffusion coefficient g with respect to ρ, which involves the Fréchet derivative of H[c]. **Implement as optional method for convergence studies.** Default remains Euler-Maruyama.
+
+### 3.3 Adaptive Timestep
+
+The SME can develop stiffness when:
+- η is large (strong measurement → fast state collapse)
+- The qubit is near |0⟩ or |1⟩ (innovation term becomes small, drift dominates)
+
+**Strategy:** Monitor the trace norm ‖ρ_{n+1}‖_tr and reduce dt if it deviates from 1 by more than a tolerance ε. Specifically:
+
+```python
+if abs(np.trace(rho_new).real - 1.0) > adaptive_tol:
+    dt *= 0.5
+    # retry step
+elif abs(np.trace(rho_new).real - 1.0) < adaptive_tol / 10:
+    dt *= 1.2  # allow larger steps when stable
+    dt = min(dt, dt_max)
+```
+
+### 3.4 Positivity Enforcement
+
+Individual SME trajectories can temporarily violate positivity (eigenvalue < 0). This is a numerical artifact of finite timestep, not a physics error. Options:
+
+1. **Monitor only:** Log positivity violations, report in SMEResult. (Default for v0.6.0)
+2. **Project onto positive cone:** After each step, diagonalize ρ, clamp negative eigenvalues to 0, renormalize. (Optional, controlled by config flag.)
+3. **Jump-based unraveling:** Alternative SME form that preserves positivity by construction. (Future work.)
+
+---
+
+## 4. Validation Strategy
+
+### 4.1 Tier 1: SME → Lindblad Convergence (η = 0)
+
+When measurement efficiency η = 0, the SME must reduce exactly to the Lindblad equation:
+
+```python
+def test_sme_reduces_to_lindblad_at_zero_efficiency():
+    """SME with η=0 must equal Lindblad for any Hamiltonian."""
+    config = SMEConfig(num_steps=100, duration_ns=20.0, measurement_efficiency=0.0)
+    sme_result = sme_solver.solve_trajectory(rho0, hamiltonians, config)
+    lindblad_result = lindblad_solver.solve(rho0, hamiltonians, lindblad_config)
+
+    assert np.allclose(sme_result.final_rho, lindblad_result.final_rho, atol=1e-10)
+```
+
+### 4.2 Tier 2: Ensemble Average Convergence
+
+The average of N→∞ SME trajectories must converge to the Lindblad solution:
+
+```python
+def test_ensemble_converges_to_lindblad():
+    """Mean of N trajectories → Lindblad as N → ∞."""
+    for n_traj in [100, 500, 1000, 5000]:
+        ensemble = sme_solver.solve_ensemble(rho0, hamiltonians, n_traj)
+        lindblad_result = lindblad_solver.solve(rho0, hamiltonians)
+        distance = trace_distance(ensemble.mean_rho, lindblad_result.final_rho)
+        # Should decrease as 1/√N
+        assert distance < 5.0 / np.sqrt(n_traj)
+```
+
+### 4.3 Tier 3: Analytical Benchmarks
+
+**Benchmark 1: Driven qubit under homodyne detection (no feedback)**
+
+A qubit driven on resonance with Rabi frequency Ω, subject to homodyne detection of σ_z with efficiency η. Analytical solution for the steady-state purity is known (Wiseman 1994):
+
+```
+P_ss = 1/2 (1 + η/(1 + (Ω/γ)²))
+```
+
+Validate numerical steady-state purity against this formula.
+
+**Benchmark 2: Spontaneous emission under perfect detection**
+
+A qubit initially in |1⟩ with T1 decay and η=1. The conditional state should collapse to |0⟩ with probability approaching 1, and the measurement record should show the characteristic "quantum jump" signature.
+
+**Benchmark 3: Feedback stabilization of |1⟩ state**
+
+Without feedback, |1⟩ decays to |0⟩ via T1. With Lyapunov feedback (target = |1⟩), the controller should partially stabilize the excited state, with steady-state population inversely related to feedback gain vs decay rate.
+
+### 4.4 Tier 4: Cross-Validation with QuTiP
+
+QuTiP's `smesolve()` provides an independent SME implementation. For each benchmark:
+
+```python
+def test_against_qutip_smesolve():
+    """Cross-validate our SME against QuTiP's smesolve."""
+    # Our solver
+    our_result = sme_solver.solve_ensemble(rho0, hamiltonians, n_traj=5000)
+
+    # QuTiP solver
+    import qutip
+    result_qutip = qutip.smesolve(H, rho0_qt, tlist, c_ops, e_ops,
+                                    ntraj=5000, method='homodyne')
+
+    # Compare ensemble-averaged expectation values
+    for op_name, our_exp, qt_exp in zip(ops, our_result.expectations, result_qutip.expect):
+        assert np.allclose(our_exp, qt_exp, atol=0.05)  # statistical tolerance
+```
+
+### 4.5 Tier 5: Feedback Controller Validation
+
+**Test 1: Zero feedback gain → open-loop (no correction applied)**
+
+```python
+def test_zero_gain_equals_open_loop():
+    fb_config = FeedbackConfig(gain=0.0)
+    fb_result = solver.solve_with_feedback(rho0, h_drift, controller)
+    ol_result = solver.solve_trajectory(rho0, hamiltonians)
+    # Same seed → same noise → same result
+    assert np.allclose(fb_result.sme_result.final_rho, ol_result.final_rho)
+```
+
+**Test 2: Lyapunov function is non-increasing (on average)**
+
+```python
+def test_lyapunov_non_increasing():
+    """V(ρ_c) should decrease on average under feedback."""
+    ensemble = solver.solve_with_feedback_ensemble(rho0, h_drift, controller, n_traj=1000)
+    mean_V = ensemble.mean_lyapunov_trajectory
+    # V should be monotonically non-increasing (within statistical noise)
+    for i in range(len(mean_V) - 1):
+        assert mean_V[i+1] <= mean_V[i] + 3 * ensemble.std_lyapunov[i] / np.sqrt(1000)
+```
+
+---
+
+## 5. 3-Level Transmon Extension (v0.8.0)
+
+### 5.1 Hamiltonian
+
+```
+H_3 = ω_q |1⟩⟨1| + (2ω_q + α)|2⟩⟨2| + Ω(t)/2 (a + a†)
+```
+
+where a = |0⟩⟨1| + √2|1⟩⟨2| is the lowering operator, ω_q is the qubit frequency, and α ≈ -330 MHz is the anharmonicity.
+
+### 5.2 Leakage-Aware Lyapunov Function
+
+```
+V_3(ρ_c) = (1 - Tr[ρ_target · ρ_c]) + λ · ⟨2|ρ_c|2⟩
+```
+
+The λ term penalizes population in the |2⟩ leakage level. Choosing λ > 0 biases the controller toward keeping population in the computational subspace {|0⟩, |1⟩}.
+
+### 5.3 Additional Collapse Operators for 3-Level
+
+```python
+# T1 decay: |2⟩→|1⟩ and |1⟩→|0⟩
+sigma_10 = |0⟩⟨1|          # rate: γ_1 = 1/T1
+sigma_21 = |1⟩⟨2|          # rate: γ_2 ≈ 2/T1 (scales with matrix element)
+
+# Pure dephasing on each transition
+sigma_z_01 = |0⟩⟨0| - |1⟩⟨1|    # rate: γ_φ,01
+sigma_z_12 = |1⟩⟨1| - |2⟩⟨2|    # rate: γ_φ,12
+```
+
+### 5.4 IQM Garnet Parameters (3-Level)
+
+| Parameter | Value | Source |
+|-----------|-------|--------|
+| f_01 | 4.8734 GHz | IQM calibration data |
+| α (anharmonicity) | -330 MHz | IQM Garnet typical |
+| T1 | 45.2 μs | IQM calibration data |
+| T2 | 35.0 μs | IQM calibration data |
+| T1 (|2⟩→|1⟩) | ~22.6 μs | ≈ T1/2 (standard approximation) |
+| Max drive amplitude | 50 MHz | IQM DAC constraint |
+| AWG sample rate | 1 GSa/s | IQM control electronics |
+
+---
+
+## 6. Performance and Scaling
+
+### 6.1 Computational Cost
+
+| Operation | Complexity | Wall Time (2-level) | Wall Time (3-level) |
+|-----------|-----------|--------------------|--------------------|
+| Single SME trajectory (1000 steps) | O(d² · N) | ~10 ms (Rust) | ~30 ms (Rust) |
+| Ensemble (1000 trajectories) | O(d² · N · M) | ~10 s (Rust) | ~30 s (Rust) |
+| Ensemble (10000 trajectories) | O(d² · N · M) | ~100 s (Rust) | ~300 s (Rust) |
+| Feedback + SME (1000 steps) | O(d² · N + d³ per feedback) | ~15 ms (Rust) | ~50 ms (Rust) |
+
+d = Hilbert space dimension, N = time steps, M = trajectories.
+
+### 6.2 Parallelization Strategy
+
+Trajectories are embarrassingly parallel (independent random seeds). Strategy:
+
+1. **Thread-level (laptop):** Rayon in Rust, `concurrent.futures` in Python. 8-16 threads.
+2. **GPU (VEGA cluster):** Future — batch matrix operations with CuPy or custom CUDA kernels.
+3. **MPI (VEGA cluster):** Distribute trajectory batches across nodes. Reduce at end.
+
+### 6.3 Memory
+
+Each trajectory stores a d×d complex matrix at each timestep (if trajectory storage enabled):
+- 2-level, 1000 steps: 4×1000×16 bytes = 64 KB per trajectory
+- 3-level, 1000 steps: 9×1000×16 bytes = 144 KB per trajectory
+- 10000 trajectories: 640 MB (2-level) or 1.4 GB (3-level)
+
+**Mitigation:** Default to storing only final state + scalar diagnostics per trajectory. Full trajectory storage opt-in.
+
+---
+
+## 7. Comparison Framework (Thesis Core)
+
+### 7.1 The Experiment
+
+For each noise strength γ/γ₀ ∈ {0.1, 0.2, ..., 10.0}:
+
+1. **GRAPE (open-loop):** Optimize pulse at nominal noise γ₀. Execute at actual noise γ. Compute mean fidelity over M trajectories.
+2. **DRAG (open-loop):** Calibrate DRAG pulse at nominal noise. Execute at actual noise.
+3. **Gaussian (open-loop baseline):** Fixed Gaussian pulse, no optimization.
+4. **Lyapunov feedback (closed-loop):** GRAPE baseline pulse + real-time feedback corrections from Lyapunov controller.
+
+### 7.2 Metrics
+
+| Metric | Definition | Significance |
+|--------|-----------|-------------|
+| Mean gate fidelity | ⟨F⟩ = ⟨Tr[ρ_target · ρ_c(T)]⟩ | Primary performance metric |
+| Fidelity variance | Var[F] | Consistency of control |
+| Crossover noise strength | γ* where ⟨F⟩_feedback = ⟨F⟩_GRAPE | Main quantitative result |
+| Feedback energy cost | ∫|δΩ(t)|²dt | Practical resource cost |
+| Leakage rate | ⟨2|ρ_c(T)|2⟩ | 3-level specific |
+
+### 7.3 The Key Figure
+
+```
+Fidelity
+  1.0 ─┬─────────────────────────────────
+       │  ╲  GRAPE                         ← degrades monotonically
+  0.99 │   ╲                    Lyapunov   ← maintains plateau
+       │    ╲              ╱───────────
+  0.98 │     ╲   ╱───────╱
+       │      ╲ ╱        
+  0.97 │       ╳  ← crossover point (γ*)
+       │      ╱ ╲
+  0.96 │     ╱   ╲
+       │    ╱     ╲  DRAG
+  0.95 │   ╱       ╲──────────────────
+       │  ╱
+  0.94 │ ╱  Gaussian baseline
+       ├──────────────────────────────────
+       0.1          1.0          10.0
+                 Noise strength γ/γ₀
+```
+
+**The crossover point γ* is the main quantitative result of the thesis.**
+
+---
+
+## 8. References (Cite in Code)
+
+Each module MUST cite its primary references in the module docstring.
+
+| Reference | DOI/arXiv | Used In |
+|-----------|----------|---------|
+| Wiseman & Milburn (2009), *Quantum Measurement and Control* | ISBN: 978-0521804424 | sme/, feedback/ |
+| Wiseman (1994), "Quantum theory of continuous feedback" | DOI: 10.1103/PhysRevA.49.2133 | feedback/lyapunov.py |
+| Jacobs & Steck (2006), "Continuous quantum measurement" | DOI: 10.1080/00107510601101934 | sme/ |
+| Mirrahimi & van Handel (2007), "Stabilizing feedback controls" | DOI: 10.1137/050644793 | feedback/lyapunov.py |
+| Lindblad (1976), "Quantum dynamical semigroups" | DOI: 10.1007/BF01608499 | lindblad/ (existing) |
+| Khaneja et al. (2005), "Optimal control of spin dynamics" | DOI: 10.1016/j.jmr.2004.11.004 | pulsegen/grape.py (existing) |
+| Motzoi et al. (2009), "DRAG pulses" | DOI: 10.1103/PhysRevLett.103.110501 | pulsegen/shapes.py (existing) |
+
+---
+
+*End of SME-FEEDBACK-SPEC.md*

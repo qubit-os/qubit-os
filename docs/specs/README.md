@@ -20,6 +20,7 @@ These are the single source of truth for system architecture.
 | [EXPERIMENT-PROVENANCE-SPEC.md](EXPERIMENT-PROVENANCE-SPEC.md) | v0.2.4 | ✅ Implemented |
 | [MULTI-QUBIT-SPEC.md](MULTI-QUBIT-SPEC.md) | v0.3.0 | ✅ Implemented |
 | [RUST-NATIVE-SOLVER-SPEC.md](RUST-NATIVE-SOLVER-SPEC.md) | v0.5.0 | ✅ Implemented |
+| [SME-FEEDBACK-SPEC.md](SME-FEEDBACK-SPEC.md) | v0.6.0–v0.8.0 | 📐 Design Phase |
 
 ## Policy: Generated Code
 
