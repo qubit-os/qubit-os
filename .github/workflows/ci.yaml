@@ -1,0 +1,294 @@
+# Unified CI workflow for QubitOS monorepo
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+env:
+  CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: 1
+  PYO3_PYTHON: python3
+
+jobs:
+  # --- Proto ---
+  proto-lint:
+    name: Proto Lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: bufbuild/buf-setup-action@v1
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Lint
+        working-directory: proto
+        run: buf lint
+
+      - name: Format check
+        working-directory: proto
+        run: buf format -d --exit-code
+
+  proto-breaking:
+    name: Proto Breaking Changes
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: bufbuild/buf-setup-action@v1
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Check for breaking changes
+        working-directory: proto
+        run: buf breaking --against 'https://github.com/${{ github.repository }}.git#branch=main,subdir=proto'
+
+  # --- Python (core) ---
+  python-lint:
+    name: Python Lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: pip install ruff mypy types-PyYAML types-protobuf
+
+      - name: Ruff check
+        working-directory: core
+        run: ruff check src/ tests/
+
+      - name: Ruff format
+        working-directory: core
+        run: ruff format --check src/ tests/
+
+  python-typecheck:
+    name: Python Type Check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        working-directory: core
+        run: |
+          pip install -e ".[dev]"
+          pip install mypy types-PyYAML types-protobuf types-grpcio
+
+      - name: MyPy
+        working-directory: core
+        run: mypy src/qubitos/ --ignore-missing-imports --exclude 'proto_convert'
+
+  python-test:
+    name: Python Test (${{ matrix.python-version }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ['3.11', '3.12']
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install dependencies
+        working-directory: core
+        run: pip install -e ".[dev]"
+
+      - name: Run tests
+        working-directory: core
+        run: pytest tests/unit/ --cov=qubitos --cov-report=xml
+
+      - name: Upload coverage
+        uses: codecov/codecov-action@v5
+        if: matrix.python-version == '3.11'
+        with:
+          files: core/coverage.xml
+          flags: python
+          fail_ci_if_error: false
+
+  python-golden:
+    name: Golden File Tests
+    runs-on: ubuntu-latest
+    needs: python-test
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        working-directory: core
+        run: pip install -e ".[dev]"
+
+      - name: Run golden file tests
+        working-directory: core
+        run: pytest tests/golden/test_golden.py -v
+
+  python-build:
+    name: Python Build
+    runs-on: ubuntu-latest
+    needs: [python-lint, python-typecheck, python-test]
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+
+      - name: Install build tools
+        run: pip install build twine
+
+      - name: Build package
+        working-directory: core
+        run: python -m build
+
+      - name: Check package
+        working-directory: core
+        run: twine check dist/*
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v6
+        with:
+          name: python-dist
+          path: core/dist/
+
+  # --- Rust (hal) ---
+  rust-check:
+    name: Rust Check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy, rustfmt
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: hal
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+
+      - name: Install protoc
+        run: sudo apt-get update && sudo apt-get install -y protobuf-compiler
+
+      - name: Format check
+        working-directory: hal
+        run: cargo fmt --all -- --check
+
+      - name: Clippy
+        working-directory: hal
+        run: cargo clippy --all-targets --all-features -- -D warnings
+
+      - name: Check
+        working-directory: hal
+        run: cargo check --all-features
+
+  rust-test:
+    name: Rust Test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: hal
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+
+      - name: Install protoc
+        run: sudo apt-get update && sudo apt-get install -y protobuf-compiler
+
+      - name: Install Python dependencies
+        run: pip install qutip numpy
+
+      - name: Run tests
+        working-directory: hal
+        run: cargo test --all-features
+
+  rust-build:
+    name: Rust Build
+    runs-on: ubuntu-latest
+    needs: [rust-check, rust-test]
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: hal
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+
+      - name: Install protoc
+        run: sudo apt-get update && sudo apt-get install -y protobuf-compiler
+
+      - name: Build (release)
+        working-directory: hal
+        run: cargo build --release
+
+      - name: Upload binary
+        uses: actions/upload-artifact@v6
+        with:
+          name: qubit-os-hal
+          path: hal/target/release/qubit-os-hal
+
+  rust-coverage:
+    name: Rust Coverage
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: llvm-tools-preview
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: hal
+
+      - uses: taiki-e/install-action@cargo-llvm-cov
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+
+      - name: Install protoc
+        run: sudo apt-get update && sudo apt-get install -y protobuf-compiler
+
+      - name: Install Python dependencies
+        run: pip install qutip numpy
+
+      - name: Generate coverage
+        working-directory: hal
+        run: cargo llvm-cov --all-features --lcov --output-path lcov.info
+
+      - name: Upload coverage
+        uses: codecov/codecov-action@v5
+        with:
+          files: hal/lcov.info
+          flags: rust
+          fail_ci_if_error: false

@@ -198,7 +198,7 @@ class TestCrossValidation:
     def golden_data(self):
         golden_path = (
             Path(__file__).resolve().parent.parent.parent.parent
-            / "qubit-os-hardware"
+            / "hal"
             / "tests"
             / "golden_lindblad_qutip.json"
         )

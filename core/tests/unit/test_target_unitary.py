@@ -342,7 +342,7 @@ class TestProtoFieldNumberCrossValidation:
         proto_path = (
             Path(__file__).resolve().parents[2]
             / ".."
-            / "qubit-os-proto"
+            / "proto"
             / "quantum"
             / "pulse"
             / "v1"

@@ -33,11 +33,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         return Ok(());
     }
 
-    // Get the proto files from qubit-os-proto
+    // Get the proto files from the proto directory (monorepo sibling)
     let proto_root = PathBuf::from(env::var("CARGO_MANIFEST_DIR")?)
         .parent()
         .unwrap()
-        .join("qubit-os-proto");
+        .join("proto");
 
     // Check if proto directory exists
     if !proto_root.exists() {
