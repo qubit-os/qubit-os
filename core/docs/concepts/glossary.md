@@ -1,0 +1,292 @@
+# Glossary
+
+A comprehensive glossary of terms used in QubitOS and quantum computing.
+
+---
+
+## Quantum Computing Terms
+
+### Anharmonicity
+
+The difference between the 0→1 and 1→2 transition frequencies in a multi-level quantum
+system. For transmons, anharmonicity is typically negative (around -200 to -300 MHz),
+which allows selective addressing of the qubit transition.
+
+$$\alpha = \omega_{12} - \omega_{01}$$
+
+### Bloch Sphere
+
+A geometrical representation of the pure state space of a two-level quantum system
+(qubit). Any pure qubit state can be represented as a point on the surface of a
+unit sphere.
+
+### Coherence Time
+
+The timescale over which a qubit maintains its quantum properties:
+
+- **T1 (Relaxation time)**: Time for energy decay from |1⟩ to |0⟩
+- **T2 (Dephasing time)**: Time for phase coherence loss
+- **T2* (Echo time)**: Coherence time measured with spin echo
+
+### Control Hamiltonian
+
+The part of the system Hamiltonian that can be externally modulated to control
+the qubit. In QubitOS, typically σx and σy terms driven by I and Q quadratures.
+
+### Detuning
+
+The difference between the qubit frequency and the drive frequency:
+
+$$\Delta = \omega_q - \omega_d$$
+
+Operating at a small detuning can be intentional (for AC Stark shift) or
+unintentional (calibration error).
+
+### Drift Hamiltonian
+
+The always-on part of the system Hamiltonian that evolves the system even
+without external control. Includes qubit frequencies, coupling terms, and
+unwanted interactions.
+
+### DRAG (Derivative Removal by Adiabatic Gate)
+
+A pulse shaping technique that adds a derivative component to reduce leakage
+to non-computational states. Particularly useful for transmons with finite
+anharmonicity.
+
+### Fidelity
+
+A measure of how close an implemented quantum operation is to the ideal target.
+QubitOS uses the average gate fidelity (Nielsen formula):
+
+$$F = \frac{|\text{Tr}(U_\text{target}^\dagger U)|^2 + d}{d^2 + d}$$
+
+where d is the Hilbert space dimension.
+
+### Gate
+
+A unitary operation on one or more qubits. Common gates include:
+
+| Gate | Matrix | Description |
+|------|--------|-------------|
+| X (Pauli-X) | `[[0,1],[1,0]]` | Bit flip |
+| Y (Pauli-Y) | `[[0,-i],[i,0]]` | Bit+phase flip |
+| Z (Pauli-Z) | `[[1,0],[0,-1]]` | Phase flip |
+| H (Hadamard) | `[[1,1],[1,-1]]/√2` | Superposition |
+| CZ | diag(1,1,1,-1) | Controlled-Z |
+| CNOT | Controlled-X | Entangling |
+
+### Hamiltonian
+
+The operator representing the total energy of a quantum system. Evolution
+is governed by the Schrödinger equation:
+
+$$i\hbar \frac{d|\psi\rangle}{dt} = H |\psi\rangle$$
+
+### Infidelity
+
+The complement of fidelity: 1 - F. Often used in log-scale plots where
+lower is better.
+
+### Leakage
+
+Population transfer to non-computational states (e.g., |2⟩ in a transmon).
+Leakage reduces gate fidelity and can accumulate over circuits.
+
+### Pauli Matrices
+
+The fundamental 2×2 Hermitian matrices for qubit operations:
+
+$$\sigma_x = \begin{pmatrix} 0 & 1 \\ 1 & 0 \end{pmatrix}, \quad
+\sigma_y = \begin{pmatrix} 0 & -i \\ i & 0 \end{pmatrix}, \quad
+\sigma_z = \begin{pmatrix} 1 & 0 \\ 0 & -1 \end{pmatrix}$$
+
+### Propagator
+
+The unitary operator describing time evolution:
+
+$$U(t) = \exp(-i H t / \hbar)$$
+
+### Qubit
+
+A two-level quantum system used as the basic unit of quantum information.
+Physical implementations include superconducting circuits, trapped ions,
+and quantum dots.
+
+### Rabi Frequency
+
+The frequency of oscillations between |0⟩ and |1⟩ when a qubit is driven
+on resonance. Proportional to the drive amplitude.
+
+### Rotating Frame
+
+A reference frame that rotates at the drive frequency, simplifying the
+time-dependent Hamiltonian to a time-independent one (in the rotating
+wave approximation).
+
+### Rotating Wave Approximation (RWA)
+
+An approximation that neglects rapidly oscillating counter-rotating terms
+in the Hamiltonian. Valid when drive frequency is close to qubit frequency.
+
+### Tensor Product
+
+The mathematical operation combining quantum systems:
+
+$$|\psi_{AB}\rangle = |\psi_A\rangle \otimes |\psi_B\rangle$$
+
+For operators: H_total = H_A ⊗ I_B + I_A ⊗ H_B
+
+### Transmon
+
+A type of superconducting qubit with reduced sensitivity to charge noise.
+Characterized by large E_J/E_C ratio and negative anharmonicity.
+
+### Unitary
+
+A matrix U satisfying U†U = UU† = I. All quantum gates are unitary
+(reversible).
+
+---
+
+## QubitOS-Specific Terms
+
+### AgentBible
+
+A configuration file defining safety constraints and validation rules.
+Used to prevent parameter values that could damage hardware or produce
+unphysical results.
+
+### Backend
+
+A hardware-specific implementation in the HAL server. Examples:
+- `opx3`: Quantum Machines OPX3
+- `zurich`: Zurich Instruments
+- `mock`: Simulated hardware for testing
+
+### Calibration
+
+The measured parameters of a quantum device, including qubit frequencies,
+coupling strengths, and coherence times. Stored in JSON/YAML format.
+
+### Envelope
+
+The time-dependent amplitude shape of a control pulse. QubitOS generates
+I (in-phase) and Q (quadrature) envelopes.
+
+### GRAPE (GRadient Ascent Pulse Engineering)
+
+The primary optimization algorithm in QubitOS for pulse synthesis.
+Iteratively improves pulses by computing analytical gradients of fidelity.
+
+### GrapeConfig
+
+The configuration dataclass for GRAPE optimization:
+
+```python
+@dataclass
+class GrapeConfig:
+    num_time_steps: int = 100
+    duration_ns: float = 20.0
+    target_fidelity: float = 0.999
+    max_iterations: int = 1000
+    learning_rate: float = 1.0
+    max_amplitude: float = 100.0  # MHz
+    regularization: float = 0.0
+    random_seed: int | None = None
+```
+
+### GrapeResult
+
+The result dataclass from GRAPE optimization containing:
+
+- `i_envelope`: In-phase pulse amplitudes
+- `q_envelope`: Quadrature pulse amplitudes
+- `fidelity`: Achieved gate fidelity
+- `iterations`: Number of optimization iterations
+- `converged`: Whether target fidelity was reached
+- `fidelity_history`: Fidelity at each iteration
+- `final_unitary`: The implemented unitary matrix
+
+### HAL (Hardware Abstraction Layer)
+
+The interface between QubitOS core and quantum hardware. Provides a
+uniform API regardless of the underlying hardware platform.
+
+### HALClient
+
+The Python client for communicating with the HAL server. Available in
+async (`HALClient`) and sync (`HALClientSync`) versions.
+
+### Pauli String
+
+A string representation of Hamiltonian terms:
+
+```
+"0.5 * X0 + 0.3 * Z0 Z1"
+```
+
+Parsed by `parse_pauli_string()` into a matrix.
+
+### Protocol Buffers (protobuf)
+
+The serialization format for gRPC communication between QubitOS core
+and the HAL server. Defined in `qubit-os-proto`.
+
+### Pulse
+
+A time-dependent control signal applied to a qubit. Characterized by:
+- Duration (typically 10-100 ns for single-qubit gates)
+- Amplitude envelope (I and Q quadratures)
+- Carrier frequency (at or near qubit frequency)
+
+### Validation
+
+The process of checking parameters against physical constraints before
+execution. Prevents invalid or dangerous configurations.
+
+---
+
+## Abbreviations
+
+| Abbreviation | Full Form |
+|--------------|-----------|
+| AWG | Arbitrary Waveform Generator |
+| CLI | Command Line Interface |
+| CW | Continuous Wave |
+| DAC | Digital-to-Analog Converter |
+| DRAG | Derivative Removal by Adiabatic Gate |
+| gRPC | gRPC Remote Procedure Call |
+| HAL | Hardware Abstraction Layer |
+| I/Q | In-phase / Quadrature |
+| OPX | Quantum Machines' pulse processor |
+| QND | Quantum Non-Demolition |
+| RF | Radio Frequency |
+| RWA | Rotating Wave Approximation |
+| SNR | Signal-to-Noise Ratio |
+| TLS | Transport Layer Security |
+
+---
+
+## Mathematical Notation
+
+| Symbol | Meaning |
+|--------|---------|
+| \|ψ⟩ | Quantum state (ket) |
+| ⟨ψ\| | Dual state (bra) |
+| ⟨ψ\|φ⟩ | Inner product |
+| ⊗ | Tensor product |
+| † | Hermitian conjugate (dagger) |
+| Tr(A) | Matrix trace |
+| exp(A) | Matrix exponential |
+| ℏ | Reduced Planck constant |
+| ω | Angular frequency |
+| σ | Pauli matrix |
+
+---
+
+## See Also
+
+- [Architecture](architecture.md) - System architecture overview
+- [API Reference](../api/index.md) - Detailed API documentation
+- [Tutorials](../tutorials/pulse-generation.md) - Step-by-step guides

@@ -1,0 +1,247 @@
+# Installation
+
+This guide covers all installation methods for QubitOS.
+
+## Requirements
+
+| Component | Minimum Version | Recommended |
+|-----------|-----------------|-------------|
+| Python | 3.11 | 3.12 |
+| Rust | 1.83 | Latest stable |
+| pip | 23.0 | Latest |
+
+## Quick Install (Python Package Only)
+
+If you only need the Python client and pulse generation:
+
+```bash
+pip install qubitos
+```
+
+Verify the installation:
+
+```bash
+python -c "import qubitos; print(f'QubitOS {qubitos.__version__}')"
+```
+
+## Full Installation (Client + HAL Server)
+
+For the complete QubitOS experience, you need both the Python package and the HAL server.
+
+### Step 1: Install Python Package
+
+=== "pip (recommended)"
+
+    ```bash
+    pip install qubitos
+    ```
+
+=== "From Source"
+
+    ```bash
+    git clone https://github.com/qubit-os/qubit-os-core.git
+    cd qubit-os-core
+    pip install -e ".[dev]"
+    ```
+
+=== "With Development Dependencies"
+
+    ```bash
+    pip install "qubitos[dev]"
+    ```
+
+### Step 2: Install HAL Server
+
+The HAL server is written in Rust and provides the quantum backend interface.
+
+=== "From Source (Recommended)"
+
+    ```bash
+    # Clone the repository
+    git clone https://github.com/qubit-os/qubit-os-hardware.git
+    cd qubit-os-hardware
+    
+    # Build in release mode
+    cargo build --release
+    
+    # The binary will be at target/release/qubit-os-hal
+    ```
+
+=== "Docker"
+
+    ```bash
+    # Pull the image
+    docker pull ghcr.io/qubit-os/qubit-os-hardware:latest
+    
+    # Run the server
+    docker run -p 50051:50051 -p 8080:8080 \
+        ghcr.io/qubit-os/qubit-os-hardware:latest
+    ```
+
+=== "Pre-built Binary"
+
+    Pre-built binaries will be available in future releases. For now, build from source.
+
+### Step 3: Verify Installation
+
+```bash
+# Start the HAL server (in one terminal)
+cd qubit-os-hardware
+cargo run --release
+
+# In another terminal, test the connection
+qubit-os hal health --server localhost:50051
+```
+
+Expected output:
+
+```
+HAL Server Health Check
+───────────────────────
+Status: healthy
+Backends:
+  • qutip_simulator: healthy (Simulator)
+```
+
+## Platform-Specific Instructions
+
+### Linux (Ubuntu/Debian)
+
+```bash
+# Install system dependencies
+sudo apt update
+sudo apt install -y python3.11 python3.11-venv python3-pip
+
+# Install Rust
+curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+source ~/.cargo/env
+
+# Install QubitOS
+pip install qubitos
+```
+
+### macOS
+
+```bash
+# Install Homebrew if not already installed
+/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+
+# Install Python and Rust
+brew install python@3.12 rust
+
+# Install QubitOS
+pip install qubitos
+```
+
+### Windows (WSL2 Recommended)
+
+QubitOS is best used on Windows through WSL2:
+
+```powershell
+# Install WSL2 with Ubuntu
+wsl --install -d Ubuntu
+
+# Then follow the Linux instructions inside WSL
+```
+
+## Development Installation
+
+For contributing to QubitOS:
+
+```bash
+# Clone all repositories
+git clone https://github.com/qubit-os/qubit-os-proto.git
+git clone https://github.com/qubit-os/qubit-os-hardware.git
+git clone https://github.com/qubit-os/qubit-os-core.git
+
+# Set up Python environment
+cd qubit-os-core
+python -m venv .venv
+source .venv/bin/activate
+pip install -e ".[dev,docs]"
+
+# Install pre-commit hooks
+pre-commit install
+
+# Run tests
+pytest tests/
+```
+
+## Environment Variables
+
+QubitOS can be configured through environment variables:
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `QUBITOS_HAL_SERVER` | HAL server address | `localhost:50051` |
+| `QUBITOS_LOG_LEVEL` | Logging level | `INFO` |
+| `QUBITOS_CONFIG_PATH` | Config file path | `~/.config/qubitos/config.yaml` |
+| `QUBITOS_STRICT_VALIDATION` | Enable strict validation | `false` |
+
+Example:
+
+```bash
+export QUBITOS_HAL_SERVER="192.168.1.100:50051"
+export QUBITOS_LOG_LEVEL="DEBUG"
+```
+
+## Virtual Environment Best Practices
+
+We recommend using virtual environments:
+
+```bash
+# Create a virtual environment
+python -m venv qubitos-env
+
+# Activate it
+source qubitos-env/bin/activate  # Linux/macOS
+# or
+qubitos-env\Scripts\activate     # Windows
+
+# Install QubitOS
+pip install qubitos
+
+# Deactivate when done
+deactivate
+```
+
+## Troubleshooting Installation
+
+### Common Issues
+
+**`ModuleNotFoundError: No module named 'qubitos'`**
+
+Ensure you've activated your virtual environment:
+
+```bash
+source .venv/bin/activate
+```
+
+**`grpcio` installation fails**
+
+You may need to install build dependencies:
+
+```bash
+# Ubuntu/Debian
+sudo apt install python3-dev build-essential
+
+# macOS
+xcode-select --install
+```
+
+**Rust compilation errors**
+
+Ensure you have Rust 1.83+:
+
+```bash
+rustup update
+rustc --version  # Should be >= 1.83
+```
+
+For more troubleshooting, see the [Troubleshooting Guide](troubleshooting.md).
+
+## Next Steps
+
+- [Quickstart Guide](quickstart.md) - Your first pulse in 15 minutes
+- [GRAPE Tutorial](../tutorials/grape-optimizer.md) - Deep dive into optimization
+- [API Reference](../api/index.md) - Complete API documentation

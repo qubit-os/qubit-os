@@ -1,0 +1,152 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "qubitos"
+version = "0.4.0"
+description = "Python modules for QubitOS quantum control kernel"
+readme = "README.md"
+license = "Apache-2.0"
+authors = [
+    { name = "QubitOS Contributors" }
+]
+keywords = ["quantum", "computing", "pulse", "optimization", "grape", "control"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: Apache Software License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Scientific/Engineering :: Physics",
+]
+requires-python = ">=3.11"
+dependencies = [
+    "grpcio>=1.60.0",
+    "protobuf>=4.25.0",
+    "numpy>=1.26.0",
+    "scipy>=1.12.0",
+    "qutip>=5.0.0",
+    "pyyaml>=6.0",
+    "click>=8.0.0",
+    "rich>=13.0.0",
+    "pydantic>=2.5.0",
+    "httpx>=0.26.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0.0",
+    "pytest-cov>=4.0.0",
+    "pytest-asyncio>=0.23.0",
+    "mypy>=1.8.0",
+    "ruff>=0.2.0",
+    "types-PyYAML>=6.0.0",
+    "types-protobuf>=4.0.0",
+    "types-grpcio>=1.0.0",
+    "scipy-stubs>=1.17.0",
+    "pre-commit>=3.6.0",
+    "grpcio-tools>=1.60.0",
+    # AgentBible - validation and reproducibility framework
+    # Not on PyPI yet; install separately: pip install git+https://github.com/rylanmalarchick/research-code-principles.git
+]
+docs = [
+    "mkdocs>=1.5.0",
+    "mkdocs-material>=9.5.0",
+    "mkdocstrings[python]>=0.24.0",
+    "mkdocs-jupyter>=0.24.0",
+    "mkdocs-gen-files>=0.5.0",
+    "mkdocs-literate-nav>=0.6.0",
+]
+
+[project.scripts]
+qubit-os = "qubitos.cli.main:cli"
+
+[project.urls]
+Homepage = "https://github.com/qubit-os/qubit-os-core"
+Documentation = "https://qubit-os.github.io/qubit-os-core/"
+Repository = "https://github.com/qubit-os/qubit-os-core"
+Issues = "https://github.com/qubit-os/qubit-os-core/issues"
+
+[tool.hatch.metadata]
+allow-direct-references = true
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/qubitos"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
+addopts = "-v --tb=short"
+markers = [
+    "slow: marks tests as slow (deselect with '-m \"not slow\"')",
+]
+
+[tool.mypy]
+python_version = "3.11"
+warn_unused_configs = true
+# Exclude auto-generated proto files from type checking
+exclude = [
+    "tests",
+    "generated",
+    ".*_pb2\\.py$",
+    ".*_pb2_grpc\\.py$",
+]
+# Relax strict mode for now - full type annotations are a Phase 2 task
+disallow_untyped_defs = false
+disallow_untyped_calls = false
+disallow_incomplete_defs = false
+check_untyped_defs = true
+no_implicit_optional = true
+warn_return_any = false
+
+[[tool.mypy.overrides]]
+# Ignore type errors in auto-generated protobuf files
+module = [
+    "qubitos.proto.*",
+    "qubitos.proto.quantum.*",
+]
+ignore_errors = true
+
+[tool.ruff]
+target-version = "py311"
+line-length = 100
+src = ["src"]
+exclude = ["src/qubitos/proto"]
+
+[tool.ruff.lint]
+select = [
+    "E",   # pycodestyle errors
+    "W",   # pycodestyle warnings
+    "F",   # pyflakes
+    "I",   # isort
+    "B",   # flake8-bugbear
+    "C4",  # flake8-comprehensions
+    "UP",  # pyupgrade
+]
+ignore = [
+    "E501",  # line too long (handled by formatter)
+]
+
+[tool.ruff.lint.isort]
+known-first-party = ["qubitos"]
+
+[tool.coverage.run]
+source = ["src/qubitos"]
+branch = true
+omit = [
+    "src/qubitos/proto/*",
+    "*_pb2.py",
+    "*_pb2_grpc.py",
+]
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "if TYPE_CHECKING:",
+    "raise NotImplementedError",
+]
+# Fail if coverage is below target (excluding proto files)
+# Note: HAL client requires gRPC server, so 80% is realistic target
+fail_under = 80

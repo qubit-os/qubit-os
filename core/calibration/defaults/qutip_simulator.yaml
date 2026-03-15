@@ -1,0 +1,184 @@
+# Default Calibration for QuTiP Simulator
+# QubitOS v0.1.0
+#
+# This calibration represents typical superconducting transmon parameters
+# based on IQM Garnet specifications. Used for realistic noise simulation.
+
+schema_version: "1.0"
+
+metadata:
+  backend: qutip_simulator
+  created_at: "2026-01-26T00:00:00Z"
+  fingerprint: "sha256:default_qutip_v1"
+  source: "default"
+  notes: |
+    Default calibration for QuTiP simulator.
+    Parameters based on typical IQM Garnet specifications.
+    This provides realistic noise modeling for development and testing.
+
+system:
+  num_qubits: 2
+  qubit_labels: ["Q0", "Q1"]
+  connectivity:
+    - [0, 1]
+
+qubits:
+  Q0:
+    # Transmon parameters
+    frequency_ghz: 4.8734
+    anharmonicity_mhz: -200.0
+    
+    # T1 relaxation
+    t1:
+      value_us: 45.0
+      uncertainty_us: 5.0
+      measured_at: "2026-01-26T00:00:00Z"
+      method: "simulated"
+      fit:
+        model: "A * exp(-t/T1) + C"
+        parameters:
+          A: 1.0
+          T1: 45.0
+          C: 0.0
+        r_squared: 1.0
+    
+    # T2 dephasing (Ramsey)
+    t2:
+      value_us: 32.0
+      uncertainty_us: 4.0
+      measured_at: "2026-01-26T00:00:00Z"
+      method: "ramsey"
+      detuning_mhz: 0.5
+      fit:
+        model: "A * exp(-t/T2) * cos(2*pi*f*t + phi) + C"
+        parameters:
+          A: 1.0
+          T2: 32.0
+          f: 0.5
+          phi: 0.0
+          C: 0.0
+        r_squared: 1.0
+    
+    # Readout
+    readout:
+      fidelity: 0.98
+      measured_at: "2026-01-26T00:00:00Z"
+      method: "confusion_matrix"
+      num_shots: 10000
+      confusion_matrix:
+        p00: 0.98
+        p01: 0.02
+        p10: 0.02
+        p11: 0.98
+    
+    # Single-qubit gates
+    single_qubit_gates:
+      X:
+        fidelity: 0.999
+        method: "simulated"
+        error_per_clifford: 0.0005
+      Y:
+        fidelity: 0.999
+        method: "simulated"
+        error_per_clifford: 0.0005
+      SX:
+        fidelity: 0.9995
+        method: "simulated"
+        error_per_clifford: 0.00025
+      H:
+        fidelity: 0.999
+        method: "simulated"
+        error_per_clifford: 0.0005
+    
+    # Thermal population
+    thermal_population: 0.01
+
+  Q1:
+    frequency_ghz: 5.1023
+    anharmonicity_mhz: -195.0
+    
+    t1:
+      value_us: 42.0
+      uncertainty_us: 5.0
+      measured_at: "2026-01-26T00:00:00Z"
+      method: "simulated"
+      fit:
+        model: "A * exp(-t/T1) + C"
+        parameters:
+          A: 1.0
+          T1: 42.0
+          C: 0.0
+        r_squared: 1.0
+    
+    t2:
+      value_us: 30.0
+      uncertainty_us: 4.0
+      measured_at: "2026-01-26T00:00:00Z"
+      method: "ramsey"
+      detuning_mhz: 0.5
+      fit:
+        model: "A * exp(-t/T2) * cos(2*pi*f*t + phi) + C"
+        parameters:
+          A: 1.0
+          T2: 30.0
+          f: 0.5
+          phi: 0.0
+          C: 0.0
+        r_squared: 1.0
+    
+    readout:
+      fidelity: 0.975
+      measured_at: "2026-01-26T00:00:00Z"
+      method: "confusion_matrix"
+      num_shots: 10000
+      confusion_matrix:
+        p00: 0.975
+        p01: 0.025
+        p10: 0.025
+        p11: 0.975
+    
+    single_qubit_gates:
+      X:
+        fidelity: 0.998
+        method: "simulated"
+        error_per_clifford: 0.001
+      Y:
+        fidelity: 0.998
+        method: "simulated"
+        error_per_clifford: 0.001
+      SX:
+        fidelity: 0.999
+        method: "simulated"
+        error_per_clifford: 0.0005
+      H:
+        fidelity: 0.998
+        method: "simulated"
+        error_per_clifford: 0.001
+    
+    thermal_population: 0.01
+
+two_qubit_gates:
+  Q0_Q1:
+    CZ:
+      fidelity: 0.98
+      method: "simulated"
+      gate_time_ns: 40
+      measured_at: "2026-01-26T00:00:00Z"
+    CNOT:
+      fidelity: 0.975
+      method: "simulated"
+      gate_time_ns: 60
+      measured_at: "2026-01-26T00:00:00Z"
+    iSWAP:
+      fidelity: 0.97
+      method: "simulated"
+      gate_time_ns: 35
+      measured_at: "2026-01-26T00:00:00Z"
+
+crosstalk:
+  Q0_to_Q1:
+    zz_coupling_khz: 25.0
+    static_zz_khz: 10.0
+  Q1_to_Q0:
+    zz_coupling_khz: 25.0
+    static_zz_khz: 10.0

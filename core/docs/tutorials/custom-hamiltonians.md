@@ -1,0 +1,559 @@
+# Custom Hamiltonians
+
+This tutorial explains how to build system Hamiltonians in QubitOS for any
+quantum control scenario — from single transmons to multi-qubit coupled
+systems. Hamiltonians are the foundation of QubitOS: every pulse
+optimization starts from the physics of your system.
+
+## Prerequisites
+
+- Completed [Quickstart Guide](../guides/quickstart.md)
+- Understanding of Pauli operators ($\sigma_x, \sigma_y, \sigma_z$)
+
+---
+
+## Hamiltonian Basics
+
+In quantum mechanics, the Hamiltonian $H$ governs time evolution:
+
+$$
+i\hbar\frac{d}{dt}|\psi(t)\rangle = H(t)|\psi(t)\rangle
+$$
+
+In quantum control, we decompose the Hamiltonian into:
+
+$$
+H(t) = H_0 + \sum_k u_k(t) H_k
+$$
+
+Where:
+
+- $H_0$ is the **drift Hamiltonian** (always-on terms like qubit frequencies)
+- $H_k$ are **control Hamiltonians** (how pulses couple to the system)
+- $u_k(t)$ are the **control amplitudes** (what GRAPE optimizes)
+
+---
+
+## Pauli String Notation
+
+QubitOS uses a convenient string notation for building Hamiltonians from Pauli operators.
+
+### Basic Syntax
+
+```python
+from qubitos.pulsegen.hamiltonians import parse_pauli_string
+
+# Single Pauli operator on qubit 0
+H = parse_pauli_string("X0", num_qubits=1)
+
+# Pauli operator on qubit 1 in a 2-qubit system
+H = parse_pauli_string("Z1", num_qubits=2)
+
+# Tensor product of operators
+H = parse_pauli_string("Z0 Z1", num_qubits=2)  # Z ⊗ Z
+```
+
+### Coefficients and Sums
+
+```python
+# Single term with coefficient
+H = parse_pauli_string("0.5 * X0", num_qubits=1)
+
+# Sum of terms
+H = parse_pauli_string("0.5 * X0 + 0.3 * Z0", num_qubits=1)
+
+# Subtraction
+H = parse_pauli_string("1.0 * Z0 - 0.5 * X0", num_qubits=1)
+```
+
+### Multi-Qubit Examples
+
+```python
+# Two-qubit Ising coupling
+H = parse_pauli_string("0.01 * Z0 Z1", num_qubits=2)
+
+# Heisenberg interaction
+H = parse_pauli_string("0.01 * X0 X1 + 0.01 * Y0 Y1 + 0.01 * Z0 Z1", num_qubits=2)
+
+# Transverse field Ising model
+H = parse_pauli_string(
+    "1.0 * Z0 + 1.0 * Z1 + 0.5 * Z0 Z1 + 0.1 * X0 + 0.1 * X1",
+    num_qubits=2
+)
+```
+
+---
+
+## Building Hamiltonians Programmatically
+
+For more complex systems, use the `build_hamiltonian` function:
+
+```python
+from qubitos.pulsegen.hamiltonians import build_hamiltonian
+
+# Build with Pauli strings
+H0, Hc = build_hamiltonian(
+    drift="5.0 * Z0",                    # Qubit frequency term
+    controls=["X0", "Y0"],               # I and Q control
+    num_qubits=1,
+)
+```
+
+### Using NumPy Arrays Directly
+
+```python
+import numpy as np
+from qubitos.pulsegen.hamiltonians import PAULI_X, PAULI_Y, PAULI_Z
+
+# Define drift Hamiltonian as matrix
+omega_qubit = 5.0  # GHz
+H0 = omega_qubit * PAULI_Z / 2
+
+# Control Hamiltonians
+Hc = [PAULI_X / 2, PAULI_Y / 2]
+
+# Use in optimizer
+result = optimizer.optimize(
+    target_unitary=target,
+    num_qubits=1,
+    drift_hamiltonian=H0,
+    control_hamiltonians=Hc,
+)
+```
+
+---
+
+## Standard Gate Unitaries
+
+QubitOS provides target unitaries for common gates:
+
+```python
+from qubitos.pulsegen.hamiltonians import get_target_unitary
+import numpy as np
+
+# Single-qubit gates
+X_gate = get_target_unitary("X")       # Pauli-X
+Y_gate = get_target_unitary("Y")       # Pauli-Y
+Z_gate = get_target_unitary("Z")       # Pauli-Z
+H_gate = get_target_unitary("H")       # Hadamard
+S_gate = get_target_unitary("S")       # Phase gate
+T_gate = get_target_unitary("T")       # T gate
+SX_gate = get_target_unitary("SX")     # √X gate
+
+# Rotation gates (parameterized)
+RX_90 = get_target_unitary("RX", angle=np.pi/2)
+RY_45 = get_target_unitary("RY", angle=np.pi/4)
+RZ_180 = get_target_unitary("RZ", angle=np.pi)
+
+# Two-qubit gates
+CZ_gate = get_target_unitary("CZ", num_qubits=2)
+CNOT_gate = get_target_unitary("CNOT", num_qubits=2)
+ISWAP_gate = get_target_unitary("ISWAP", num_qubits=2)
+SWAP_gate = get_target_unitary("SWAP", num_qubits=2)
+```
+
+### Embedding Gates in Larger Systems
+
+```python
+# X gate on qubit 1 in a 3-qubit system
+X_on_q1 = get_target_unitary("X", num_qubits=3, qubit_indices=[1])
+
+# CZ between qubits 0 and 2 in a 3-qubit system
+CZ_02 = get_target_unitary("CZ", num_qubits=3, qubit_indices=[0, 2])
+```
+
+---
+
+## Custom Target Unitaries
+
+For gates not in the standard library, define your own:
+
+```python
+import numpy as np
+from qubitos.pulsegen import GrapeOptimizer, GrapeConfig
+
+# Custom gate: √Y gate
+sqrtY = np.array([
+    [1+1j, -1-1j],
+    [1+1j,  1+1j],
+], dtype=np.complex128) / 2
+
+config = GrapeConfig(
+    num_time_steps=100,
+    duration_ns=50,
+    target_fidelity=0.999,
+)
+
+optimizer = GrapeOptimizer(config)
+result = optimizer.optimize(
+    target_unitary=sqrtY,
+    num_qubits=1,
+)
+
+print(f"√Y gate fidelity: {result.fidelity:.4f}")
+```
+
+### Verify Your Unitary
+
+Always check that custom unitaries are valid:
+
+```python
+def is_unitary(U: np.ndarray, tol: float = 1e-10) -> bool:
+    """Check if a matrix is unitary: U^dag @ U = I."""
+    d = U.shape[0]
+    identity = np.eye(d)
+    product = U.conj().T @ U
+    return np.allclose(product, identity, atol=tol)
+
+# Verify
+print(f"√Y is unitary: {is_unitary(sqrtY)}")
+```
+
+---
+
+## Two-Qubit Systems
+
+Two-qubit optimization requires more care with Hamiltonians.
+
+### Drift Hamiltonian
+
+A typical superconducting two-qubit system has:
+
+$$
+H_0 = \frac{\omega_0}{2}Z_0 + \frac{\omega_1}{2}Z_1 + J \cdot Z_0 Z_1
+$$
+
+```python
+import numpy as np
+from qubitos.pulsegen.hamiltonians import (
+    parse_pauli_string,
+    build_hamiltonian,
+    get_target_unitary,
+)
+from qubitos.pulsegen import GrapeOptimizer, GrapeConfig
+
+# System parameters
+omega_0 = 5.0   # Qubit 0 frequency (GHz)
+omega_1 = 5.2   # Qubit 1 frequency (GHz)
+J = 0.01        # Coupling strength (GHz)
+
+# Build drift Hamiltonian
+H0 = parse_pauli_string(
+    f"{omega_0/2} * Z0 + {omega_1/2} * Z1 + {J} * Z0 Z1",
+    num_qubits=2
+)
+```
+
+### Control Hamiltonians
+
+For independent control of each qubit:
+
+```python
+# Control on qubit 0: I and Q channels
+Hc_0_I = parse_pauli_string("X0", num_qubits=2)
+Hc_0_Q = parse_pauli_string("Y0", num_qubits=2)
+
+# Control on qubit 1: I and Q channels
+Hc_1_I = parse_pauli_string("X1", num_qubits=2)
+Hc_1_Q = parse_pauli_string("Y1", num_qubits=2)
+
+control_hamiltonians = [Hc_0_I, Hc_0_Q, Hc_1_I, Hc_1_Q]
+```
+
+### Optimizing a CZ Gate
+
+```python
+# Target: CZ gate
+target = get_target_unitary("CZ", num_qubits=2)
+
+# Configuration for 2-qubit gates
+config = GrapeConfig(
+    num_time_steps=200,
+    duration_ns=100,
+    max_iterations=500,
+    target_fidelity=0.999,
+    learning_rate=0.5,
+)
+
+optimizer = GrapeOptimizer(config)
+result = optimizer.optimize(
+    target_unitary=target,
+    num_qubits=2,
+    drift_hamiltonian=H0,
+    control_hamiltonians=control_hamiltonians,
+)
+
+print(f"CZ fidelity: {result.fidelity:.4f}")
+print(f"Converged: {result.converged}")
+```
+
+---
+
+## Advanced: XY Coupling
+
+For systems with XY-type coupling (common in transmon qubits):
+
+$$
+H_{XY} = \frac{g}{2}(X_0 X_1 + Y_0 Y_1)
+$$
+
+This enables iSWAP-family gates:
+
+```python
+# XY coupling Hamiltonian
+g = 0.02  # Coupling strength (GHz)
+H_coupling = parse_pauli_string(
+    f"{g/2} * X0 X1 + {g/2} * Y0 Y1",
+    num_qubits=2
+)
+
+# Add to drift
+H0 = parse_pauli_string(
+    f"{omega_0/2} * Z0 + {omega_1/2} * Z1",
+    num_qubits=2
+)
+H0 = H0 + H_coupling
+
+# Optimize iSWAP
+target = get_target_unitary("ISWAP", num_qubits=2)
+result = optimizer.optimize(
+    target_unitary=target,
+    num_qubits=2,
+    drift_hamiltonian=H0,
+)
+```
+
+---
+
+## Transmon Anharmonicity
+
+Real transmon qubits have anharmonicity that affects gate quality. While the current implementation uses a two-level approximation, you can account for leakage to the $|2\rangle$ state by using a 3-level model:
+
+```python
+import numpy as np
+
+def transmon_drift_3level(omega: float, alpha: float) -> np.ndarray:
+    """Build 3-level transmon drift Hamiltonian.
+    
+    Args:
+        omega: Qubit frequency (GHz)
+        alpha: Anharmonicity (GHz), typically negative
+        
+    Returns:
+        3x3 drift Hamiltonian
+    """
+    # Energy levels: |0⟩ = 0, |1⟩ = ω, |2⟩ = 2ω + α
+    H0 = np.diag([0, omega, 2*omega + alpha]).astype(np.complex128)
+    return H0
+
+def transmon_drive_3level() -> tuple[np.ndarray, np.ndarray]:
+    """Build 3-level transmon control Hamiltonians.
+    
+    Returns:
+        Tuple of (H_I, H_Q) control Hamiltonians
+    """
+    # X-like coupling: |0⟩↔|1⟩ and |1⟩↔|2⟩ with √2 factor
+    H_I = np.array([
+        [0, 1, 0],
+        [1, 0, np.sqrt(2)],
+        [0, np.sqrt(2), 0],
+    ], dtype=np.complex128)
+    
+    # Y-like coupling
+    H_Q = np.array([
+        [0, -1j, 0],
+        [1j, 0, -1j*np.sqrt(2)],
+        [0, 1j*np.sqrt(2), 0],
+    ], dtype=np.complex128)
+    
+    return H_I, H_Q
+
+# Usage (note: requires 3x3 target unitary)
+H0 = transmon_drift_3level(omega=5.0, alpha=-0.3)
+H_I, H_Q = transmon_drive_3level()
+
+# Embed X gate in 3-level space
+X_3level = np.array([
+    [0, 1, 0],
+    [1, 0, 0],
+    [0, 0, 1],  # |2⟩ unchanged (no leakage)
+], dtype=np.complex128)
+```
+
+!!! warning "3-Level Optimization"
+    The current GRAPE implementation assumes 2-level qubits. For 3-level 
+    optimization, you'll need to modify the optimizer or use a 
+    `num_qubits` value that gives the correct Hilbert space dimension.
+
+---
+
+## Tensor Product Utilities
+
+For building multi-qubit operators manually:
+
+```python
+from qubitos.pulsegen.hamiltonians import (
+    tensor_product,
+    PAULI_I,
+    PAULI_X,
+    PAULI_Y,
+    PAULI_Z,
+)
+
+# X ⊗ I (X on qubit 0, I on qubit 1)
+X_I = tensor_product([PAULI_X, PAULI_I])
+
+# I ⊗ Z (I on qubit 0, Z on qubit 1)  
+I_Z = tensor_product([PAULI_I, PAULI_Z])
+
+# Z ⊗ Z (ZZ coupling)
+Z_Z = tensor_product([PAULI_Z, PAULI_Z])
+
+# Three-qubit: X ⊗ I ⊗ Z
+X_I_Z = tensor_product([PAULI_X, PAULI_I, PAULI_Z])
+```
+
+---
+
+## Rotation Gates
+
+Generate arbitrary rotation gates:
+
+```python
+from qubitos.pulsegen.hamiltonians import rotation_gate
+import numpy as np
+
+# Rotations around Pauli axes
+RX_pi2 = rotation_gate("X", np.pi/2)   # R_X(π/2)
+RY_pi4 = rotation_gate("Y", np.pi/4)   # R_Y(π/4)
+RZ_pi = rotation_gate("Z", np.pi)      # R_Z(π)
+
+# Verify: R_X(π) = -iX
+RX_pi = rotation_gate("X", np.pi)
+print(np.allclose(RX_pi, -1j * PAULI_X))  # True
+```
+
+### Arbitrary Axis Rotation
+
+For rotation around an arbitrary axis $\hat{n} = (n_x, n_y, n_z)$:
+
+$$
+R_{\hat{n}}(\theta) = \cos(\theta/2)I - i\sin(\theta/2)(n_x X + n_y Y + n_z Z)
+$$
+
+```python
+def rotation_arbitrary(n: tuple[float, float, float], theta: float) -> np.ndarray:
+    """Rotation around arbitrary axis.
+    
+    Args:
+        n: Unit vector (nx, ny, nz) defining rotation axis
+        theta: Rotation angle in radians
+        
+    Returns:
+        2x2 rotation matrix
+    """
+    nx, ny, nz = n
+    c = np.cos(theta / 2)
+    s = np.sin(theta / 2)
+    
+    return c * PAULI_I - 1j * s * (nx * PAULI_X + ny * PAULI_Y + nz * PAULI_Z)
+
+# Example: rotation around (1,1,0)/√2 axis
+axis = (1/np.sqrt(2), 1/np.sqrt(2), 0)
+R_custom = rotation_arbitrary(axis, np.pi/2)
+```
+
+---
+
+## Complete Example: Optimizing a Custom Gate
+
+Putting it all together:
+
+```python
+import numpy as np
+from qubitos.pulsegen import GrapeOptimizer, GrapeConfig
+from qubitos.pulsegen.hamiltonians import (
+    parse_pauli_string,
+    get_target_unitary,
+    rotation_gate,
+)
+
+# Define the system
+omega = 5.0  # Qubit frequency (GHz)
+
+H0 = parse_pauli_string(f"{omega/2} * Z0", num_qubits=1)
+Hc = [
+    parse_pauli_string("X0", num_qubits=1),
+    parse_pauli_string("Y0", num_qubits=1),
+]
+
+# Define a custom gate: R_X(π/3) - an irrational angle
+target = rotation_gate("X", np.pi/3)
+
+# Configure optimizer
+config = GrapeConfig(
+    num_time_steps=100,
+    duration_ns=50,
+    max_iterations=300,
+    target_fidelity=0.9999,
+    learning_rate=0.5,
+)
+
+# Run optimization
+optimizer = GrapeOptimizer(config)
+result = optimizer.optimize(
+    target_unitary=target,
+    num_qubits=1,
+    drift_hamiltonian=H0,
+    control_hamiltonians=Hc,
+)
+
+# Report results
+print(f"Gate: R_X(π/3)")
+print(f"Fidelity: {result.fidelity:.6f}")
+print(f"Converged: {result.converged}")
+print(f"Iterations: {result.iterations}")
+print(f"Pulse duration: {config.duration_ns} ns")
+print(f"Pulse samples: {len(result.i_envelope)}")
+```
+
+---
+
+## Troubleshooting
+
+### Low Fidelity for Custom Gates
+
+| Issue | Solution |
+|-------|----------|
+| Fidelity stuck at ~0.5 | Check Hamiltonian normalization and units |
+| Fidelity oscillates | Reduce learning rate |
+| Very slow convergence | Increase pulse duration or time steps |
+| Never converges | Verify target unitary is achievable with your controls |
+
+### Common Mistakes
+
+1. **Wrong units**: QubitOS uses GHz for frequencies and MHz for pulse amplitudes
+2. **Missing identity**: For multi-qubit systems, operators must be tensored with identity on other qubits
+3. **Unitary check**: Custom targets must be unitary ($U^\dagger U = I$)
+4. **Control mismatch**: Ensure control Hamiltonians match your physical system
+
+---
+
+## Summary
+
+| Task | Function/Class |
+|------|----------------|
+| Parse Pauli string | `parse_pauli_string()` |
+| Build Hamiltonian | `build_hamiltonian()` |
+| Get standard gate | `get_target_unitary()` |
+| Rotation gate | `rotation_gate()` |
+| Tensor product | `tensor_product()` |
+| Embed in larger space | `embed_gate()` |
+
+---
+
+## Next Steps
+
+- [API Reference](../api/pulsegen.md) - Complete Hamiltonian API
+- [Notebooks](../notebooks/03-custom-hamiltonians.ipynb) - Interactive examples
+- [Architecture](../concepts/architecture.md) - System design overview

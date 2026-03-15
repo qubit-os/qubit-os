@@ -1,0 +1,22 @@
+# Dependabot configuration for qubit-os-core
+version: 2
+updates:
+  # Python/pip
+  - package-ecosystem: "pip"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    commit-message:
+      prefix: "deps"
+    ignore:
+      # Ignore patch updates for stability
+      - dependency-name: "*"
+        update-types: ["version-update:semver-patch"]
+  
+  # GitHub Actions
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    commit-message:
+      prefix: "ci"
