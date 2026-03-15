@@ -1,0 +1,8 @@
+# Cargo configuration for qubit-os-hardware local development
+#
+# PYO3_PYTHON tells PyO3's build script which Python interpreter to use.
+# LD_LIBRARY_PATH for libpython3.14.so is handled by .envrc (direnv) since
+# Cargo's [env] cannot append to existing values.
+
+[env]
+PYO3_PYTHON = "/home/linuxbrew/.linuxbrew/bin/python3"

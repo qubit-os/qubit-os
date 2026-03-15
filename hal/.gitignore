@@ -1,0 +1,31 @@
+# Rust
+/target/
+**/*.rs.bk
+# Don't ignore Cargo.lock — this is an application crate
+# Cargo.lock
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+logs/
+*.log
+
+# Config with secrets
+config.local.yaml
+.env
+
+# Coverage
+*.profraw
+*.profdata
+lcov.info
+coverage/
+test_output.txt

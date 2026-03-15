@@ -1,0 +1,8 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Documentation
+    url: https://qubit-os.github.io/qubit-os-core/
+    about: Check the documentation for answers
+  - name: Discussions
+    url: https://github.com/qubit-os/qubit-os-core/discussions
+    about: Ask questions and discuss with the community
