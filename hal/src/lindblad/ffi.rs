@@ -159,6 +159,42 @@ extern "C" {
         rho_out: *mut f64,
     ) -> i32;
 
+    /// Compute propagators for a piecewise-constant Hamiltonian sequence.
+    ///
+    /// Given N Liouvillians (one per time segment), computes N propagators:
+    ///   P_k = exp(L_k * dt)   for k = 0, ..., n_segments-1
+    ///
+    /// This is the key function for GRAPE optimization, where each pulse
+    /// segment has a different Hamiltonian (and thus a different Liouvillian).
+    /// Computing all propagators in one call allows the C library to:
+    /// - Reuse scratch buffers across segments
+    /// - Parallelize across segments with OpenMP
+    /// - Prefetch the next Liouvillian while computing the current propagator
+    ///
+    /// # Arguments
+    /// * `dim` — Hilbert space dimension d. Each Liouvillian is (d²×d²).
+    /// * `liouvillians` — Array of `n_segments` flat (d²×d²) Liouvillians,
+    ///                    laid out contiguously: [L_0, L_1, ..., L_{n-1}].
+    ///                    Total size: n_segments * d⁴ * 2 doubles.
+    /// * `n_segments` — Number of time segments (= number of Liouvillians).
+    /// * `dt` — Time step in seconds (uniform across segments).
+    /// * `propagators_out` — Output buffer for `n_segments` propagators,
+    ///                       each (d²×d²), laid out contiguously.
+    ///                       Must be pre-allocated with n_segments * d⁴ * 2 doubles.
+    ///
+    /// # Returns
+    /// 0 on success, nonzero error code on failure.
+    ///
+    /// # Threading
+    /// This function may use OpenMP internally to parallelize across segments.
+    pub fn qos_lindblad_propagator_sequence(
+        dim: i32,
+        liouvillians: *const f64,
+        n_segments: i32,
+        dt: f64,
+        propagators_out: *mut f64,
+    ) -> i32;
+
     /// Return the maximum Hilbert space dimension supported by this build.
     ///
     /// The C library may be compiled with different MAX_DIM depending on
@@ -260,6 +296,76 @@ pub fn evolve_c(
 
     Array2::from_shape_vec((d, d), data)
         .map_err(|e| format!("Failed to reshape output: {e}"))
+}
+
+/// Compute propagators for a piecewise-constant pulse sequence via the C fast path.
+///
+/// Given N Liouvillians (one per GRAPE segment), returns N propagators.
+/// This is the workhorse for open-system GRAPE: each optimizer iteration
+/// needs all N segment propagators to compute the forward/backward pass.
+pub fn compute_propagator_sequence_c(
+    liouvillians: &[Array2<Complex64>],
+    dt: f64,
+) -> Result<Vec<Array2<Complex64>>, String> {
+    if liouvillians.is_empty() {
+        return Ok(vec![]);
+    }
+
+    let d2 = liouvillians[0].nrows();
+    let d = (d2 as f64).sqrt() as usize;
+    if d * d != d2 {
+        return Err(format!("Liouvillian dimension {d2} is not a perfect square"));
+    }
+    if d > C_SOLVER_MAX_DIM {
+        return Err(format!("Dimension {d} exceeds C solver max {C_SOLVER_MAX_DIM}"));
+    }
+
+    let n_segments = liouvillians.len();
+    let elems_per_liouvillian = d2 * d2 * 2; // interleaved re/im
+
+    // Flatten all Liouvillians contiguously
+    let mut l_flat = Vec::with_capacity(n_segments * elems_per_liouvillian);
+    for l in liouvillians {
+        if l.nrows() != d2 || l.ncols() != d2 {
+            return Err(format!(
+                "Liouvillian shape mismatch: expected ({d2},{d2}), got ({},{})",
+                l.nrows(),
+                l.ncols()
+            ));
+        }
+        l_flat.extend(l.iter().flat_map(|c| [c.re, c.im]));
+    }
+
+    let mut p_flat = vec![0.0f64; n_segments * elems_per_liouvillian];
+
+    let rc = unsafe {
+        qos_lindblad_propagator_sequence(
+            d as i32,
+            l_flat.as_ptr(),
+            n_segments as i32,
+            dt,
+            p_flat.as_mut_ptr(),
+        )
+    };
+
+    let err = LindbladFfiError::from_code(rc);
+    if !err.is_success() {
+        return Err(format!("C propagator sequence failed: {err}"));
+    }
+
+    // Unflatten into Vec<Array2<Complex64>>
+    let mut propagators = Vec::with_capacity(n_segments);
+    for chunk in p_flat.chunks_exact(elems_per_liouvillian) {
+        let data: Vec<Complex64> = chunk
+            .chunks_exact(2)
+            .map(|c| Complex64::new(c[0], c[1]))
+            .collect();
+        let mat = Array2::from_shape_vec((d2, d2), data)
+            .map_err(|e| format!("Failed to reshape propagator: {e}"))?;
+        propagators.push(mat);
+    }
+
+    Ok(propagators)
 }
 
 #[cfg(test)]

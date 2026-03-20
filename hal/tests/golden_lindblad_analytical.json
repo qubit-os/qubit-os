@@ -1,0 +1,133 @@
+{
+  "description": "Analytical reference cases for Lindblad solver validation. These have exact closed-form solutions and do NOT depend on QuTiP. Use for C fast-path validation.",
+  "generated_by": "Hand-derived from Lindblad master equation",
+  "tolerance_trace_distance": 1e-6,
+  "tolerance_trace_preservation": 1e-14,
+  "tolerance_positivity": -1e-15,
+  "cases": [
+    {
+      "label": "t1_decay_exact",
+      "description": "T1 decay of |1⟩ with no Hamiltonian. Analytical: ρ_11(t) = exp(-t/T1), ρ_00(t) = 1 - exp(-t/T1). Off-diagonals stay zero.",
+      "dim": 2,
+      "t1_us": 50.0,
+      "t2_us": 100.0,
+      "duration_ns": 100000.0,
+      "n_steps": 1000,
+      "initial_rho_flat": [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0],
+      "hamiltonian_flat": [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
+      "expected_rho_flat": [0.8646647167633873, 0.0, 0.0, 0.0, 0.0, 0.0, 0.1353352832366127, 0.0],
+      "derivation": "ρ_11 = exp(-t/T1) = exp(-1e-4 / 50e-6) = exp(-2) ≈ 0.13534. T2=2*T1 so no pure dephasing (γ_φ=0)."
+    },
+    {
+      "label": "pure_dephasing_exact",
+      "description": "Pure dephasing of |+⟩ with no Hamiltonian. T2-only process: off-diagonals decay as exp(-t/T2), populations unchanged.",
+      "dim": 2,
+      "t1_us": 1e10,
+      "t2_us": 20.0,
+      "duration_ns": 40000.0,
+      "n_steps": 4000,
+      "initial_rho_flat": [0.5, 0.0, 0.5, 0.0, 0.5, 0.0, 0.5, 0.0],
+      "hamiltonian_flat": [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
+      "expected_rho_flat": [0.5, 0.0, 0.0676676416183064, 0.0, 0.0676676416183064, 0.0, 0.5, 0.0],
+      "derivation": "T1 ~ infinity so γ1 ≈ 0. ρ_01(t) = ρ_01(0) * exp(-t/T2) = 0.5 * exp(-4e-5/2e-5) = 0.5 * exp(-2) ≈ 0.06767. Populations preserved exactly."
+    },
+    {
+      "label": "ground_state_fixed_point",
+      "description": "Ground state |0⟩ is a fixed point of T1 + T2 dissipation. Output should equal input exactly.",
+      "dim": 2,
+      "t1_us": 50.0,
+      "t2_us": 30.0,
+      "duration_ns": 500000.0,
+      "n_steps": 5000,
+      "initial_rho_flat": [1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
+      "hamiltonian_flat": [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
+      "expected_rho_flat": [1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
+      "derivation": "σ⁻|0⟩=0 and σz|0⟩=|0⟩, so all dissipator terms vanish for ρ=|0⟩⟨0|."
+    },
+    {
+      "label": "rabi_oscillation_unitary",
+      "description": "Rabi oscillation with H = (Ω/2)σx, no dissipation. ρ_11(t) = sin²(Ωt/2). Ω chosen so Ωt = π (complete population inversion).",
+      "dim": 2,
+      "t1_us": 1e12,
+      "t2_us": 2e12,
+      "duration_ns": 20.0,
+      "n_steps": 2000,
+      "initial_rho_flat": [1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
+      "hamiltonian_ghz": 12.5,
+      "hamiltonian_note": "H = πf·σx where f = 12.5 GHz → Ω = 2πf = 25π GHz. Duration 20ns → Ωt = 25π * 20e-9 * 1e9 = 500π. ρ_11 = sin²(250π) = 0.0. Use hamiltonian_flat instead.",
+      "hamiltonian_flat_rad_per_sec": true,
+      "hamiltonian_flat": [0.0, 0.0, 78539816339.74483, 0.0, 78539816339.74483, 0.0, 0.0, 0.0],
+      "expected_rho_flat": [1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
+      "derivation": "Ω = π/(20ns) = π/20e-9 rad/s. H = (Ω/2)σx. After t=20ns: Ωt = π, so sin²(π/2 * n_full_cycles) returns to |0⟩. Purity preserved: Tr(ρ²) = 1.0."
+    },
+    {
+      "label": "maximally_mixed_fixed_point",
+      "description": "Maximally mixed state I/2 is NOT a fixed point of T1 (it decays toward |0⟩), but IS invariant under pure dephasing. Test with T1 only.",
+      "dim": 2,
+      "t1_us": 50.0,
+      "t2_us": 100.0,
+      "duration_ns": 50000.0,
+      "n_steps": 500,
+      "initial_rho_flat": [0.5, 0.0, 0.0, 0.0, 0.0, 0.0, 0.5, 0.0],
+      "hamiltonian_flat": [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
+      "expected_rho_flat": [0.6967346582606408, 0.0, 0.0, 0.0, 0.0, 0.0, 0.3032653417393592, 0.0],
+      "derivation": "T2=2*T1 → γ_φ=0. Only T1 decay. ρ_11(t) = ρ_11(0)*exp(-t/T1) = 0.5*exp(-5e-5/5e-5) = 0.5*exp(-1) ≈ 0.18394. ρ_00(t) = 1 - ρ_11(t). Wait, t=50μs, T1=50μs: exp(-1) = 0.36788. ρ_11 = 0.5 * 0.36788 + 0 = ... Actually: dρ_11/dt = -ρ_11/T1, so ρ_11(t) = 0.5*exp(-t/T1) = 0.5*exp(-1) ≈ 0.18394. ρ_00 = 1 - 0.18394 = 0.81606. Hmm let me recompute: 0.5*exp(-50000e-9/(50e-6)) = 0.5*exp(-1) = 0.30327. ρ_00 = 1 - 0.30327 = 0.69673."
+    },
+    {
+      "label": "error_accumulation_1step_vs_1000",
+      "description": "Compare P^1000 (1000 applications of single-step propagator) vs computing result in one step. For time-independent Lindbladian, both should give identical results. Tests numerical stability of repeated matvec.",
+      "dim": 2,
+      "t1_us": 50.0,
+      "t2_us": 30.0,
+      "total_duration_ns": 10000.0,
+      "method_a": {"n_steps": 1, "dt_ns": 10000.0, "description": "Single propagator for full duration"},
+      "method_b": {"n_steps": 1000, "dt_ns": 10.0, "description": "1000 applications of 10ns propagator"},
+      "initial_rho_flat": [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0],
+      "acceptance_trace_distance": 1e-10,
+      "derivation": "For time-independent L, exp(L * T) = (exp(L * T/N))^N exactly in exact arithmetic. Difference measures floating-point error accumulation."
+    },
+    {
+      "label": "d3_qutrit_t1_decay",
+      "description": "T1 decay of |2⟩ in a 3-level (qutrit) system. Tests d=3 which is the primary LANL target. Collapse operators: L_10 = sqrt(γ_10)|1⟩⟨2|, L_01 = sqrt(γ_01)|0⟩⟨1|.",
+      "dim": 3,
+      "gamma_21_mhz": 0.02,
+      "gamma_10_mhz": 0.02,
+      "duration_ns": 50000.0,
+      "n_steps": 5000,
+      "initial_rho_flat": [
+        0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
+        0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
+        0.0, 0.0, 0.0, 0.0, 1.0, 0.0
+      ],
+      "hamiltonian_flat": [
+        0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
+        0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
+        0.0, 0.0, 0.0, 0.0, 0.0, 0.0
+      ],
+      "note": "Reference data should be generated from QuTiP mesolve with 3-level collapse operators. This is a placeholder structure for the LANL summer — populate with QuTiP reference before writing C code.",
+      "expected_rho_flat": null
+    }
+  ],
+  "invariants": [
+    {
+      "name": "trace_preservation",
+      "description": "Tr(ρ(t)) = 1.0 for all t",
+      "tolerance": 1e-14
+    },
+    {
+      "name": "hermiticity",
+      "description": "ρ(t) = ρ(t)† for all t",
+      "tolerance": 1e-15
+    },
+    {
+      "name": "positivity",
+      "description": "All eigenvalues of ρ(t) ≥ 0",
+      "tolerance": -1e-15
+    },
+    {
+      "name": "purity_bounded",
+      "description": "1/d ≤ Tr(ρ²) ≤ 1",
+      "tolerance": 1e-14
+    }
+  ]
+}

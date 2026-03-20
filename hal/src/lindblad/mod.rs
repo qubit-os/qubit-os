@@ -50,7 +50,7 @@ pub mod open_grape;
 pub mod pyo3_bindings;
 pub mod types;
 
-pub use ffi::{c_solver_available, C_SOLVER_MAX_DIM};
+pub use ffi::{c_solver_available, compute_propagator_sequence_c, C_SOLVER_MAX_DIM};
 pub use integrate::{hellinger_distance, solve_lindblad, state_fidelity, trace_distance};
 pub use open_grape::{OpenSystemGrapeConfig, OpenSystemGrapeResult, OpenSystemOptimizer};
 pub use types::{CollapseOperator, LindbladConfig, LindbladResult};
