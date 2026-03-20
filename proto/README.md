@@ -4,13 +4,13 @@
 [![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 [![Protobuf](https://img.shields.io/badge/protobuf-v3-green.svg)](https://protobuf.dev/)
 
-Protocol Buffer definitions for QubitOS — the open-source quantum control kernel.
+Protocol Buffer definitions for QubitOS -- the open-source quantum control kernel.
 
-Part of the [QubitOS](https://qubit-os.github.io) project. See also: [qubit-os-core](https://github.com/qubit-os/qubit-os-core) (Python) · [qubit-os-hardware](https://github.com/qubit-os/qubit-os-hardware) (Rust)
+Part of the [QubitOS](https://qubit-os.github.io) monorepo. See also: [core/](../core/) (Python) and [hal/](../hal/) (Rust).
 
 ## Overview
 
-This repository contains the protocol buffer definitions that form the contract between QubitOS components:
+This directory contains the protocol buffer definitions that form the contract between QubitOS components:
 
 - **quantum.common.v1** - Shared types (TraceContext, Timestamp, Error)
 - **quantum.pulse.v1** - Pulse specifications (Hamiltonian, PulseShape, GRAPE)

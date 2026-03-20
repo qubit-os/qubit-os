@@ -133,7 +133,7 @@ ruff format src/ tests/
 
 ## Documentation
 
-📖 **[Full Documentation](https://qubit-os.github.io/qubit-os-core/)** — guides, tutorials, API reference, Jupyter notebooks.
+**[Full Documentation](https://qubit-os.github.io/qubit-os-core/)** -- Guides, tutorials, API reference, Jupyter notebooks.
 
 - [Installation Guide](https://qubit-os.github.io/qubit-os-core/guides/installation/)
 - [Quickstart](https://qubit-os.github.io/qubit-os-core/guides/quickstart/)

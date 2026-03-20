@@ -14,13 +14,13 @@ These are the single source of truth for system architecture.
 
 | Spec | Phase | Status |
 |------|-------|--------|
-| [TIME-MODEL-SPEC.md](TIME-MODEL-SPEC.md) | v0.2.1 | ✅ Implemented |
-| [ERROR-BUDGET-SPEC.md](ERROR-BUDGET-SPEC.md) | v0.2.2 | ✅ Implemented |
-| [HAMILTONIAN-FIRST-API-SPEC.md](HAMILTONIAN-FIRST-API-SPEC.md) | v0.2.3 | ✅ Implemented |
-| [EXPERIMENT-PROVENANCE-SPEC.md](EXPERIMENT-PROVENANCE-SPEC.md) | v0.2.4 | ✅ Implemented |
-| [MULTI-QUBIT-SPEC.md](MULTI-QUBIT-SPEC.md) | v0.3.0 | ✅ Implemented |
-| [RUST-NATIVE-SOLVER-SPEC.md](RUST-NATIVE-SOLVER-SPEC.md) | v0.5.0 | ✅ Implemented |
-| [SME-FEEDBACK-SPEC.md](SME-FEEDBACK-SPEC.md) | v0.6.0–v0.8.0 | 📐 Design Phase |
+| [TIME-MODEL-SPEC.md](TIME-MODEL-SPEC.md) | v0.2.1 | Implemented |
+| [ERROR-BUDGET-SPEC.md](ERROR-BUDGET-SPEC.md) | v0.2.2 | Implemented |
+| [HAMILTONIAN-FIRST-API-SPEC.md](HAMILTONIAN-FIRST-API-SPEC.md) | v0.2.3 | Implemented |
+| [EXPERIMENT-PROVENANCE-SPEC.md](EXPERIMENT-PROVENANCE-SPEC.md) | v0.2.4 | Implemented |
+| [MULTI-QUBIT-SPEC.md](MULTI-QUBIT-SPEC.md) | v0.3.0 | Implemented |
+| [RUST-NATIVE-SOLVER-SPEC.md](RUST-NATIVE-SOLVER-SPEC.md) | v0.5.0 | Implemented |
+| [SME-FEEDBACK-SPEC.md](SME-FEEDBACK-SPEC.md) | v0.6.0-v0.8.0 | Design phase |
 
 ## Policy: Generated Code
 
@@ -33,6 +33,6 @@ These are the single source of truth for system architecture.
 
 **Process:** When `.proto` files change, regenerate with:
 ```bash
-cd qubit-os-proto && make generate
+cd proto && make generate
 ```
 Then commit the generated files.

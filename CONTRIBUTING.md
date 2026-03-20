@@ -8,7 +8,7 @@ Be respectful, constructive, and professional. We're building scientific softwar
 
 ---
 
-## ⚠️ CI/CD-First Development (MANDATORY)
+## CI/CD-First Development (MANDATORY)
 
 **QubitOS follows a strict CI/CD-first development policy. Read this section carefully.**
 
@@ -29,22 +29,25 @@ If this script fails, **do not push**. Fix the issues first.
 
 ### Local CI Commands
 
-#### qubit-os-hardware (Rust)
+#### hal (Rust)
 ```bash
+cd hal
 cargo fmt --check           # Format check
-cargo clippy -- -D warnings # Lint check  
+cargo clippy -- -D warnings # Lint check
 cargo test                  # Run tests
 ```
 
-#### qubit-os-core (Python)
+#### core (Python)
 ```bash
+cd core
 ruff check src/             # Lint check
 ruff format --check src/    # Format check
 pytest tests/               # Run tests
 ```
 
-#### qubit-os-proto
+#### proto
 ```bash
+cd proto
 buf lint                    # Proto lint
 buf format -d --exit-code   # Proto format
 python -m build             # Python build test
@@ -62,12 +65,9 @@ python -m build             # Python build test
 Install pre-commit hooks to catch issues automatically:
 
 ```bash
-# In qubit-os-core
+cd core
 pip install pre-commit
 pre-commit install
-
-# In qubit-os-hardware  
-# Hooks are configured in .pre-commit-config.yaml if present
 ```
 
 ---
@@ -76,65 +76,51 @@ pre-commit install
 
 ### Repository Structure
 
-QubitOS consists of three repositories:
+QubitOS is a monorepo with three modules:
 
-| Repository | Purpose | Language |
-|------------|---------|----------|
-| [qubit-os-proto](https://github.com/qubit-os/qubit-os-proto) | Protocol Buffers definitions | Protobuf |
-| [qubit-os-hardware](https://github.com/qubit-os/qubit-os-hardware) | Hardware Abstraction Layer | Rust |
-| [qubit-os-core](https://github.com/qubit-os/qubit-os-core) | Python modules and CLI | Python |
+| Directory | Purpose | Language |
+|-----------|---------|----------|
+| `proto/`  | Protocol Buffers definitions | Protobuf |
+| `hal/`    | Hardware Abstraction Layer | Rust |
+| `core/`   | Python modules and CLI | Python |
 
 ### Development Setup
 
-#### Proto Repository
+```bash
+# Clone the monorepo
+git clone https://github.com/qubit-os/qubit-os.git
+cd qubit-os
+```
+
+#### Proto
 
 ```bash
 # Install buf
 brew install bufbuild/buf/buf
 
-# Clone and setup
-git clone https://github.com/qubit-os/qubit-os-proto.git
-cd qubit-os-proto
-
-# Lint and verify build
+cd proto
 buf lint
 python -m build
 ```
 
-#### Hardware Repository
+#### HAL (Rust)
 
 ```bash
-# Requires Rust 1.83+ and Python 3.11+
-git clone https://github.com/qubit-os/qubit-os-hardware.git
-cd qubit-os-hardware
-
-# Build and test
+# Requires Rust 1.85+ and Python 3.11+
+cd hal
 cargo build
 cargo test
-
-# Run local CI check
-./scripts/ci-check.sh
 ```
 
-#### Core Repository
+#### Core (Python)
 
 ```bash
 # Requires Python 3.11+
-git clone https://github.com/qubit-os/qubit-os-core.git
-cd qubit-os-core
-
-# Create virtual environment
+cd core
 python3 -m venv .venv
 source .venv/bin/activate
-
-# Install in development mode
 pip install -e ".[dev]"
-
-# Run tests
 pytest tests/
-
-# Run local CI check
-./scripts/ci-check.sh
 ```
 
 ---

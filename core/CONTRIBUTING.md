@@ -8,7 +8,7 @@ Be respectful, constructive, and professional. We're building scientific softwar
 
 ---
 
-## ⚠️ CI/CD-First Development (MANDATORY)
+## CI/CD-First Development (MANDATORY)
 
 **QubitOS follows a strict CI/CD-first development policy. Read this section carefully.**
 

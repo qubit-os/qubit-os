@@ -4,9 +4,9 @@
 [![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 [![Rust](https://img.shields.io/badge/rust-1.85+-orange.svg)](https://www.rust-lang.org/)
 
-Rust implementation of the QubitOS Hardware Abstraction Layer — the bridge between pulse optimization and quantum backends.
+Rust implementation of the QubitOS Hardware Abstraction Layer -- the bridge between pulse optimization and quantum backends.
 
-Part of the [QubitOS](https://qubit-os.github.io) project. See also: [qubit-os-core](https://github.com/qubit-os/qubit-os-core) (Python) · [qubit-os-proto](https://github.com/qubit-os/qubit-os-proto) (Protobuf)
+Part of the [QubitOS](https://qubit-os.github.io) monorepo. See also: [core/](../core/) (Python) and [proto/](../proto/) (Protobuf).
 
 ## Overview
 
@@ -80,7 +80,7 @@ logging:
 
 The HAL includes several security features:
 
-- **Input Validation**: All requests are validated at the API boundary (envelope sizes, qubit bounds, amplitude limits). See [qubit-os-proto/LIMITS.md](../qubit-os-proto/LIMITS.md).
+- **Input Validation**: All requests are validated at the API boundary (envelope sizes, qubit bounds, amplitude limits). See [proto/LIMITS.md](../proto/LIMITS.md).
 - **Timeout Protection**: Python/QuTiP execution has a 300s timeout to prevent hangs.
 - **Error Sanitization**: Production builds return generic error messages to prevent information leakage.
 - **Rate Limiting**: Configurable rate limits (enforced at infrastructure layer).

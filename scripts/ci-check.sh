@@ -3,10 +3,10 @@
 # Run this before pushing to catch issues that would fail in GitHub Actions
 #
 # Usage:
-#   ./scripts/ci-check.sh           # Check all repos
-#   ./scripts/ci-check.sh proto     # Check only qubit-os-proto
-#   ./scripts/ci-check.sh hardware  # Check only qubit-os-hardware
-#   ./scripts/ci-check.sh core      # Check only qubit-os-core
+#   ./scripts/ci-check.sh           # Check all modules
+#   ./scripts/ci-check.sh proto     # Check only proto
+#   ./scripts/ci-check.sh hal       # Check only hal (Rust)
+#   ./scripts/ci-check.sh core      # Check only core (Python)
 
 set -e
 
@@ -31,12 +31,12 @@ check_command() {
 }
 
 # =============================================================================
-# Proto Repo Checks
+# Proto Checks
 # =============================================================================
 check_proto() {
-    log_info "Checking qubit-os-proto..."
-    cd "$ROOT_DIR/qubit-os-proto"
-    
+    log_info "Checking proto..."
+    cd "$ROOT_DIR/proto"
+
     # Check if buf is installed
     if check_command buf; then
         log_info "Running buf lint..."
@@ -46,7 +46,7 @@ check_proto() {
             log_error "Proto lint: FAILED"
             return 1
         fi
-        
+
         log_info "Running buf format check..."
         if buf format -d --exit-code 2>/dev/null; then
             log_info "Proto format: PASSED"
@@ -56,18 +56,18 @@ check_proto() {
     else
         log_warn "buf not installed, skipping proto checks"
     fi
-    
-    log_info "qubit-os-proto: OK"
+
+    log_info "proto: OK"
     return 0
 }
 
 # =============================================================================
-# Hardware Repo Checks
+# HAL (Rust) Checks
 # =============================================================================
-check_hardware() {
-    log_info "Checking qubit-os-hardware..."
-    cd "$ROOT_DIR/qubit-os-hardware"
-    
+check_hal() {
+    log_info "Checking hal..."
+    cd "$ROOT_DIR/hal"
+
     # Check if cargo is installed
     if check_command cargo; then
         log_info "Running cargo fmt check..."
@@ -76,7 +76,7 @@ check_hardware() {
         else
             log_warn "Rust format: needs formatting (run 'cargo fmt')"
         fi
-        
+
         log_info "Running cargo clippy..."
         if cargo clippy --all-targets 2>/dev/null -- -D warnings; then
             log_info "Rust clippy: PASSED"
@@ -84,7 +84,7 @@ check_hardware() {
             log_error "Rust clippy: FAILED"
             return 1
         fi
-        
+
         log_info "Running cargo check..."
         if cargo check 2>/dev/null; then
             log_info "Rust check: PASSED"
@@ -92,7 +92,7 @@ check_hardware() {
             log_error "Rust check: FAILED"
             return 1
         fi
-        
+
         log_info "Running cargo test..."
         if cargo test 2>/dev/null; then
             log_info "Rust tests: PASSED"
@@ -103,18 +103,18 @@ check_hardware() {
     else
         log_warn "cargo not installed, skipping Rust checks"
     fi
-    
-    log_info "qubit-os-hardware: OK"
+
+    log_info "hal: OK"
     return 0
 }
 
 # =============================================================================
-# Core Repo Checks
+# Core (Python) Checks
 # =============================================================================
 check_core() {
-    log_info "Checking qubit-os-core..."
-    cd "$ROOT_DIR/qubit-os-core"
-    
+    log_info "Checking core..."
+    cd "$ROOT_DIR/core"
+
     # Check if Python tools are installed
     if check_command python3; then
         log_info "Running ruff check..."
@@ -124,21 +124,21 @@ check_core() {
             log_error "Python lint: FAILED"
             return 1
         fi
-        
+
         log_info "Running ruff format check..."
         if python3 -m ruff format --check src/ 2>/dev/null; then
             log_info "Python format: PASSED"
         else
             log_warn "Python format: needs formatting (run 'ruff format src/')"
         fi
-        
+
         log_info "Running mypy..."
         if python3 -m mypy src/qubitos/ --ignore-missing-imports 2>/dev/null; then
             log_info "Python types: PASSED"
         else
             log_warn "Python types: has issues (may be expected during early development)"
         fi
-        
+
         log_info "Running pytest..."
         if python3 -m pytest tests/ -v --tb=short 2>/dev/null; then
             log_info "Python tests: PASSED"
@@ -148,7 +148,7 @@ check_core() {
     else
         log_warn "python3 not installed, skipping Python checks"
     fi
-    
+
     # Check for secrets
     log_info "Checking for potential secrets..."
     if check_command detect-secrets; then
@@ -165,8 +165,8 @@ check_core() {
             log_info "Basic secret scan: PASSED"
         fi
     fi
-    
-    log_info "qubit-os-core: OK"
+
+    log_info "core: OK"
     return 0
 }
 
@@ -176,15 +176,15 @@ check_core() {
 main() {
     log_info "QubitOS Local CI Check"
     log_info "======================"
-    
+
     FAILED=0
-    
+
     case "${1:-all}" in
         proto)
             check_proto || FAILED=1
             ;;
-        hardware)
-            check_hardware || FAILED=1
+        hal|hardware)
+            check_hal || FAILED=1
             ;;
         core)
             check_core || FAILED=1
@@ -192,20 +192,20 @@ main() {
         all)
             check_proto || FAILED=1
             echo ""
-            check_hardware || FAILED=1
+            check_hal || FAILED=1
             echo ""
             check_core || FAILED=1
             ;;
         *)
             log_error "Unknown target: $1"
-            echo "Usage: $0 [proto|hardware|core|all]"
+            echo "Usage: $0 [proto|hal|core|all]"
             exit 1
             ;;
     esac
-    
+
     echo ""
     if [ $FAILED -eq 0 ]; then
-        log_info "All checks passed! Safe to push."
+        log_info "All checks passed. Safe to push."
         exit 0
     else
         log_error "Some checks failed. Fix issues before pushing."

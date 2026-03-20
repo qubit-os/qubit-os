@@ -2,7 +2,7 @@
 
 ## Overview
 
-QubitOS is an open-source quantum control kernel providing Hamiltonian-level pulse optimization, hardware abstraction, and calibration management for quantum computing research. The project spans three repositories: `qubit-os-proto` (Protocol Buffer definitions), `qubit-os-hardware` (Rust HAL server), and `qubit-os-core` (Python client, optimizer, and calibration). **v0.1.0 has been released** — this roadmap now focuses on v0.2.0 foundation hardening informed by a comprehensive architecture review.
+QubitOS is an open-source quantum control kernel providing Hamiltonian-level pulse optimization, hardware abstraction, and calibration management for quantum computing research. The monorepo contains three modules: `proto/` (Protocol Buffer definitions), `hal/` (Rust HAL server), and `core/` (Python client, optimizer, and calibration). **v0.1.0 has been released** -- this roadmap now focuses on v0.2.0 foundation hardening informed by a comprehensive architecture review.
 
 ---
 
@@ -27,17 +27,17 @@ QubitOS is an open-source quantum control kernel providing Hamiltonian-level pul
 ### Quick Reference: CI Check Commands
 
 ```bash
-# qubit-os-hardware
-cd qubit-os-hardware
+# hal (Rust)
+cd hal
 cargo fmt --check && cargo clippy -- -D warnings && cargo test
 
-# qubit-os-core
-cd qubit-os-core
+# core (Python)
+cd core
 source .venv/bin/activate
 ruff check src/ && ruff format --check src/ && pytest tests/
 
-# qubit-os-proto
-cd qubit-os-proto
+# proto
+cd proto
 buf lint && buf format -d --exit-code
 python -m build  # Test Python build works
 ```
@@ -46,23 +46,23 @@ python -m build  # Test Python build works
 
 ## Completed Phases (v0.1.0)
 
-### Phase 0: Design & Foundation ✅
+### Phase 0: Design & Foundation [done]
 
 Established project structure and governance: design document v0.5.0 defining the Hamiltonian-first architecture, 3-repo structure (proto, hardware, core), Protocol Buffer API definitions, CI/CD workflows for all repos, default calibration data, README files, Apache 2.0 licensing, pre-commit hooks, issue templates, and Dependabot configuration.
 
-### Phase 1: Core Implementation ✅
+### Phase 1: Core Implementation [done]
 
 Built the working single-qubit control stack: Rust HAL server (tonic gRPC + axum REST), QuTiP simulation backend via PyO3, GRAPE optimizer achieving 99.9% fidelity on X-gate, full `qubit-os` CLI, Python client library, and completed a 12-item security audit. End-to-end test passing: X-gate optimization through pulse execution to measurement results.
 
-### Phase 2: Integration & Testing ✅
+### Phase 2: Integration & Testing [done]
 
 Achieved production-quality test coverage and documentation: 93% Python coverage (464 tests), 85%+ Rust coverage (149 tests), MkDocs documentation site, 3 tutorial notebooks (quickstart, GRAPE deep dive, custom Hamiltonians), 5 golden file test suites for reproducibility validation, mypy clean, troubleshooting guide, and API reference (Sphinx, rustdoc, OpenAPI, buf).
 
-### Phase 3: IQM Integration ✅
+### Phase 3: IQM Integration [done]
 
 Connected to real quantum hardware: IQM Resonance API client in Rust with exponential backoff retry and SecretString credential handling, Hellinger distance crosscheck validation between simulation and hardware, T1/T2 fitting from hardware measurements, randomized benchmarking with 24 single-qubit Cliffords (BFS over generators), and automated calibration runner with drift detection via fingerprinting.
 
-### Phase 4: v0.1.0 Release ✅
+### Phase 4: v0.1.0 Release [done]
 
 Published the first release: v0.1.0 tagged across all three repositories, CHANGELOGs finalized, Python package published to PyPI, Docker images pushed to GHCR, documentation site deployed, and release notes written.
 
@@ -367,31 +367,31 @@ The [architecture review](../../ARCHITECTURE-REVIEW.md) identified five structur
 
 | Job | Command | Must Pass |
 |-----|---------|-----------|
-| Lint | `buf lint` | ✅ |
-| Format | `buf format -d --exit-code` | ✅ |
-| Build Rust | `cargo build` | ✅ |
-| Build Python | `python -m build` | ✅ |
-| Test Import | `python -c "from quantum..."` | ✅ |
+| Lint | `buf lint` | [done] |
+| Format | `buf format -d --exit-code` | [done] |
+| Build Rust | `cargo build` | [done] |
+| Build Python | `python -m build` | [done] |
+| Test Import | `python -c "from quantum..."` | [done] |
 
 #### qubit-os-hardware
 
 | Job | Command | Must Pass |
 |-----|---------|-----------|
-| Format | `cargo fmt --check` | ✅ |
-| Clippy | `cargo clippy -- -D warnings` | ✅ |
-| Build | `cargo build --release` | ✅ |
-| Test | `cargo test` | ✅ |
-| Docker | `docker build .` | ✅ |
+| Format | `cargo fmt --check` | [done] |
+| Clippy | `cargo clippy -- -D warnings` | [done] |
+| Build | `cargo build --release` | [done] |
+| Test | `cargo test` | [done] |
+| Docker | `docker build .` | [done] |
 
 #### qubit-os-core
 
 | Job | Command | Must Pass |
 |-----|---------|-----------|
-| Lint | `ruff check src/` | ✅ |
-| Format | `ruff format --check src/` | ✅ |
-| Test | `pytest tests/` | ✅ |
-| Type Check | `mypy src/qubitos/` | ✅ |
-| Coverage | `pytest --cov` | ✅ |
+| Lint | `ruff check src/` | [done] |
+| Format | `ruff format --check src/` | [done] |
+| Test | `pytest tests/` | [done] |
+| Type Check | `mypy src/qubitos/` | [done] |
+| Coverage | `pytest --cov` | [done] |
 
 ### Pre-Push Checklist
 
@@ -444,7 +444,7 @@ git push
 
 ## Success Metrics
 
-### v0.1.0 ✅
+### v0.1.0 [done]
 
 - Clean install works on Linux/macOS
 - Quickstart completable in 15 minutes

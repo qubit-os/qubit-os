@@ -2,7 +2,7 @@
 
 ## Overview
 
-QubitOS is an open-source quantum control kernel providing Hamiltonian-level pulse optimization, hardware abstraction, and calibration management for quantum computing research. The project spans three repositories: `qubit-os-proto` (Protocol Buffer definitions), `qubit-os-hardware` (Rust HAL server), and `qubit-os-core` (Python client, optimizer, and calibration). **v0.5.0 is complete** — all five architecture gaps addressed, Rust-native GRAPE and Lindblad solver operational, IBM/AWS/IQM backends integrated. Next milestone: v1.0.0 production readiness.
+QubitOS is an open-source quantum control kernel providing Hamiltonian-level pulse optimization, hardware abstraction, and calibration management for quantum computing research. The monorepo contains three modules: `proto/` (Protocol Buffer definitions), `hal/` (Rust HAL server), and `core/` (Python client, optimizer, and calibration). **v0.5.0 is complete** -- all five architecture gaps addressed, Rust-native GRAPE and Lindblad solver operational, IBM/AWS/IQM backends integrated. Next milestone: v1.0.0 production readiness.
 
 ---
 
@@ -27,17 +27,17 @@ QubitOS is an open-source quantum control kernel providing Hamiltonian-level pul
 ### Quick Reference: CI Check Commands
 
 ```bash
-# qubit-os-hardware
-cd qubit-os-hardware
+# hal (Rust)
+cd hal
 cargo fmt --check && cargo clippy -- -D warnings && cargo test
 
-# qubit-os-core
-cd qubit-os-core
+# core (Python)
+cd core
 source .venv/bin/activate
 ruff check src/ && ruff format --check src/ && pytest tests/
 
-# qubit-os-proto
-cd qubit-os-proto
+# proto
+cd proto
 buf lint && buf format -d --exit-code
 python -m build  # Test Python build works
 ```
@@ -46,29 +46,29 @@ python -m build  # Test Python build works
 
 ## Completed Phases (v0.1.0 – v0.5.0)
 
-### Phase 0: Design & Foundation ✅
+### Phase 0: Design & Foundation [done]
 
 Established project structure and governance: design document v0.5.0 defining the Hamiltonian-first architecture, 3-repo structure (proto, hardware, core), Protocol Buffer API definitions, CI/CD workflows for all repos, default calibration data, README files, Apache 2.0 licensing, pre-commit hooks, issue templates, and Dependabot configuration.
 
-### Phase 1: Core Implementation ✅
+### Phase 1: Core Implementation [done]
 
 Built the working single-qubit control stack: Rust HAL server (tonic gRPC + axum REST), QuTiP simulation backend via PyO3, GRAPE optimizer achieving 99.9% fidelity on X-gate, full `qubit-os` CLI, Python client library, and completed a 12-item security audit. End-to-end test passing: X-gate optimization through pulse execution to measurement results.
 
-### Phase 2: Integration & Testing ✅
+### Phase 2: Integration & Testing [done]
 
 Achieved production-quality test coverage and documentation: 93% Python coverage (464 tests), 85%+ Rust coverage (149 tests), MkDocs documentation site, 3 tutorial notebooks (quickstart, GRAPE deep dive, custom Hamiltonians), 5 golden file test suites for reproducibility validation, mypy clean, troubleshooting guide, and API reference (Sphinx, rustdoc, OpenAPI, buf).
 
-### Phase 3: IQM Integration ✅
+### Phase 3: IQM Integration [done]
 
 Connected to real quantum hardware: IQM Resonance API client in Rust with exponential backoff retry and SecretString credential handling, Hellinger distance crosscheck validation between simulation and hardware, T1/T2 fitting from hardware measurements, randomized benchmarking with 24 single-qubit Cliffords (BFS over generators), and automated calibration runner with drift detection via fingerprinting.
 
-### Phase 4: v0.1.0 Release ✅
+### Phase 4: v0.1.0 Release [done]
 
 Published the first release: v0.1.0 tagged across all three repositories, CHANGELOGs finalized, Python package published to PyPI, Docker images pushed to GHCR, documentation site deployed, and release notes written.
 
 ---
 
-## v0.2.0 — Foundation Hardening ✅
+## v0.2.0 — Foundation Hardening [done]
 
 **Theme:** Address structural gaps before scaling to multi-qubit.
 
@@ -233,7 +233,7 @@ The [architecture review](ARCHITECTURE-REVIEW.md) identified five structural gap
 
 ---
 
-## v0.3.0 — Multi-Qubit Expansion ✅
+## v0.3.0 — Multi-Qubit Expansion [done]
 
 **Theme:** Scale up with confidence, building on the v0.2.0 foundation of time model, error budgets, and experiment provenance.
 
@@ -281,7 +281,7 @@ The [architecture review](ARCHITECTURE-REVIEW.md) identified five structural gap
 
 ---
 
-## v0.4.0 — Active Calibration & GRAPE-in-Rust ✅
+## v0.4.0 — Active Calibration & GRAPE-in-Rust [done]
 
 ### 0.4.1 Active Calibration
 
@@ -313,7 +313,7 @@ The [architecture review](ARCHITECTURE-REVIEW.md) identified five structural gap
 
 ---
 
-## v0.5.0 — Additional Backends & Rust-Native Solver ✅
+## v0.5.0 — Additional Backends & Rust-Native Solver [done]
 
 ### 0.5.1 Additional Backends
 
@@ -351,7 +351,7 @@ The [architecture review](ARCHITECTURE-REVIEW.md) identified five structural gap
 
 The Lindblad equation (v0.5.0) computes *ensemble-averaged* dynamics. The SME conditions state evolution on a continuous measurement record, producing a *conditional* density matrix ρ_c(t) — our best knowledge of the quantum state given everything we've measured.
 
-**Design spec:** [SME-FEEDBACK-SPEC.md](qubit-os-core/docs/specs/SME-FEEDBACK-SPEC.md)
+**Design spec:** [SME-FEEDBACK-SPEC.md](core/docs/specs/SME-FEEDBACK-SPEC.md)
 
 ### 0.6.1 SME Solver (Python + Rust)
 
@@ -411,7 +411,7 @@ solver.evolve(H, rho0, tlist, c_ops)
         └── Arbitrary dimension
 ```
 
-- [ ] FFI bridge: `extern "C"` bindings in `qubit-os-hardware/src/lindblad/ffi.rs`
+- [ ] FFI bridge: `extern "C"` bindings in `hal/src/lindblad/ffi.rs`
 - [ ] C library build integration: CMake subproject or pkg-config discovery
 - [ ] Automatic dispatch: dimension check + time-independence check in Python solver
 - [ ] Validation: C fast path matches Rust solver to machine precision (atol=1e-12)
@@ -602,37 +602,37 @@ This release represents the complete, stable, documented system as described in 
 
 > **If CI is red, nothing else matters until it's green.**
 
-### Per-Repository CI Requirements
+### Per-Module CI Requirements
 
-#### qubit-os-proto
-
-| Job | Command | Must Pass |
-|-----|---------|-----------|
-| Lint | `buf lint` | ✅ |
-| Format | `buf format -d --exit-code` | ✅ |
-| Build Rust | `cargo build` | ✅ |
-| Build Python | `python -m build` | ✅ |
-| Test Import | `python -c "from quantum..."` | ✅ |
-
-#### qubit-os-hardware
+#### proto
 
 | Job | Command | Must Pass |
 |-----|---------|-----------|
-| Format | `cargo fmt --check` | ✅ |
-| Clippy | `cargo clippy -- -D warnings` | ✅ |
-| Build | `cargo build --release` | ✅ |
-| Test | `cargo test` | ✅ |
-| Docker | `docker build .` | ✅ |
+| Lint | `buf lint` | Yes |
+| Format | `buf format -d --exit-code` | Yes |
+| Build Rust | `cargo build` | Yes |
+| Build Python | `python -m build` | Yes |
+| Test Import | `python -c "from quantum..."` | Yes |
 
-#### qubit-os-core
+#### hal
 
 | Job | Command | Must Pass |
 |-----|---------|-----------|
-| Lint | `ruff check src/` | ✅ |
-| Format | `ruff format --check src/` | ✅ |
-| Test | `pytest tests/` | ✅ |
-| Type Check | `mypy src/qubitos/` | ✅ |
-| Coverage | `pytest --cov` | ✅ |
+| Format | `cargo fmt --check` | Yes |
+| Clippy | `cargo clippy -- -D warnings` | Yes |
+| Build | `cargo build --release` | Yes |
+| Test | `cargo test` | Yes |
+| Docker | `docker build .` | Yes |
+
+#### core
+
+| Job | Command | Must Pass |
+|-----|---------|-----------|
+| Lint | `ruff check src/` | Yes |
+| Format | `ruff format --check src/` | Yes |
+| Test | `pytest tests/` | Yes |
+| Type Check | `mypy src/qubitos/` | Yes |
+| Coverage | `pytest --cov` | Yes |
 
 ### Pre-Push Checklist
 
@@ -690,7 +690,7 @@ git push
 
 ## Success Metrics
 
-### v0.1.0 ✅
+### v0.1.0 [done]
 
 - Clean install works on Linux/macOS
 - Quickstart completable in 15 minutes
@@ -699,7 +699,7 @@ git push
 - IQM hardware execution demonstrated
 - Golden file reproducibility validated
 
-### v0.2.0 ✅
+### v0.2.0 [done]
 
 - Time model expressible: temporal constraints between pulses work in API and are validated
 - Error budget: `projected_fidelity()` shown before execution, warnings at configurable thresholds
@@ -708,20 +708,20 @@ git push
 - ≥80 new tests, all CI green, backward compatibility maintained
 - Design specs published and reviewed
 
-### v0.3.0 ✅
+### v0.3.0 [done]
 
 - 5-qubit GRAPE optimization completing successfully
 - Pulse scheduling with temporal constraints demonstrated
 - Multi-qubit RB with symplectic Cliffords operational
 - 3-qubit GRAPE completes in <60 seconds
 
-### v0.4.0 ✅
+### v0.4.0 [done]
 
 - Drift-triggered recalibration demonstrated end-to-end
 - Rust GRAPE ≥5x faster than Python (achieved 10.4x), matching golden files
 - Active calibration loop running without manual intervention
 
-### v0.5.0 ✅
+### v0.5.0 [done]
 
 - IBM and AWS backends submitting and retrieving jobs (mock-tested, ready for live API keys)
 - Rust Lindblad solver matching QuTiP to trace distance < 1e-6 (exceeds Hellinger < 0.01 target)
@@ -809,10 +809,10 @@ QubitOS's solver stack is evolving toward eliminating Python numerical dependenc
 
 | Phase | Solver | Language | Status |
 |-------|--------|----------|--------|
-| v0.1.0–v0.4.0 | QuTiP via PyO3 | Python (Cython/Fortran under the hood) | ✅ Retired as primary |
-| v0.5.0 | Rust ndarray solver | Rust | ✅ Current production |
-| v0.6.0 | C bare-metal fast path | C (AVX2/AVX-512) | 🔨 LANL Summer 2026 |
-| Post-thesis | FPGA fast path | Verilog (open-source toolchain) | 📋 PhD scope |
+| v0.1.0–v0.4.0 | QuTiP via PyO3 | Python (Cython/Fortran under the hood) | Yes Retired as primary |
+| v0.5.0 | Rust ndarray solver | Rust | Yes Current production |
+| v0.6.0 | C bare-metal fast path | C (AVX2/AVX-512) | In progress -- LANL Summer 2026 |
+| Post-thesis | FPGA fast path | Verilog (open-source toolchain) | Planned -- PhD scope |
 
 **Why this matters:**
 - QuTiP remains as a *validation oracle* (testing only), never in the hot path
@@ -841,4 +841,4 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for contribution guidelines, including:
 
 *Last Updated: March 10, 2026*
 
-*References: [ARCHITECTURE-REVIEW.md](ARCHITECTURE-REVIEW.md) for the gap analysis motivating v0.2.0. [SME-FEEDBACK-SPEC.md](qubit-os-core/docs/specs/SME-FEEDBACK-SPEC.md) for the stochastic master equation and feedback controller design. Design specifications for all sub-phases are published in the `specs/` directory.*
+*References: [ARCHITECTURE-REVIEW.md](ARCHITECTURE-REVIEW.md) for the gap analysis motivating v0.2.0. [SME-FEEDBACK-SPEC.md](core/docs/specs/SME-FEEDBACK-SPEC.md) for the stochastic master equation and feedback controller design. Design specifications for all sub-phases are published in the `specs/` directory.*
