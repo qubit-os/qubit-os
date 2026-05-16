@@ -7,13 +7,14 @@ bridges the gap with three handlers:
   on_config       Rewrites any nav entry ending in .txt to .md so the
                   config matches the file names mkdocs sees during build.
 
-  on_pre_build    Renames every *.txt under docs_dir to *.md in place,
-                  recording the renames for restoration.
+  on_pre_build    Creates transient *.md copies of every *.txt page and
+                  rewrites internal markdown links from .txt to .md so
+                  MkDocs link validation sees the generated page names.
 
-  on_post_build   Restores the .md files back to .txt.
+  on_post_build   Deletes the transient *.md files.
 
-  on_build_error  Also restores, so a failed build does not leave the
-                  working tree in a half-renamed state.
+  on_build_error  Also cleans up, so a failed build does not leave the
+                  working tree in a half-generated state.
 
 The .txt files in the source tree are unchanged on disk after a
 successful build. CI and contributors only ever see .txt extensions.
@@ -22,8 +23,10 @@ successful build. CI and contributors only ever see .txt extensions.
 from __future__ import annotations
 
 from pathlib import Path
+import re
 
-_renamed: list[tuple[Path, Path]] = []
+_generated: list[Path] = []
+_MARKDOWN_LINK_RE = re.compile(r"(!?\[[^\]]*\]\()([^)]+)(\))")
 
 
 def on_config(config, **kwargs):
@@ -45,10 +48,40 @@ def on_config(config, **kwargs):
     return config
 
 
+def _rewrite_internal_txt_links(text: str, source: Path, docs_dir: Path) -> str:
+    """Point internal markdown links at the transient .md copies."""
+
+    def replace(match: re.Match[str]) -> str:
+        prefix, target, suffix = match.groups()
+        if target.startswith(("#", "http://", "https://", "mailto:")):
+            return match.group(0)
+
+        target_path, hash_sep, fragment = target.partition("#")
+        target_path, query_sep, query = target_path.partition("?")
+        resolved = (source.parent / target_path).resolve()
+
+        try:
+            resolved.relative_to(docs_dir.resolve())
+        except ValueError:
+            return match.group(0)
+
+        if resolved.suffix != ".txt" or not resolved.exists():
+            return match.group(0)
+
+        rewritten = target_path[:-4] + ".md"
+        if query_sep:
+            rewritten = f"{rewritten}?{query}"
+        if hash_sep:
+            rewritten = f"{rewritten}#{fragment}"
+        return f"{prefix}{rewritten}{suffix}"
+
+    return _MARKDOWN_LINK_RE.sub(replace, text)
+
+
 def on_pre_build(config, **kwargs):
-    """Rename every *.txt under docs_dir to *.md."""
-    global _renamed
-    _renamed = []
+    """Create transient *.md copies for every *.txt page."""
+    global _generated
+    _generated = []
     docs_dir = Path(config["docs_dir"])
     for txt in docs_dir.rglob("*.txt"):
         md = txt.with_suffix(".md")
@@ -60,16 +93,20 @@ def on_pre_build(config, **kwargs):
                 f"txt_support hook: both {txt} and {md} exist; "
                 "remove one before building."
             )
-        txt.rename(md)
-        _renamed.append((md, txt))
+        content = txt.read_text(encoding="utf-8")
+        md.write_text(
+            _rewrite_internal_txt_links(content, txt, docs_dir),
+            encoding="utf-8",
+        )
+        _generated.append(md)
 
 
 def _restore() -> None:
-    global _renamed
-    for md, txt in _renamed:
-        if md.exists() and not txt.exists():
-            md.rename(txt)
-    _renamed = []
+    global _generated
+    for md in _generated:
+        if md.exists():
+            md.unlink()
+    _generated = []
 
 
 def on_post_build(config, **kwargs):

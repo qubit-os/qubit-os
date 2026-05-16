@@ -4,8 +4,10 @@ This directory contains feature-level design specifications for QubitOS.
 
 ## Architecture
 
-System architecture is described in the top-level [README.txt](../../../README.txt)
-and the release plan in [ROADMAP.txt](../../../ROADMAP.txt). The feature specs below
+System architecture is described in the top-level
+[README.txt](https://github.com/qubit-os/qubit-os/blob/main/README.txt)
+and the release plan in
+[ROADMAP.txt](https://github.com/qubit-os/qubit-os/blob/main/ROADMAP.txt). The feature specs below
 are the canonical design for each subsystem.
 
 ## Feature Specifications

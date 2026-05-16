@@ -259,7 +259,7 @@ H0, Hc = build_hamiltonian(
     options:
       show_root_heading: true
 
-::: qubitos.pulsegen.grape.GateType
+::: qubitos.target_unitary.TargetUnitary
     options:
       show_root_heading: true
 
