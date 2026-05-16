@@ -2618,14 +2618,22 @@
 
 <h1 id="stochastic-master-equation-feedback-control-specification">Stochastic Master Equation &amp; Feedback Control Specification<a class="headerlink" href="#stochastic-master-equation-feedback-control-specification" title="Permanent link">&para;</a></h1>
 <h2 id="qubitos-v060v080-technical-design-for-quantum-feedback-control">QubitOS v0.6.0–v0.8.0 — Technical Design for Quantum Feedback Control<a class="headerlink" href="#qubitos-v060v080-technical-design-for-quantum-feedback-control" title="Permanent link">&para;</a></h2>
-<p><strong>Status:</strong> Design Phase<br />
-<strong>Author:</strong> Rylan Malarchick<br />
-<strong>Date:</strong> February 2026<br />
-<strong>Purpose:</strong> Extend QubitOS from open-loop optimal control (GRAPE/Lindblad) to closed-loop measurement-based quantum feedback control. This is the core technical contribution for the MS thesis.</p>
+<p><strong>Status:</strong>
+Sections 0–4 (SME solver, validation suite) — <strong>Implemented in v0.6.0</strong>
+(2026-05-16). Sections 5+ (Lyapunov feedback controller, comparison
+framework, 3-level transmon extension) — <strong>Design phase for v0.7.0+</strong>.</p>
+<p><strong>Author:</strong> Rylan Malarchick
+<strong>Originally drafted:</strong> February 2026
+<strong>Last reviewed against implementation:</strong> May 2026
+<strong>Purpose:</strong> Extend QubitOS from open-loop optimal control
+(GRAPE/Lindblad) to closed-loop measurement-based quantum feedback
+control. The SME runtime (v0.6.0) and the Lyapunov controller (v0.7.0)
+together form the core technical contribution for the MS thesis.</p>
 <hr />
 <h2 id="0-motivation-and-context">0. Motivation and Context<a class="headerlink" href="#0-motivation-and-context" title="Permanent link">&para;</a></h2>
 <h3 id="01-where-we-are">0.1 Where We Are<a class="headerlink" href="#01-where-we-are" title="Permanent link">&para;</a></h3>
-<p>QubitOS v0.5.0 provides a complete open-loop quantum control stack:</p>
+<p>QubitOS v0.6.0 provides a complete open-loop <em>and</em> conditional control
+stack. Through v0.5.0 the project shipped:</p>
 <div class="language-text highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>HamiltonianSpec → GRAPE Optimizer → PulseShape → Backend → MeasurementResult
 </span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>                                         ↓
 </span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>                                  Lindblad Solver (ensemble dynamics)
@@ -2633,6 +2641,13 @@
 </span><span id="__span-0-5"><a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a>                                  Error Budgets + Provenance
 </span></code></pre></div>
 <p>The Lindblad solver computes <em>ensemble-averaged</em> dynamics: what happens to the density matrix ρ when you average over all possible measurement outcomes. This is the right model for characterizing gates, but it ignores a fundamental resource: <strong>information gained from measurement</strong>.</p>
+<p>In v0.6.0 the SME runtime (<code>core/sme/</code>, <code>hal/sme/</code>) was added on top of
+the v0.5.0 stack. SME conditions the state on the measurement record
+and produces a <em>conditional</em> density matrix ρ_c(t). The v0.7.0 release
+adds the Lyapunov controller that consumes ρ_c(t) and emits a real-time
+correction to the drive Hamiltonian — the closed-loop side of the
+diagram. Sections 1–4 below describe what has shipped; sections 5+
+describe what is coming.</p>
 <h3 id="02-the-gap">0.2 The Gap<a class="headerlink" href="#02-the-gap" title="Permanent link">&para;</a></h3>
 <p>In a real experiment, you <em>do</em> get measurement outcomes. Continuous weak measurement of a superconducting qubit yields a noisy photocurrent I(t) that contains information about the qubit state. The Lindblad equation throws this information away by averaging over it.</p>
 <p>The <strong>stochastic master equation (SME)</strong> conditions the state evolution on the measurement record, producing a <em>conditional</em> density matrix ρ_c(t) that represents our best knowledge of the quantum state given everything we've measured so far. This conditional state can be fed to a <strong>feedback controller</strong> that adapts the drive pulse in real time.</p>

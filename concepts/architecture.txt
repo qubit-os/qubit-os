@@ -1,301 +1,275 @@
 # Architecture
 
-QubitOS follows a **three-layer architecture** designed to separate concerns and enable
-maximum flexibility for researchers and hardware integrators.
+QubitOS is a **pulse-feedback runtime**: the kernel-shape layer between
+compiler intent and quantum hardware that handles Hamiltonians,
+calibrations, timing, noise, drift, and (in v0.6.0 onward)
+measurement-conditioned dynamics.
 
-## Overview Diagram
+Pulse-first, not gate-first. You specify the Hamiltonian and the target
+unitary; QubitOS optimizes the control pulses and tracks the
+calibration, timing, and error budget that surround them. Gate-level
+abstractions discard physics that the kernel preserves: decoherence
+during gates, crosstalk, leakage, and feedback latency.
 
-```
-┌─────────────────────────────────────────────────────────────────────────────┐
-│                              USER APPLICATIONS                               │
-│                                                                             │
-│   ┌─────────────┐   ┌──────────────┐   ┌─────────────┐   ┌──────────────┐  │
-│   │   Python    │   │   Jupyter    │   │     CLI     │   │   REST API   │  │
-│   │   Scripts   │   │  Notebooks   │   │  (qos ...)  │   │   Clients    │  │
-│   └──────┬──────┘   └──────┬───────┘   └──────┬──────┘   └──────┬───────┘  │
-│          │                 │                  │                 │          │
-└──────────┼─────────────────┼──────────────────┼─────────────────┼──────────┘
-           │                 │                  │                 │
-           └────────────┬────┴──────────────────┴────┬────────────┘
-                        │                            │
-                        ▼                            ▼
-┌─────────────────────────────────────────────────────────────────────────────┐
-│                           QUBIT-OS-CORE (Python)                            │
-│                                                                             │
-│   ┌────────────────┐   ┌──────────────────┐   ┌──────────────────────────┐ │
-│   │   HALClient    │   │   Pulse Generator │   │     Calibrator           │ │
-│   │   (gRPC/REST)  │   │   (GRAPE, etc.)   │   │   (Load/Validate)        │ │
-│   └───────┬────────┘   └────────┬─────────┘   └──────────┬───────────────┘ │
-│           │                     │                        │                  │
-│   ┌───────┴─────────────────────┴────────────────────────┴───────────────┐ │
-│   │                         Validation Layer                              │ │
-│   │              (Parameter bounds, AgentBible, safety checks)            │ │
-│   └───────────────────────────────────────────┬──────────────────────────┘ │
-└───────────────────────────────────────────────┼──────────────────────────────┘
-                                                │
-                                                │ gRPC / REST
-                                                ▼
-┌─────────────────────────────────────────────────────────────────────────────┐
-│                        QUBIT-OS-HARDWARE (Rust)                             │
-│                                                                             │
-│   ┌────────────────────────────────────────────────────────────────────┐   │
-│   │                         HAL Server                                  │   │
-│   │                     (Hardware Abstraction Layer)                    │   │
-│   └────────────┬────────────────────┬────────────────────┬─────────────┘   │
-│                │                    │                    │                  │
-│   ┌────────────▼────────┐ ┌────────▼─────────┐ ┌────────▼─────────┐       │
-│   │   OPX3 Backend      │ │   Zurich Backend  │ │   Mock Backend   │       │
-│   │   (Quantum Machines)│ │ (Zurich Instr.)   │ │   (Testing)      │       │
-│   └─────────────────────┘ └──────────────────┘ └──────────────────┘       │
-└─────────────────────────────────────────────────────────────────────────────┘
-                                                │
-                                                │ Vendor-specific protocols
-                                                ▼
-┌─────────────────────────────────────────────────────────────────────────────┐
-│                            QUANTUM HARDWARE                                  │
-│                                                                             │
-│   ┌─────────────────┐   ┌─────────────────┐   ┌─────────────────┐          │
-│   │   AWGs          │   │   Digitizers    │   │   RF Sources    │          │
-│   └─────────────────┘   └─────────────────┘   └─────────────────┘          │
-│                                    │                                        │
-│                                    ▼                                        │
-│                         ┌─────────────────────┐                            │
-│                         │   Dilution Fridge   │                            │
-│                         │      + Qubits       │                            │
-│                         └─────────────────────┘                            │
-└─────────────────────────────────────────────────────────────────────────────┘
-```
+## Repository layout
 
-## Layer Details
+QubitOS is a monorepo at
+[qubit-os/qubit-os](https://github.com/qubit-os/qubit-os):
 
-### Layer 1: User Applications
+| Module    | Purpose                                                 | Language |
+|-----------|---------------------------------------------------------|----------|
+| `core/`   | Python: GRAPE, SME, calibration, scheduling, CLI        | Python   |
+| `hal/`    | Rust: gRPC server, backend dispatch, Lindblad and SME   | Rust     |
+| `proto/`  | Protocol Buffer API contracts between core and HAL      | Protobuf |
 
-The top layer provides multiple interfaces for interacting with QubitOS:
+The previous split repositories (`qubit-os-core`, `qubit-os-hardware`,
+`qubit-os-proto`) are archived and redirect to the monorepo.
 
-| Interface | Description | Use Case |
-|-----------|-------------|----------|
-| **Python API** | Direct library imports | Integration, automation |
-| **Jupyter Notebooks** | Interactive environment | Research, exploration |
-| **CLI** | Command-line tool (`qos`) | Quick operations, scripting |
-| **REST API** | HTTP endpoints | Web integration, remote access |
-
-### Layer 2: qubit-os-core (Python)
-
-The core Python library provides high-level functionality:
-
-#### HALClient
-
-The Hardware Abstraction Layer client communicates with the HAL server:
-
-```python
-from qubitos.client import HALClient
-
-async with HALClient("localhost:50051") as client:
-    result = await client.execute_pulse(pulse_data)
-```
-
-**Responsibilities:**
-
-- Connection management (gRPC/REST)
-- Request serialization via Protocol Buffers
-- Response handling and error propagation
-- Automatic reconnection and retry logic
-
-#### Pulse Generator
-
-The GRAPE optimizer synthesizes control pulses:
-
-```python
-from qubitos.pulsegen import generate_pulse
-
-result = generate_pulse("X", duration_ns=20, target_fidelity=0.999)
-```
-
-**Responsibilities:**
-
-- Hamiltonian construction from Pauli strings
-- Gradient ascent optimization
-- Pulse envelope generation (I/Q)
-- Fidelity tracking and convergence
-
-#### Calibrator
-
-Manages qubit calibration data:
-
-```python
-from qubitos.calibrator import CalibrationLoader
-
-loader = CalibrationLoader("calibrations/")
-cal = loader.get_backend("ibm_kyoto")
-```
-
-**Responsibilities:**
-
-- Load calibration from JSON/YAML files
-- Parse OpenPulse/OpenQASM3 formats
-- Provide qubit parameters (frequencies, T1, T2)
-- Cache and refresh calibration data
-
-#### Validation Layer
-
-Ensures all parameters meet physical constraints:
-
-```python
-from qubitos.validation import validate_pulse
-
-validate_pulse(envelope, max_amplitude=100.0, duration_ns=20.0)
-```
-
-**Responsibilities:**
-
-- Parameter bound checking
-- AgentBible constraint enforcement
-- Safety interlocks
-- Error message generation
-
-### Layer 3: qubit-os-hardware (Rust)
-
-The HAL server handles hardware communication:
-
-#### HAL Server
-
-The gRPC/REST server receives requests from core:
-
-```rust
-// Simplified server structure
-struct HalServer {
-    backend: Box<dyn Backend>,
-    safety: SafetyController,
-}
-
-impl HalServer {
-    async fn execute_pulse(&self, req: PulseRequest) -> Result<PulseResult> {
-        self.safety.check(&req)?;
-        self.backend.execute(req).await
-    }
-}
-```
-
-**Responsibilities:**
-
-- Protocol handling (gRPC, REST)
-- Backend dispatch
-- Safety enforcement
-- Telemetry and logging
-
-#### Hardware Backends
-
-Vendor-specific implementations:
-
-| Backend | Hardware | Status |
-|---------|----------|--------|
-| `opx3` | Quantum Machines OPX3 | In development |
-| `zurich` | Zurich Instruments HDAWG/SHFQA | Planned |
-| `mock` | Simulated hardware | Complete |
-
-## Data Flow
-
-### Pulse Execution Flow
+## Overview
 
 ```
-1. User calls generate_pulse("X")
-   │
-2. GRAPE optimizer computes I/Q envelopes
-   │
-3. validate_pulse() checks bounds
-   │
-4. HALClient serializes to protobuf
-   │
-5. gRPC sends to HAL server
-   │
-6. Backend converts to hardware commands
-   │
-7. AWG executes pulse sequence
-   │
-8. Digitizer captures measurement
-   │
-9. Response propagates back up
+       Python scripts        Jupyter notebooks       CLI (qubit-os)
+              |                      |                      |
+              +----------+-----------+----------+-----------+
+                         |                      |
+                         v                      v
++--------------------------------------------------------------+
+|                            core/                              |
+|                                                               |
+|  pulsegen/     GRAPE optimizer, Hamiltonian construction,     |
+|                pulse shapes (DRAG, Gaussian, square)          |
+|  sme/          Stochastic master equation solver (v0.6.0)     |
+|  lindblad/     Lindblad master equation solver                |
+|  calibrator/   T1/T2 fitting, drift detection, fingerprinting |
+|  temporal/     TimePoint, TemporalConstraint, PulseSequence,  |
+|                DecoherenceBudget                              |
+|  error_budget/ Cumulative error accounting                    |
+|  provenance/   Merkle tree experiment provenance              |
+|  compilation/  Native gate compilation traits                 |
+|  validation/   Input validation; agentbible decoration        |
+|  client/       gRPC client to HAL                             |
+|  cli/          qubit-os entry point                           |
++--------------------------------------------------------------+
+                              |
+                              | gRPC / REST   (or --local: in-process)
+                              v
++--------------------------------------------------------------+
+|                             hal/                              |
+|                                                               |
+|  server/       tonic gRPC + axum REST                         |
+|  grape/        Rust-native GRAPE (Pade [13/13]), ~10x Python  |
+|  lindblad/     Rust-native Lindblad solver; FFI bridge for    |
+|                the C fast path (LANL summer stretch)          |
+|  sme/          Rust-native SME (Itô SDE), Rayon-parallel      |
+|                ensemble                                        |
+|  backend/      Backend dispatch: QuTiP, IQM, IBM, AWS         |
+|  temporal/     Rust mirror of core/temporal/ validation       |
++--------------------------------------------------------------+
+                              |
+                              v
+                    Backend (see "Backend integration honesty")
 ```
 
-### Calibration Flow
+## The five planes
+
+The kernel is the union of five concerns. Each plane has its own module
+boundaries in `core/` and `hal/`, and each is meant to be replaceable
+without rewriting the others.
+
+### 1. Control kernel
+
+Hamiltonian in, optimized pulses out. GRAPE / DRAG / Gaussian /
+(v0.7.0) Lyapunov feedback. Pulse scheduling, timing constraints,
+hardware-aware validation. Lives in `core/pulsegen/`, `hal/grape/`,
+and (forthcoming) `core/feedback/` plus `hal/feedback/`.
+
+### 2. Calibration / state plane
+
+Device state as live runtime state, not static config. Calibration
+loading, drift detection, T1/T2 fitting, error budgets, experiment
+provenance. Lives in `core/calibrator/`, `core/error_budget/`, and
+`core/provenance/`.
+
+### 3. Backend ABI
+
+A stable typed boundary for hardware and simulators. The
+`QuantumBackend` trait in Rust, the gRPC contract in `proto/`, and the
+Backend SDK in `hal/docs/BACKEND-SDK.txt`. Documentation deliverable,
+not a maintenance commitment for arbitrary cloud backends.
+
+### 4. Simulation / performance plane
+
+A serious execution path, not notebook glue. Rust-native solvers as
+production tier; QuTiP retained as validation oracle only. The C
+bare-metal fast path (v0.6.0 stretch, LANL summer 2026) and the FPGA
+fast path (post-thesis, PhD scope) extend the same propagator algorithm
+through additional tiers. See `hal/grape/`, `hal/lindblad/`, `hal/sme/`.
+
+### 5. Feedback plane
+
+Stochastic master equation support, closed-loop controllers,
+measurement-conditioned updates, reproducible crossover studies vs
+open-loop control. v0.6.0 landed the SME runtime; v0.7.0 adds the
+Lyapunov controller; v0.8.0 brings the 3-level transmon campaign.
+Lives in `core/sme/` and `hal/sme/` today; `core/feedback/` and
+`hal/feedback/` are added in v0.7.0.
+
+## Backend integration honesty
+
+IQM is the primary live integration and the only backend exercised
+against real hardware. IBM Quantum, AWS Braket, and the QuTiP simulator
+are mock-tested and demonstrate the backend abstraction; they are not
+maintained as production cloud integrations. The README and the docs
+landing page state this same way; the catalog metadata on each backend
+adapter encodes it as well.
+
+| Backend        | Status                                            |
+|----------------|---------------------------------------------------|
+| IQM Resonance  | Live; exercised against real hardware             |
+| QuTiP simulator | Demonstrated through the abstraction (mock-tested) |
+| IBM Quantum    | Demonstrated through the abstraction (mock-tested) |
+| AWS Braket     | Demonstrated through the abstraction (mock-tested) |
+
+## Data flow
+
+### Open-loop pulse execution (v0.5.0 and earlier)
 
 ```
-1. CalibrationLoader reads JSON/YAML
-   │
-2. Parse into BackendCalibration dataclass
-   │
-3. GRAPE uses parameters for Hamiltonian
-   │
-4. Validation uses bounds from calibration
+user                                  HamiltonianSpec
+ |                                          |
+ v                                          v
+core.pulsegen.generate_pulse  --GRAPE-->  PulseShape
+ |
+ +-- core.validation.* (boundary checks; agentbible)
+ |
+ v
+core.client.HALClient  --gRPC/REST-->  hal.server
+                                         |
+                                         v
+                                       hal.backend (IQM / QuTiP / ...)
+                                         |
+                                         v
+                                       MeasurementResult
+                                         |
+                                         v
+                                       provenance hash on the way back
 ```
 
-## Protocol Buffers
+### Conditional pulse execution (v0.6.0 SME, no feedback)
 
-Communication between layers uses Protocol Buffers defined in `qubit-os-proto`:
+```
+user
+ |
+ v
+core.sme.SMESolver.solve_trajectory(initial_rho, hamiltonians, ...)
+ |
+ +-- Euler-Maruyama Itô SDE integrator
+ +-- core.validation.* on the conditional rho per step
+ |
+ v
+SMEResult (final_rho, measurement_record, fidelity_trajectory, ...)
+```
+
+### Closed-loop pulse execution (v0.7.0 Lyapunov, forthcoming)
+
+```
+user
+ |
+ v
+core.feedback.solve_with_feedback(solver, controller, ...)
+ |
+ +-- SME step
+ +-- LyapunovController.correction(rho_c, rho_target)
+ +-- Hamiltonian update H(t) += delta_Omega(t)
+ +-- Feedback delay flows through core.temporal.TemporalConstraint
+ |
+ v
+FeedbackResult (SMEResult + correction history + energy cost)
+```
+
+## Protocol contracts
+
+The gRPC and Python boundaries are defined in `proto/quantum/pulse/v1/`.
+Versioning is path-based; breaking changes require a new path version
+(v2, v3, ...). Generated bindings are committed to the repository so
+that consumers can `pip install` without the proto toolchain and CI
+runs without `protoc` / `buf`.
+
+Selected current messages:
 
 ```protobuf
-// Simplified example
-message PulseRequest {
-    string gate_name = 1;
-    repeated double i_envelope = 2;
-    repeated double q_envelope = 3;
-    double duration_ns = 4;
-    int32 qubit_index = 5;
-}
-
-message PulseResult {
-    bool success = 1;
-    double fidelity = 2;
-    repeated double measurements = 3;
-    string error_message = 4;
-}
+message PulseShape          { ... }
+message MeasurementResult   { ... provenance_hash, projected_fidelity ... }
+message HamiltonianSpec     { ... }
+message TimePoint           { nominal_ns, precision_ns, jitter_bound_ns }
+message TemporalConstraint  { Simultaneous | Sequential | Aligned | MaxDelay }
+message PulseSequence       { time-aware sequence of pulses }
+message DecoherenceBudget   { cumulative T1/T2 consumption }
+message ErrorBudget         { multiplicative infidelity + decoherence ... }
+message ProvenanceTree      { Merkle node hashes per experiment input }
+message SMEConfig           { v0.6.0 }
+message SMEResult           { v0.6.0 }
 ```
 
-## Extension Points
+## Extension points
 
-QubitOS is designed for extensibility:
+The kernel is extensible without forking.
 
-### Adding a New Backend
+### Adding a new backend
 
-1. Implement the `Backend` trait in Rust
-2. Register in the backend factory
-3. Add configuration schema
+1. Implement `QuantumBackend` in `hal/backend/<name>/`.
+2. Pass the backend certification tests documented in
+   [hal/docs/BACKEND-SDK.txt](https://github.com/qubit-os/qubit-os/blob/main/hal/docs/BACKEND-SDK.txt).
+3. Register in the backend factory.
 
-### Adding a New Gate
+### Adding a new optimizer
 
-1. Add to `GateType` enum
-2. Define unitary in `hamiltonians.py`
-3. Add CLI shortcut if needed
+1. Implement an optimizer class with an `optimize()` method returning
+   a `GrapeResult`-compatible result.
+2. Decorate numerical surfaces with agentbible at the module boundary.
+3. Register in the optimizer factory if you want it CLI-reachable.
 
-### Adding a New Optimizer
+### Adding a new feedback controller (v0.7.0+)
 
-1. Implement optimizer class with `optimize()` method
-2. Return `GrapeResult`-compatible result
-3. Register in factory if using CLI
+1. Implement a controller class with a `correction(rho_c, rho_target)`
+   method returning the per-axis Hamiltonian correction vector.
+2. Decorate the controller's Lyapunov-function output with agentbible.
+3. Wire into `core/feedback/controller.py` dispatch by name.
 
-## Security Model
+## Reproducibility and integrity
 
-!!! warning "Production Deployment"
-    For production deployments, always use TLS and authentication.
+Three load-bearing properties:
 
-- **Transport**: TLS 1.3 for gRPC/REST
-- **Authentication**: mTLS or API keys
-- **Authorization**: Role-based access control (planned)
-- **Audit**: All operations logged with timestamps
+- **Provenance Merkle tree**: every measurement result carries a hash
+  that lets you `diff()` two experiment runs and identify what
+  changed. Covers calibration fingerprint, pulse sequence, GRAPE
+  config, software versions.
+- **agentbible decoration**: numerical surfaces (density matrices,
+  unitaries, probability vectors, Lyapunov functions in v0.7.0) are
+  validated at the module boundary where they are emitted, not deep
+  inside hot loops.
+- **Golden file tests**: deterministic numerical code (GRAPE output,
+  Lindblad results) has pinned golden files. Tolerances are tiered:
+  strict (1e-10) for GRAPE goldens, looser (1e-8) for QuTiP-execution
+  cross-validation where CI floating-point drift is real.
 
-## Performance Considerations
+## Performance characteristics
 
-| Component | Typical Latency | Notes |
-|-----------|-----------------|-------|
-| GRAPE optimization | 100ms - 10s | Depends on fidelity target |
-| gRPC round-trip | 1-10ms | Local network |
-| AWG programming | 10-100ms | Hardware dependent |
-| Pulse execution | 10-1000µs | Gate duration |
-| Measurement | 1-10µs | Readout time |
+| Component                   | Typical latency      | Notes                          |
+|-----------------------------|----------------------|--------------------------------|
+| GRAPE optimization (single-qubit) | 100 ms – 10 s   | Depends on fidelity target     |
+| Rust GRAPE vs Python GRAPE  | ~10× speedup         | Measured on single-qubit gates |
+| gRPC round-trip             | 1–10 ms              | Local network                  |
+| SME single trajectory       | 10–100 ms            | Python; dimension-dependent    |
+| SME ensemble (Rayon, N=1000) | 1–10 s              | Rust; scales linearly in cores |
+| Pulse execution             | 10–1000 μs           | Gate duration                  |
+| Readout / measurement       | 1–10 μs              | Hardware                       |
 
-## Related Documentation
+## Related documentation
 
-- [API Reference](../api/index.txt) - Detailed API documentation
-- [Quickstart Guide](../guides/quickstart.txt) - Getting started
-- [CLI Reference](../api/cli.txt) - Command-line interface
-- [gRPC Reference](../api/grpc.txt) - Protocol details
+- [API Reference](../api/index.txt) — Python, REST, gRPC surfaces
+- [Quickstart](../guides/quickstart.txt) — getting started
+- [CLI Reference](../api/cli.txt) — `qubit-os` subcommands
+- [Backend SDK](https://github.com/qubit-os/qubit-os/blob/main/hal/docs/BACKEND-SDK.txt)
+- [Design specs](../specs/README.txt) — per-subsystem design documents
+- [Strategy](https://github.com/qubit-os/qubit-os/blob/main/README.txt) — the kernel claim, on the top-level README
