@@ -1,0 +1,611 @@
+openapi: 3.0.3
+info:
+  title: QubitOS REST API
+  description: |
+    REST API facade for the QubitOS Hardware Abstraction Layer.
+    
+    This API provides HTTP/JSON access to the gRPC QuantumBackend service.
+    All endpoints map directly to gRPC methods.
+    
+    ## Authentication
+    
+    Authentication is required for hardware backends (e.g., IQM).
+    The simulator backend does not require authentication.
+    
+    Use Bearer token authentication:
+    ```
+    Authorization: Bearer <token>
+    ```
+    
+    ## Error Handling
+    
+    Errors follow RFC 7807 Problem Details format:
+    ```json
+    {
+      "type": "https://qubitos.io/errors/validation-failed",
+      "title": "Validation Failed",
+      "status": 400,
+      "detail": "Pulse duration exceeds maximum allowed value",
+      "trace_id": "abc123..."
+    }
+    ```
+  version: 0.1.0
+  license:
+    name: Apache 2.0
+    url: https://www.apache.org/licenses/LICENSE-2.0
+  contact:
+    name: QubitOS
+    url: https://github.com/qubit-os
+
+servers:
+  - url: http://localhost:8080
+    description: Local development server
+  - url: https://api.qubitos.io
+    description: Production server (future)
+
+tags:
+  - name: health
+    description: Health check endpoints
+  - name: backends
+    description: Backend information and management
+  - name: pulse
+    description: Pulse execution
+  - name: grape
+    description: GRAPE optimization
+
+paths:
+  /health:
+    get:
+      tags: [health]
+      summary: Health check
+      description: Check the health status of the HAL and all backends.
+      operationId: healthCheck
+      parameters:
+        - name: backend
+          in: query
+          description: Specific backend to check (optional)
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Service is healthy
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthResponse'
+        '503':
+          description: Service is unhealthy
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthResponse'
+
+  /backends:
+    get:
+      tags: [backends]
+      summary: List backends
+      description: Get a list of all available quantum backends.
+      operationId: listBackends
+      parameters:
+        - name: include_details
+          in: query
+          description: Include detailed hardware info for each backend
+          schema:
+            type: boolean
+            default: false
+      responses:
+        '200':
+          description: List of backends
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ListBackendsResponse'
+
+  /backends/{backend_name}:
+    get:
+      tags: [backends]
+      summary: Get backend info
+      description: Get detailed information about a specific backend.
+      operationId: getBackendInfo
+      parameters:
+        - name: backend_name
+          in: path
+          required: true
+          schema:
+            type: string
+          example: qutip_simulator
+      responses:
+        '200':
+          description: Backend information
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HardwareInfo'
+        '404':
+          description: Backend not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /pulse/execute:
+    post:
+      tags: [pulse]
+      summary: Execute pulse
+      description: Execute a pulse on a quantum backend and return measurement results.
+      operationId: executePulse
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ExecutePulseRequest'
+      responses:
+        '200':
+          description: Pulse executed successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ExecutePulseResponse'
+        '400':
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '503':
+          description: Backend unavailable
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /pulse/batch:
+    post:
+      tags: [pulse]
+      summary: Execute pulse batch
+      description: Execute multiple pulses in a single request.
+      operationId: executePulseBatch
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ExecutePulseBatchRequest'
+      responses:
+        '200':
+          description: Batch executed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ExecutePulseBatchResponse'
+        '400':
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /grape/optimize:
+    post:
+      tags: [grape]
+      summary: Run GRAPE optimization
+      description: |
+        Run GRAPE optimization to generate an optimized pulse for a quantum gate.
+        This is a long-running operation that may take several minutes.
+      operationId: grapeOptimize
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GRAPERequest'
+      responses:
+        '200':
+          description: Optimization completed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GRAPEResponse'
+        '400':
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '408':
+          description: Optimization timed out
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GRAPEResponse'
+
+  /grape/{trace_id}:
+    delete:
+      tags: [grape]
+      summary: Cancel GRAPE optimization
+      description: Cancel a running GRAPE optimization and return partial results.
+      operationId: cancelGrape
+      parameters:
+        - name: trace_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Optimization cancelled
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CancelGRAPEResponse'
+        '404':
+          description: Optimization not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+components:
+  schemas:
+    HealthResponse:
+      type: object
+      required: [status, checked_at]
+      properties:
+        status:
+          type: string
+          enum: [healthy, degraded, unavailable]
+        message:
+          type: string
+        checked_at:
+          type: string
+          format: date-time
+        latency_ms:
+          type: number
+        backend_statuses:
+          type: object
+          additionalProperties:
+            type: string
+            enum: [healthy, degraded, unavailable]
+
+    ListBackendsResponse:
+      type: object
+      required: [backend_names]
+      properties:
+        backend_names:
+          type: array
+          items:
+            type: string
+        backends:
+          type: array
+          items:
+            $ref: '#/components/schemas/HardwareInfo'
+
+    HardwareInfo:
+      type: object
+      required: [backend_name, backend_type, num_qubits]
+      properties:
+        backend_name:
+          type: string
+        backend_type:
+          type: string
+          enum: [simulator, hardware]
+        tier:
+          type: string
+          enum: [local, cloud]
+        num_qubits:
+          type: integer
+        available_qubit_indices:
+          type: array
+          items:
+            type: integer
+        supported_gates:
+          type: array
+          items:
+            type: string
+        supports_state_vector:
+          type: boolean
+        supports_noise_model:
+          type: boolean
+        software_version:
+          type: string
+        limits:
+          $ref: '#/components/schemas/ResourceLimits'
+
+    ResourceLimits:
+      type: object
+      properties:
+        max_hilbert_dim:
+          type: integer
+        max_qubits:
+          type: integer
+        max_shots:
+          type: integer
+        max_pulse_duration_ns:
+          type: integer
+        max_time_steps:
+          type: integer
+        max_batch_size:
+          type: integer
+
+    PulseShape:
+      type: object
+      required: [pulse_id, gate_type, target_qubit_indices, duration_ns, num_time_steps, i_envelope, q_envelope]
+      properties:
+        pulse_id:
+          type: string
+          format: uuid
+        algorithm:
+          type: string
+        gate_type:
+          type: string
+          enum: [X, Y, Z, SX, H, RX, RY, RZ, CZ, CNOT, iSWAP]
+        target_qubit_indices:
+          type: array
+          items:
+            type: integer
+        target_fidelity:
+          type: number
+        duration_ns:
+          type: integer
+        num_time_steps:
+          type: integer
+        time_step_ns:
+          type: number
+        i_envelope:
+          type: array
+          items:
+            type: number
+        q_envelope:
+          type: array
+          items:
+            type: number
+        max_amplitude_mhz:
+          type: number
+        calibration_fingerprint:
+          type: string
+        random_seed:
+          type: integer
+
+    ExecutePulseRequest:
+      type: object
+      required: [backend_name, pulse, num_shots]
+      properties:
+        trace_id:
+          type: string
+          format: uuid
+        backend_name:
+          type: string
+        pulse:
+          $ref: '#/components/schemas/PulseShape'
+        num_shots:
+          type: integer
+          minimum: 1
+          maximum: 100000
+        measurement_basis:
+          type: string
+          default: z
+        measurement_qubits:
+          type: array
+          items:
+            type: integer
+        return_state_vector:
+          type: boolean
+          default: false
+        include_noise:
+          type: boolean
+          default: true
+        timeout_ms:
+          type: integer
+
+    ExecutePulseResponse:
+      type: object
+      required: [success]
+      properties:
+        trace_id:
+          type: string
+        success:
+          type: boolean
+        error:
+          $ref: '#/components/schemas/Error'
+        result:
+          $ref: '#/components/schemas/MeasurementResult'
+        warnings:
+          type: array
+          items:
+            type: string
+
+    MeasurementResult:
+      type: object
+      required: [bitstring_counts, total_shots, successful_shots, quality]
+      properties:
+        bitstring_counts:
+          type: object
+          additionalProperties:
+            type: integer
+        total_shots:
+          type: integer
+        successful_shots:
+          type: integer
+        quality:
+          type: string
+          enum: [full_success, degraded, partial_failure, total_failure]
+        fidelity_estimate:
+          type: number
+        backend_name:
+          type: string
+        measured_at:
+          type: string
+          format: date-time
+        calibration_fingerprint:
+          type: string
+        state_vector:
+          type: array
+          items:
+            type: object
+            properties:
+              re:
+                type: number
+              im:
+                type: number
+
+    ExecutePulseBatchRequest:
+      type: object
+      required: [requests]
+      properties:
+        trace_id:
+          type: string
+        requests:
+          type: array
+          items:
+            $ref: '#/components/schemas/ExecutePulseRequest'
+        stop_on_first_error:
+          type: boolean
+          default: false
+
+    ExecutePulseBatchResponse:
+      type: object
+      required: [responses, successful_count, failed_count]
+      properties:
+        trace_id:
+          type: string
+        responses:
+          type: array
+          items:
+            $ref: '#/components/schemas/ExecutePulseResponse'
+        successful_count:
+          type: integer
+        failed_count:
+          type: integer
+        skipped_count:
+          type: integer
+        total_time_ms:
+          type: integer
+
+    GRAPERequest:
+      type: object
+      required: [target_gate, target_qubit_indices, target_fidelity, num_time_steps, duration_ns]
+      properties:
+        trace_id:
+          type: string
+        system_hamiltonian:
+          type: object
+          properties:
+            format:
+              type: string
+              enum: [pauli_string, matrix_sparse]
+            content:
+              type: string
+            hilbert_space_dim:
+              type: integer
+            num_qubits:
+              type: integer
+        target_gate:
+          type: string
+        target_qubit_indices:
+          type: array
+          items:
+            type: integer
+        target_fidelity:
+          type: number
+        max_iterations:
+          type: integer
+          default: 1000
+        learning_rate:
+          type: number
+          default: 0.01
+        random_seed:
+          type: integer
+        num_time_steps:
+          type: integer
+        duration_ns:
+          type: integer
+        max_amplitude_mhz:
+          type: number
+          default: 100
+        timeout_ms:
+          type: integer
+        calibration_fingerprint:
+          type: string
+        options:
+          type: object
+          properties:
+            optimizer:
+              type: string
+              default: adam
+            include_decoherence:
+              type: boolean
+              default: false
+            include_leakage:
+              type: boolean
+              default: false
+
+    GRAPEResponse:
+      type: object
+      required: [success]
+      properties:
+        trace_id:
+          type: string
+        success:
+          type: boolean
+        error:
+          $ref: '#/components/schemas/Error'
+        optimized_pulse:
+          $ref: '#/components/schemas/PulseShape'
+        achieved_fidelity:
+          type: number
+        iterations_used:
+          type: integer
+        convergence_reason:
+          type: string
+          enum: [target_reached, max_iterations, stalled, timeout, cancelled, error]
+        fidelity_history:
+          type: array
+          items:
+            type: number
+        wall_time_ms:
+          type: integer
+        warnings:
+          type: array
+          items:
+            type: string
+
+    CancelGRAPEResponse:
+      type: object
+      required: [cancelled]
+      properties:
+        cancelled:
+          type: boolean
+        partial_result:
+          $ref: '#/components/schemas/GRAPEResponse'
+
+    Error:
+      type: object
+      required: [code, message]
+      properties:
+        code:
+          type: integer
+        severity:
+          type: string
+          enum: [info, warning, degraded, fatal]
+        message:
+          type: string
+        details:
+          type: string
+        trace_id:
+          type: string
+        timestamp:
+          type: string
+          format: date-time
+
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: Required for hardware backends
+
+security:
+  - {}
+  - bearerAuth: []

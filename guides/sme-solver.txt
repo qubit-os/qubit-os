@@ -1,0 +1,88 @@
+SME solver guide
+================
+
+The stochastic master equation (SME) solver adds measurement-conditioned
+open-system evolution on top of the v0.5 Lindblad solver.
+
+What it solves
+--------------
+
+For homodyne detection, QubitOS evolves the conditional density matrix
+
+    d rho_c = L(rho_c) dt + sqrt(eta) H[c](rho_c) dW
+
+where:
+
+    L(.)     Lindblad drift term
+    eta      measurement efficiency in [0, 1]
+    H[c](.)  measurement innovation superoperator
+    dW       Wiener increment
+
+When eta = 0, the solver dispatches to the existing Lindblad path exactly.
+
+Python API
+----------
+
+    import numpy as np
+    from qubitos.lindblad import CollapseOperator
+    from qubitos.sme import SMEConfig, SMESolver
+
+    rho0 = np.array([[0.5, 0.5], [0.5, 0.5]], dtype=np.complex128)
+    hamiltonians = [np.zeros((2, 2), dtype=np.complex128) for _ in range(80)]
+    collapse_ops = [CollapseOperator.amplitude_damping(t1_us=50.0)]
+
+    config = SMEConfig(
+        num_time_steps=80,
+        duration_ns=160.0,
+        measurement_efficiency=0.6,
+        random_seed=123,
+        store_measurement_record=True,
+    )
+
+    solver = SMESolver(config=config, collapse_ops=collapse_ops)
+    result = solver.solve_trajectory(rho0, hamiltonians)
+
+Key result fields
+-----------------
+
+    final_density_matrix
+        Final conditional state.
+
+    measurement_record
+        Homodyne current samples for accepted substeps.
+
+    max_trace_deviation
+        Largest unit-trace drift seen before renormalization.
+
+    positivity_violations
+        Count of accepted steps whose minimum eigenvalue fell below the
+        configured tolerance before any optional projection.
+
+    dt_history
+        Accepted adaptive timesteps in seconds.
+
+Ensembles
+---------
+
+Use solve_ensemble(...) to average many conditional trajectories.
+
+    ensemble = solver.solve_ensemble(
+        rho0,
+        hamiltonians,
+        num_trajectories=256,
+    )
+
+The ensemble result reports:
+
+    mean_density_matrix
+    variance_real
+    variance_imag
+    mean_fidelity / std_fidelity
+    convergence_trace_distance
+
+Validation
+----------
+
+Every density-matrix surface emitted by qubitos.sme is validated at the
+module boundary. Trajectory outputs use a stochastic tolerance override;
+ensemble averages use the strict density-matrix tolerance.
