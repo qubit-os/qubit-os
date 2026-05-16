@@ -1995,15 +1995,15 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#7-comparison-framework-thesis-core" class="md-nav__link">
+  <a href="#7-comparison-framework-open-loop-vs-closed-loop" class="md-nav__link">
     <span class="md-ellipsis">
       
-        7. Comparison Framework (Thesis Core)
+        7. Comparison Framework (Open-Loop vs Closed-Loop)
       
     </span>
   </a>
   
-    <nav class="md-nav" aria-label="7. Comparison Framework (Thesis Core)">
+    <nav class="md-nav" aria-label="7. Comparison Framework (Open-Loop vs Closed-Loop)">
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
@@ -2536,15 +2536,15 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#7-comparison-framework-thesis-core" class="md-nav__link">
+  <a href="#7-comparison-framework-open-loop-vs-closed-loop" class="md-nav__link">
     <span class="md-ellipsis">
       
-        7. Comparison Framework (Thesis Core)
+        7. Comparison Framework (Open-Loop vs Closed-Loop)
       
     </span>
   </a>
   
-    <nav class="md-nav" aria-label="7. Comparison Framework (Thesis Core)">
+    <nav class="md-nav" aria-label="7. Comparison Framework (Open-Loop vs Closed-Loop)">
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
@@ -2628,7 +2628,7 @@ framework, 3-level transmon extension) — <strong>Design phase for v0.7.0+</str
 <strong>Purpose:</strong> Extend QubitOS from open-loop optimal control
 (GRAPE/Lindblad) to closed-loop measurement-based quantum feedback
 control. The SME runtime (v0.6.0) and the Lyapunov controller (v0.7.0)
-together form the core technical contribution for the MS thesis.</p>
+together form the project's feedback-plane primitives.</p>
 <hr />
 <h2 id="0-motivation-and-context">0. Motivation and Context<a class="headerlink" href="#0-motivation-and-context" title="Permanent link">&para;</a></h2>
 <h3 id="01-where-we-are">0.1 Where We Are<a class="headerlink" href="#01-where-we-are" title="Permanent link">&para;</a></h3>
@@ -2652,7 +2652,7 @@ describe what is coming.</p>
 <p>In a real experiment, you <em>do</em> get measurement outcomes. Continuous weak measurement of a superconducting qubit yields a noisy photocurrent I(t) that contains information about the qubit state. The Lindblad equation throws this information away by averaging over it.</p>
 <p>The <strong>stochastic master equation (SME)</strong> conditions the state evolution on the measurement record, producing a <em>conditional</em> density matrix ρ_c(t) that represents our best knowledge of the quantum state given everything we've measured so far. This conditional state can be fed to a <strong>feedback controller</strong> that adapts the drive pulse in real time.</p>
 <h3 id="03-why-this-matters">0.3 Why This Matters<a class="headerlink" href="#03-why-this-matters" title="Permanent link">&para;</a></h3>
-<p>The thesis question: <em>At what noise strength does closed-loop measurement-based feedback outperform open-loop optimal control (GRAPE) for single-qubit gate stabilization?</em></p>
+<p>The motivating question: <em>At what noise strength does closed-loop measurement-based feedback outperform open-loop optimal control (GRAPE) for single-qubit gate stabilization?</em></p>
 <p>This is a quantitative, answerable question with a clear experimental protocol. The answer has practical implications for quantum error mitigation and calibration.</p>
 <h3 id="04-connection-to-existing-code">0.4 Connection to Existing Code<a class="headerlink" href="#04-connection-to-existing-code" title="Permanent link">&para;</a></h3>
 <table>
@@ -2911,7 +2911,7 @@ describe what is coming.</p>
 </span><span id="__span-11-62"><a id="__codelineno-11-62" name="__codelineno-11-62" href="#__codelineno-11-62"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Feedback energy: </span><span class="si">{</span><span class="n">fb_result</span><span class="o">.</span><span class="n">feedback_energy_cost</span><span class="si">:</span><span class="s2">.2f</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
 </span><span id="__span-11-63"><a id="__codelineno-11-63" name="__codelineno-11-63" href="#__codelineno-11-63"></a>
 </span><span id="__span-11-64"><a id="__codelineno-11-64" name="__codelineno-11-64" href="#__codelineno-11-64"></a>
-</span><span id="__span-11-65"><a id="__codelineno-11-65" name="__codelineno-11-65" href="#__codelineno-11-65"></a><span class="c1"># === Comparison Plot (THE thesis figure) ===</span>
+</span><span id="__span-11-65"><a id="__codelineno-11-65" name="__codelineno-11-65" href="#__codelineno-11-65"></a><span class="c1"># === Comparison plot (headline open-loop vs closed-loop figure) ===</span>
 </span><span id="__span-11-66"><a id="__codelineno-11-66" name="__codelineno-11-66" href="#__codelineno-11-66"></a>
 </span><span id="__span-11-67"><a id="__codelineno-11-67" name="__codelineno-11-67" href="#__codelineno-11-67"></a><span class="kn">from</span><span class="w"> </span><span class="nn">qubitos.feedback.analysis</span><span class="w"> </span><span class="kn">import</span> <span class="n">noise_sweep_comparison</span>
 </span><span id="__span-11-68"><a id="__codelineno-11-68" name="__codelineno-11-68" href="#__codelineno-11-68"></a>
@@ -3175,7 +3175,7 @@ describe what is coming.</p>
 - 10000 trajectories: 640 MB (2-level) or 1.4 GB (3-level)</p>
 <p><strong>Mitigation:</strong> Default to storing only final state + scalar diagnostics per trajectory. Full trajectory storage opt-in.</p>
 <hr />
-<h2 id="7-comparison-framework-thesis-core">7. Comparison Framework (Thesis Core)<a class="headerlink" href="#7-comparison-framework-thesis-core" title="Permanent link">&para;</a></h2>
+<h2 id="7-comparison-framework-open-loop-vs-closed-loop">7. Comparison Framework (Open-Loop vs Closed-Loop)<a class="headerlink" href="#7-comparison-framework-open-loop-vs-closed-loop" title="Permanent link">&para;</a></h2>
 <h3 id="71-the-experiment">7.1 The Experiment<a class="headerlink" href="#71-the-experiment" title="Permanent link">&para;</a></h3>
 <p>For each noise strength γ/γ₀ ∈ {0.1, 0.2, ..., 10.0}:</p>
 <ol>
@@ -3240,7 +3240,7 @@ describe what is coming.</p>
 </span><span id="__span-25-16"><a id="__codelineno-25-16" name="__codelineno-25-16" href="#__codelineno-25-16"></a>       0.1          1.0          10.0
 </span><span id="__span-25-17"><a id="__codelineno-25-17" name="__codelineno-25-17" href="#__codelineno-25-17"></a>                 Noise strength γ/γ₀
 </span></code></pre></div>
-<p><strong>The crossover point γ* is the main quantitative result of the thesis.</strong></p>
+<p><strong>The crossover point γ* is the main quantitative result of the open-loop vs closed-loop comparison.</strong></p>
 <hr />
 <h2 id="8-references-cite-in-code">8. References (Cite in Code)<a class="headerlink" href="#8-references-cite-in-code" title="Permanent link">&para;</a></h2>
 <p>Each module MUST cite its primary references in the module docstring.</p>

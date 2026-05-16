@@ -12,7 +12,7 @@ framework, 3-level transmon extension) — **Design phase for v0.7.0+**.
 **Purpose:** Extend QubitOS from open-loop optimal control
 (GRAPE/Lindblad) to closed-loop measurement-based quantum feedback
 control. The SME runtime (v0.6.0) and the Lyapunov controller (v0.7.0)
-together form the core technical contribution for the MS thesis.
+together form the project's feedback-plane primitives.
 
 ---
 
@@ -49,7 +49,7 @@ The **stochastic master equation (SME)** conditions the state evolution on the m
 
 ### 0.3 Why This Matters
 
-The thesis question: *At what noise strength does closed-loop measurement-based feedback outperform open-loop optimal control (GRAPE) for single-qubit gate stabilization?*
+The motivating question: *At what noise strength does closed-loop measurement-based feedback outperform open-loop optimal control (GRAPE) for single-qubit gate stabilization?*
 
 This is a quantitative, answerable question with a clear experimental protocol. The answer has practical implications for quantum error mitigation and calibration.
 
@@ -331,7 +331,7 @@ print(f"Feedback fidelity: {fb_result.final_fidelity:.4f}")
 print(f"Feedback energy: {fb_result.feedback_energy_cost:.2f}")
 
 
-# === Comparison Plot (THE thesis figure) ===
+# === Comparison plot (headline open-loop vs closed-loop figure) ===
 
 from qubitos.feedback.analysis import noise_sweep_comparison
 
@@ -606,7 +606,7 @@ Each trajectory stores a d×d complex matrix at each timestep (if trajectory sto
 
 ---
 
-## 7. Comparison Framework (Thesis Core)
+## 7. Comparison Framework (Open-Loop vs Closed-Loop)
 
 ### 7.1 The Experiment
 
@@ -649,7 +649,7 @@ Fidelity
                  Noise strength γ/γ₀
 ```
 
-**The crossover point γ* is the main quantitative result of the thesis.**
+**The crossover point γ\* is the main quantitative result of the open-loop vs closed-loop comparison.**
 
 ---
 
