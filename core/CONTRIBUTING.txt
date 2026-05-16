@@ -326,7 +326,7 @@ cargo test -- --nocapture           # Show output
 - [ ] Code follows style guidelines
 - [ ] Tests added/updated
 - [ ] Documentation updated
-- [ ] CHANGELOG.md updated (for significant changes)
+- [ ] CHANGELOG.txt updated (for significant changes)
 - [ ] No secrets or credentials in code
 
 ### After Opening a PR
@@ -369,7 +369,7 @@ cargo test -- --nocapture           # Show output
 
 - Update documentation for all user-facing changes
 - Include docstrings/doc comments
-- Update CHANGELOG.md
+- Update CHANGELOG.txt
 - Add examples for new features
 
 ---
@@ -407,7 +407,7 @@ Include:
 ## Recognition
 
 Contributors are recognized in:
-- CHANGELOG.md for specific contributions
+- CHANGELOG.txt for specific contributions
 - GitHub contributors page
 - Release notes
 

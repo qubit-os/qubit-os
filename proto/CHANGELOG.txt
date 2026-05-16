@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-05-16
+
+### Added
+- `quantum.pulse.v1/sme.proto`: SMEConfig and SMEResult messages for the
+  stochastic master equation solver introduced in QubitOS v0.6.0.
+  SMEConfig carries measurement efficiency, collapse-operator specs,
+  measurement operator override, RNG seed, and per-trajectory storage
+  flags. SMEResult carries the conditional density matrix, trajectory
+  fidelity / purity series (when stored), the measurement record, and
+  diagnostics for max trace deviation and positivity violations.
+
 ## [0.5.0] - 2026-02-09
 
 ### Added
