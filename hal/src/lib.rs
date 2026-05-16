@@ -33,6 +33,7 @@
 pub mod backend;
 pub mod config;
 pub mod error;
+pub mod feedback;
 pub mod grape;
 pub mod lindblad;
 pub mod proto;
