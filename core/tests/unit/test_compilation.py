@@ -82,8 +82,8 @@ class TestZXZCompiler:
         from qubitos.compilation import ZXZCompiler
 
         compiler = ZXZCompiler()
-        I = np.eye(2, dtype=np.complex128)
-        seq = compiler.compile_unitary(I, (0,))
+        identity = np.eye(2, dtype=np.complex128)
+        seq = compiler.compile_unitary(identity, (0,))
         assert len(seq.gates) == 0
 
     def test_x_gate_decomposition(self):
@@ -162,9 +162,7 @@ class TestZXZCompiler:
             # Check unitary equivalence up to global phase
             # F = |Tr(U†V)|² / d² = 1.0 for equivalent unitaries
             fidelity = abs(np.trace(U.conj().T @ result)) ** 2 / 4.0
-            assert fidelity > 0.99, (
-                f"{name}: fidelity={fidelity:.4f}, expected ~1.0"
-            )
+            assert fidelity > 0.99, f"{name}: fidelity={fidelity:.4f}, expected ~1.0"
 
 
 def _ry(theta: float) -> np.ndarray:

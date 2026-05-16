@@ -6,7 +6,6 @@
 from __future__ import annotations
 
 import numpy as np
-import pytest
 
 
 class TestMemoryEstimation:
@@ -38,11 +37,6 @@ class TestMemoryEstimation:
 
     def test_large_system_logs_warning(self, caplog):
         """Optimizer warns when memory usage is high."""
-        import logging
-
-        from qubitos.pulsegen import GrapeConfig, GrapeOptimizer
-        from qubitos.pulsegen.hamiltonians import get_target_unitary
-
         # 7+ qubits triggers warning, but that's very slow to optimize.
         # Instead, test that the logging path works by checking at dim=128
         # We can't practically run a 7-qubit optimization in a test,
@@ -82,8 +76,8 @@ class TestSparseBeneficial:
         from qubitos.pulsegen.grape import _is_sparse_beneficial
 
         # 8x8 identity has 8/64 = 12.5% nonzero — below 50% threshold
-        I = np.eye(8, dtype=np.complex128)
-        assert _is_sparse_beneficial(I)
+        identity = np.eye(8, dtype=np.complex128)
+        assert _is_sparse_beneficial(identity)
 
     def test_threshold_parameter(self):
         from qubitos.pulsegen.grape import _is_sparse_beneficial
@@ -91,8 +85,8 @@ class TestSparseBeneficial:
         A = np.zeros((10, 10), dtype=np.complex128)
         A[:3, :3] = 1.0  # 9/100 = 9% nonzero
 
-        assert _is_sparse_beneficial(A, threshold=0.5)   # 9% < 50%
-        assert _is_sparse_beneficial(A, threshold=0.1)    # 9% < 10%
+        assert _is_sparse_beneficial(A, threshold=0.5)  # 9% < 50%
+        assert _is_sparse_beneficial(A, threshold=0.1)  # 9% < 10%
         assert not _is_sparse_beneficial(A, threshold=0.05)  # 9% > 5%
 
 
@@ -160,7 +154,7 @@ class TestSparseHamiltonian:
         )
 
         np.testing.assert_allclose(H0_sparse.toarray(), H0_dense, atol=1e-12)
-        for s, d in zip(Hc_sparse, Hc_dense):
+        for s, d in zip(Hc_sparse, Hc_dense, strict=True):
             np.testing.assert_allclose(s.toarray(), d, atol=1e-12)
 
     def test_sparse_2qubit_hamiltonian(self):
@@ -187,6 +181,4 @@ class TestSparseHamiltonian:
         )
 
         H0_dense = H0.toarray()
-        np.testing.assert_allclose(
-            H0_dense, H0_dense.conj().T, atol=1e-12
-        )
+        np.testing.assert_allclose(H0_dense, H0_dense.conj().T, atol=1e-12)
