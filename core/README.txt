@@ -5,7 +5,7 @@ Open-source quantum control system: pulse optimization, multi-qubit
 scheduling, calibration management, Lindblad simulation, and hardware
 abstraction.
 
-Current version: v0.5.0. Python 3.11+. Apache License 2.0.
+Current version: v0.7.0. Python 3.11+. Apache License 2.0.
 
 This package is the Python module of the QubitOS monorepo. See the
 top-level README.txt for the project overview and the monorepo layout.
@@ -45,9 +45,12 @@ What is in core/
         client/        gRPC client to HAL server
         compilation/   Native gate compilation traits
         error_budget/  Cumulative error tracking
+        feedback/      Lyapunov feedback controller, comparison framework,
+                       visualization (v0.7.0)
         lindblad/      Python Lindblad solver (validation oracle)
         provenance/    Merkle tree experiment provenance
-        pulsegen/      GRAPE optimizer
+        pulsegen/      GRAPE optimizer, DRAG, Gaussian envelopes
+        sme/           Stochastic master equation solver (v0.6.0)
         temporal/      Time model and constraint validation
         testing/       Test utilities and mock backends
         validation/    Input validation

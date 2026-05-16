@@ -17,9 +17,13 @@ What HAL does
   * Rust-native Lindblad master equation solver (ndarray, RK4).
   * Rust-native GRAPE optimizer (Pade scaling-and-squaring; 10x speedup
     over Python GRAPE).
+  * Rust-native Stochastic Master Equation solver with Rayon-parallel
+    trajectory ensemble (v0.6.0).
+  * Rust-native Lyapunov feedback hot path with PyO3 bindings; ~150x
+    speedup over the Python reference (v0.7.0).
   * Backend dispatch: QuTiP (PyO3), IQM Resonance, IBM Quantum, AWS Braket.
   * Temporal constraint validation.
-  * FFI scaffolding for the bare-metal C fast path (v0.6.0 stretch track).
+  * FFI scaffolding for the bare-metal C fast path (stretch track).
 
 
 Build and test
@@ -43,12 +47,14 @@ Crate layout
         backend/    Backend adapters (qutip, iqm, ibm, aws_braket)
         config.rs   Server configuration
         error.rs    Error types
+        feedback/   Lyapunov feedback law + PyO3 bindings (v0.7.0)
         grape/      Rust-native GRAPE optimizer
         lib.rs      Library entry point
         lindblad/   Lindblad solver, FFI bridge, open-GRAPE
         main.rs     Binary entry point
         proto/      Generated protobuf bindings
         server/     gRPC and REST handlers
+        sme/        Stochastic master equation solver (v0.6.0)
         temporal/   Time model validation
         validation/ Input validation
 

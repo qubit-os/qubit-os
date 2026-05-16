@@ -3,8 +3,15 @@
 
 **Status:**
 Sections 0–4 (SME solver, validation suite) — **Implemented in v0.6.0**
-(2026-05-16). Sections 5+ (Lyapunov feedback controller, comparison
-framework, 3-level transmon extension) — **Design phase for v0.7.0+**.
+(2026-05-16). Section 1.4 (Lyapunov function and feedback law), Section
+2 (API surface), the diagonal-gain feedback controller, the comparison
+framework (`noise_sweep_comparison`, `crossover_point`), the
+visualization helpers, and Tier 5 of the validation suite —
+**Implemented in v0.7.0**. The full 3x3 cross-axis gain matrix is
+shipped as an opt-in surface that is documented in Section 5 below but
+is not part of the v0.7.0 validation gates. Section 5's 3-level
+transmon extension and the leakage-aware Lyapunov function remain
+**Design phase for v0.8.0+**.
 
 **Author:** Rylan Malarchick
 **Originally drafted:** February 2026
@@ -159,6 +166,26 @@ The feedback drives ρ_c toward ρ_target along the Bloch sphere geodesic contro
 ```
 
 This provides asymptotic stability to ρ_target (modulo the LaSalle invariance principle — see Mirrahimi & van Handel 2007 for the full stability proof on the Bloch sphere).
+
+**Diagonal gain (validated path).** The v0.7.0 implementation accepts a
+diagonal gain matrix K = diag(K_x, K_y, K_z). Length-1 gains broadcast
+across the active axis set; length-N gains apply per-axis. This is the
+only path covered by the v0.7.0 Tier 5 validation gates and the only
+path that Mirrahimi & van Handel 2007 cover analytically.
+
+**Full 3x3 gain matrix (opt-in, not validated).** As of v0.7.0 the
+`FeedbackConfig.full_gain_matrix` field accepts a length-9 row-major
+flattening of a real 3x3 K matrix:
+
+```
+δΩ_k(t) = -Σ_j K_{kj} · Tr[ρ_target · [iσ_j/2, ρ_c]]
+```
+
+Off-diagonal entries couple the projection along σ_j into the
+correction along σ_k. This surface exists for completeness; it is not
+covered by the Tier 5 validation gates and has no analytical
+convergence guarantee in v0.7.0. The Rust port (`hal/src/feedback/`)
+honors the same surface for parity.
 
 ### 1.5 Itô vs. Stratonovich
 

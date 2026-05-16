@@ -9,6 +9,62 @@ Versioning policy: Semantic Versioning.
 Unreleased
 ----------
 
+0.7.0 - 2026-05-16
+-------------------
+
+Added
+
+Lyapunov Feedback Controller (v0.7.0)
+- `qubitos.feedback`: closed-loop controller that consumes the v0.6.0
+  SME runtime and emits a real-time correction to the drive Hamiltonian
+- Lyapunov function `V(rho_c) = 1 - Tr[rho_target rho_c]` and feedback
+  law `delta_Omega_k(t) = -K_k * Tr[rho_target * [i sigma_k / 2, rho_c]]`
+- `LyapunovController` with diagonal gain (scalar or per-axis), opt-in
+  full 3x3 gain matrix, and amplitude saturation
+- `solve_with_feedback` and `solve_with_feedback_ensemble` orchestrate
+  the SME runtime + feedback law per nominal step, preserving the
+  adaptive-timestep substep machinery so zero-gain reproduces
+  `SMESolver.solve_trajectory` exactly
+- `_FeedbackDelayBuffer` discrete-time latency aligned to the nominal
+  SME step
+- `build_feedback_delay_constraint` and `accumulate_feedback_delay`
+  integrate feedback delay with the existing temporal/ machinery
+  (SEQUENTIAL TemporalConstraint, DecoherenceBudget block_fraction)
+- `qubitos.feedback.analysis`: `noise_sweep_comparison`,
+  `crossover_point`, `build_baseline_hamiltonians`, `HardwareParams`,
+  `default_iqm_garnet_params`, `NoiseSweepResult`
+- `qubitos.feedback.viz`: `plot_lyapunov_trajectory`,
+  `plot_bloch_trajectory` (via qutip.Bloch), `plot_noise_sweep`
+- AgentBible decoration on the Lyapunov scalar output and the
+  trajectory-level Lyapunov vector at the module boundary
+- 117 feedback tests in the core tree (105 fast unit + 12 slow
+  integration), covering the Tier-5 validation gates from
+  SME-FEEDBACK-SPEC section 4.5: zero-gain identity, ensemble-mean V(t)
+  trend, V(t) noise-floor behaviour, |1> stabilization counteracting T1,
+  noise-sweep crossover smoke
+- Tutorial: `core/docs/tutorials/lyapunov-feedback.txt`
+- 7 Rust crossvalidation tests for the
+  `qubit_os_hardware.feedback.RustLyapunovController` (gated on the
+  Python extension being available)
+
+Changed
+
+- `matplotlib >= 3.7` added as a `core` runtime dependency (used by the
+  visualization helpers)
+- `_grape_baseline` in `qubitos.feedback.analysis` doubles the GRAPE
+  envelope scale to match the SME's `omega * sigma / 2` Hamiltonian
+  convention (GRAPE optimizes against `H = i * sigma_x + q * sigma_y`
+  with no 1/2 factor; the SME runtime uses the 1/2 factor)
+- `qubitos.feedback.analysis._drag_baseline` uses a dimensionally
+  consistent `omega_q = -beta * sigma * dOmega/dt` Q-component
+- `SME-FEEDBACK-SPEC.txt` status header updated to reflect v0.7.0
+  surfaces (sections 0-4 in v0.6.0, sections 1.4 + 2 + comparison
+  framework + Tier 5 in v0.7.0); the diagonal-gain validated path and
+  the opt-in full 3x3 K matrix path are now documented in section 1.4
+
+0.6.0 - 2026-05-16
+-------------------
+
 Added
 
 Stochastic Master Equation Solver (v0.6.0)

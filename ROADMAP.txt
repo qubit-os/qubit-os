@@ -9,9 +9,12 @@ QubitOS is an open-source quantum control kernel providing Hamiltonian-level
 pulse optimization, hardware abstraction, and calibration management for
 quantum computing research. The monorepo contains three modules: proto/
 (Protocol Buffer definitions), hal/ (Rust HAL server), and core/ (Python
-client, optimizer, and calibration). v0.5.0 is complete; all five
-architecture gaps addressed, Rust-native GRAPE and Lindblad solver
-operational, IBM/AWS/IQM backends integrated. Next milestone: v0.6.0.
+client, optimizer, and calibration). v0.5.0 (Rust GRAPE, Lindblad solver,
+multi-backend) is complete. v0.6.0 added the stochastic master equation
+runtime (Python and Rust + Rayon ensemble). v0.7.0 added the Lyapunov
+feedback controller, open-loop vs closed-loop comparison framework, and
+Rust feedback hot path. Next milestone: v0.8.0 (3-level transmon with
+leakage-aware Lyapunov control).
 
 
 CI/CD-first development policy
@@ -905,8 +908,10 @@ dependencies (QuTiP, SciPy) from the performance-critical path. The
 trajectory:
 
     v0.1.0 to v0.4.0    QuTiP via PyO3      Python    Retired as primary
-    v0.5.0              Rust ndarray solver Rust      Current production
-    v0.6.0              C bare-metal fast path  C     In progress; LANL Summer 2026
+    v0.5.0              Rust ndarray solver Rust      Production (GRAPE, Lindblad)
+    v0.6.0              Rust + Rayon SME ensemble  Rust  Production
+    v0.7.0              Rust feedback hot path  Rust  Production (~150x Python)
+    v0.6.x stretch      C bare-metal fast path  C     In progress; LANL Summer 2026
     Future              FPGA fast path      Verilog   Planned
 
 Why this matters:

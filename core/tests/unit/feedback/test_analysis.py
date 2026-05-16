@@ -3,10 +3,9 @@
 
 """Unit tests for the noise-sweep comparison framework in feedback/analysis.py.
 
-These exercise the public surface of the comparison engine without invoking
-the full thesis-scale grid: small noise lists, small ensembles, short
-durations. The thesis-figure script in the external planning tree handles
-the headline grid.
+These exercise the public surface of the comparison engine on a small
+smoke-scale grid: short noise lists, small ensembles, short durations.
+Larger sweeps run out of tree via scripts that import this module.
 """
 
 from __future__ import annotations

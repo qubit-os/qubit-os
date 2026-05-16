@@ -9,11 +9,11 @@ configurable subset of baseline methods (GRAPE, DRAG, Gaussian) plus the
 Lyapunov feedback closed loop. The function returns a structured result
 that downstream plotting helpers (:mod:`qubitos.feedback.viz`) consume.
 
-This is the library API behind the v0.7.0 headline figure. The repo
-ships only the library and a smoke test; the thesis-scale figure script
-(50 noise points x 1000 trajectories) lives in the internal planning
-tree, imports this function, and writes its own raw data and figures
-outside the repo. See the v0.7.0 handoff plan, section "Out of scope".
+This is the library API behind the v0.7.0 open-loop vs closed-loop
+comparison. The repo ships only the library and a smoke-scale test;
+larger sweeps (e.g. 50 noise points x 1000 trajectories) are produced
+by reproducible scripts that import this function out of tree and
+write their own raw data and figures.
 
 References:
     - Wiseman and Milburn (2009), Quantum Measurement and Control,
@@ -61,8 +61,8 @@ class HardwareParams:
     intrinsic Wiener-noise floor on the stability metric is roughly
     ``sqrt(eta * dt) * ||c||``, so the tolerance must sit above that floor
     or the retry loop thrashes. The default value works for transmon
-    parameters at dt ~ 0.25 ns; the thesis-figure script overrides as
-    needed for its grid.
+    parameters at dt ~ 0.25 ns; callers running larger sweeps may
+    override it.
     """
 
     t1_us: float = 45.2
@@ -184,8 +184,8 @@ def noise_sweep_comparison(
             ``seed + j * num_trajectories + i + hash(m)``-derived offset.
         baselines: Optional pre-built Hamiltonian schedules keyed by
             method. When provided, skips the corresponding call to
-            :func:`build_baseline_hamiltonians`; useful for the external
-            thesis-figure script that caches GRAPE results across runs.
+            :func:`build_baseline_hamiltonians`; useful for callers that
+            cache GRAPE results across runs.
 
     Returns:
         :class:`NoiseSweepResult` populated with mean / std fidelity per
@@ -327,8 +327,8 @@ def _default_feedback_config(
         * scalar gain broadcasted across axes
         * ``max_correction_amplitude = drive_amp_max_mhz``
 
-    This is a reasonable starting point for the smoke test; the external
-    thesis-scale script overrides this via the ``feedback_config`` kwarg.
+    This is a reasonable starting point for the smoke test; callers
+    running larger sweeps override it via the ``feedback_config`` kwarg.
     """
     return FeedbackConfig(
         gains=(1.0e7,),
@@ -400,9 +400,9 @@ def _grape_baseline(params: HardwareParams) -> list[NDArray[np.complex128]]:
     """GRAPE-optimized envelope for a single X gate.
 
     For the v0.7.0 smoke test we use a tight :class:`GrapeConfig`: 100
-    iterations, default learning rate, fixed seed. The external thesis
-    script may swap in a fully optimized GRAPE result via the
-    ``baselines`` argument of :func:`noise_sweep_comparison`.
+    iterations, default learning rate, fixed seed. Callers may swap in
+    a fully optimized GRAPE result via the ``baselines`` argument of
+    :func:`noise_sweep_comparison`.
 
     Falls back to the Gaussian baseline when GRAPE fails to produce a
     finite envelope (defensive against pathological hardware_params).
