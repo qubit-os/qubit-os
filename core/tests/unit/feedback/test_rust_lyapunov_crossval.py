@@ -89,9 +89,7 @@ def test_rust_and_python_lyapunov_value_agree_to_1e_minus_12(state: np.ndarray) 
         max_correction_amplitude=0.0,
     )
     rust_v = rust.lyapunov_value(_flatten(state))
-    assert abs(py_v - rust_v) < 1e-12, (
-        f"Lyapunov mismatch: python={py_v:.16e} rust={rust_v:.16e}"
-    )
+    assert abs(py_v - rust_v) < 1e-12, f"Lyapunov mismatch: python={py_v:.16e} rust={rust_v:.16e}"
 
 
 @pytest.mark.parametrize(
