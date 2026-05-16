@@ -13,8 +13,10 @@ Apache License 2.0. Python 3.11+. Rust 1.85+.
 Status
 ------
 
-Current release: v0.5.0. Next milestone: v0.6.0 (stochastic master equation
-solver). See ROADMAP.txt.
+Current release: v0.7.0 (Lyapunov feedback controller, open-loop vs
+closed-loop comparison framework, Rust feedback hot path). Next milestone:
+v0.8.0 (3-level transmon with leakage-aware Lyapunov control). See
+ROADMAP.txt.
 
 
 Backend integration honesty
@@ -68,9 +70,20 @@ Calibration Management. Fingerprinting, drift detection, decoherence
 budgets. Treats calibration as a continuous process, not a static snapshot.
 
 Lindblad Simulation. Open quantum system solver written in Rust (RK4). A
-bare-metal C fast path for d <= 27 is on the v0.6.0 stretch track tied to
-the LANL summer 2026 deliverable. Three-tier dispatch: Rust general-purpose,
+bare-metal C fast path for d <= 27 is on a stretch track tied to the
+LANL summer 2026 deliverable. Three-tier dispatch: Rust general-purpose,
 C SIMD-optimized, FPGA (future).
+
+Stochastic Master Equation (v0.6.0). Conditional density-matrix evolution
+with milstein-step integration, adaptive sub-stepping, and Rayon-parallel
+trajectory ensembles. Public API: SMESolver, SMEResult, SMEConfig.
+
+Lyapunov Feedback Controller (v0.7.0). Measurement-conditioned control
+that drives a state toward a target via a Lyapunov function. Diagonal
+gain (K_x, K_y, K_z) is the validated path; full 3x3 K matrix is an
+opt-in surface. Companion noise_sweep_comparison runs GRAPE, DRAG,
+Gaussian, and Lyapunov feedback across a noise sweep with crossover
+detection. Rust hot path provides ~150x speedup over Python.
 
 Hardware Abstraction. QuantumBackend trait with pluggable backends. Live:
 IQM. Demonstrated through the abstraction (mock-tested): QuTiP simulator,

@@ -39,6 +39,8 @@ The previous split repositories (`qubit-os-core`, `qubit-os-hardware`,
 |  pulsegen/     GRAPE optimizer, Hamiltonian construction,     |
 |                pulse shapes (DRAG, Gaussian, square)          |
 |  sme/          Stochastic master equation solver (v0.6.0)     |
+|  feedback/     Lyapunov feedback controller, comparison       |
+|                framework, visualization (v0.7.0)              |
 |  lindblad/     Lindblad master equation solver                |
 |  calibrator/   T1/T2 fitting, drift detection, fingerprinting |
 |  temporal/     TimePoint, TemporalConstraint, PulseSequence,  |
@@ -62,6 +64,8 @@ The previous split repositories (`qubit-os-core`, `qubit-os-hardware`,
 |                the C fast path (LANL summer stretch)          |
 |  sme/          Rust-native SME (Itô SDE), Rayon-parallel      |
 |                ensemble                                        |
+|  feedback/     Rust Lyapunov feedback law hot path (v0.7.0),  |
+|                ~150x faster than the Python reference         |
 |  backend/      Backend dispatch: QuTiP, IQM, IBM, AWS         |
 |  temporal/     Rust mirror of core/temporal/ validation       |
 +--------------------------------------------------------------+
@@ -79,9 +83,9 @@ without rewriting the others.
 ### 1. Control kernel
 
 Hamiltonian in, optimized pulses out. GRAPE / DRAG / Gaussian /
-(v0.7.0) Lyapunov feedback. Pulse scheduling, timing constraints,
-hardware-aware validation. Lives in `core/pulsegen/`, `hal/grape/`,
-and (forthcoming) `core/feedback/` plus `hal/feedback/`.
+Lyapunov feedback (v0.7.0). Pulse scheduling, timing constraints,
+hardware-aware validation. Lives in `core/pulsegen/`, `core/feedback/`,
+`hal/grape/`, and `hal/feedback/`.
 
 ### 2. Calibration / state plane
 

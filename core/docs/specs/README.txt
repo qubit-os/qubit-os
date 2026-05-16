@@ -20,7 +20,7 @@ are the canonical design for each subsystem.
 | [EXPERIMENT-PROVENANCE-SPEC.txt](EXPERIMENT-PROVENANCE-SPEC.txt) | v0.2.4 | Implemented |
 | [MULTI-QUBIT-SPEC.txt](MULTI-QUBIT-SPEC.txt) | v0.3.0 | Implemented |
 | [RUST-NATIVE-SOLVER-SPEC.txt](RUST-NATIVE-SOLVER-SPEC.txt) | v0.5.0 | Implemented |
-| [SME-FEEDBACK-SPEC.txt](SME-FEEDBACK-SPEC.txt) | v0.6.0-v0.8.0 | Design phase |
+| [SME-FEEDBACK-SPEC.txt](SME-FEEDBACK-SPEC.txt) | v0.6.0-v0.8.0 | v0.6.0 SME + v0.7.0 feedback implemented; section 5 (3-level transmon) is design phase |
 
 ## Policy: Generated Code
 

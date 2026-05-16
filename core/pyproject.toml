@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "qubitos"
-version = "0.5.0"
+version = "0.7.0"
 description = "Python modules for QubitOS quantum control kernel"
 readme = "README.txt"
 license = "Apache-2.0"
@@ -28,6 +28,7 @@ dependencies = [
     "numpy>=1.26.0",
     "scipy>=1.12.0",
     "qutip>=5.0.0",
+    "matplotlib>=3.7.0",
     "agentbible>=1.0.0",
     "pyyaml>=6.0",
     "click>=8.0.0",

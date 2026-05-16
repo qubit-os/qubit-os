@@ -48,6 +48,39 @@ Changed
 Unreleased
 ----------
 
+0.7.0 - 2026-05-16
+-------------------
+
+Added
+- Rust Lyapunov feedback law in `src/feedback/`:
+  - `lyapunov.rs`: `ControlAxis`, `FeedbackConfig`, `axis_pauli`,
+    `lyapunov_value`, `feedback_correction`
+  - `mod.rs`: public exports
+  - `pyo3_bindings.rs`: `RustLyapunovController` drop-in for the Python
+    `LyapunovController` hot path, gated by the `python` feature
+- agentbible 0.1.0 (Rust crate) decorates the Lyapunov scalar output at
+  the module boundary (finite + range [0, 1] within atol = 1e-8)
+- 17 inline `#[cfg(test)]` Rust tests cover the same identities as the
+  Python suite (zero correction at fixed point and antipode, off-target
+  non-zero correction, saturation, per-axis gain broadcast, full 3x3
+  matrix path, axis-subset slicing, non-finite-input rejection)
+- Micro-benchmark `tests/bench_feedback_law.rs` (run with
+  `cargo test --release --test bench_feedback_law -- --ignored
+  --nocapture`)
+
+Performance
+- Rust feedback law: 876 ns / correction call on a 200-step trajectory
+  with three control axes (release build, single thread, local
+  workstation)
+- Python feedback law: 132,677 ns / correction call on the identical
+  workload (`core/scripts/bench_feedback_law.py`)
+- 151x speedup, well above the 5x bar in the v0.7.0 handoff plan;
+  accumulator values agree to five significant figures, confirming the
+  two implementations are numerically equivalent
+
+0.6.0 - 2026-05-16
+-------------------
+
 Added
 - Rust SME solver in `src/sme/` with Euler-Maruyama trajectories,
   Lindblad dispatch at eta = 0, and Rayon-parallel ensembles

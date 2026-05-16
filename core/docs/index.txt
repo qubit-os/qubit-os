@@ -7,8 +7,10 @@ control pulses against live calibration data, schedules them with
 constraint-aware parallelism, and dispatches through a hardware
 abstraction layer.
 
-Current release: **v0.6.0** (stochastic master equation solver, Rust + Rayon).
-Next milestone: **v0.7.0** (Lyapunov feedback controller). See
+Current release: **v0.7.0** (Lyapunov feedback controller, open-loop vs
+closed-loop comparison framework, Rust feedback hot path).
+Next milestone: **v0.8.0** (3-level transmon with leakage-aware
+Lyapunov control). See
 [ROADMAP.txt](https://github.com/qubit-os/qubit-os/blob/main/ROADMAP.txt).
 
 ## Start here
@@ -63,6 +65,35 @@ solver = SMESolver(config=config)
 result = solver.solve_trajectory(initial_rho=rho0, hamiltonians=h_list,
                                  target_rho=rho_target)
 print(f"Final fidelity: {result.final_fidelity:.4f}")
+```
+
+### Lyapunov feedback controller (v0.7.0)
+
+Close the loop on the SME runtime. A Lyapunov function V(rho_c) =
+1 - Tr[rho_target rho_c] drives a per-axis feedback law that adds a
+real-time correction to the baseline drive Hamiltonian. The
+`noise_sweep_comparison` API produces the open-loop vs closed-loop
+fidelity curves; `crossover_point` returns the noise strength where
+the closed loop starts to win.
+
+```python
+from qubitos.feedback import (
+    AXIS_X, AXIS_Y, AXIS_Z,
+    FeedbackConfig, LyapunovController,
+    solve_with_feedback,
+)
+
+fb_config = FeedbackConfig(
+    gains=(5.0e6,),
+    control_axes=(AXIS_X, AXIS_Y, AXIS_Z),
+    max_correction_amplitude=50.0e6 * 2.0 * 3.14159,
+    delay_ns=0.0,
+)
+controller = LyapunovController(fb_config, rho_target)
+result = solve_with_feedback(solver, controller, rho0, hamiltonians,
+                             target_rho=rho_target)
+print(f"Final fidelity: {result.sme_result.final_fidelity:.4f}")
+print(f"V(T):           {result.lyapunov_trajectory[-1]:.4f}")
 ```
 
 ### Hardware abstraction

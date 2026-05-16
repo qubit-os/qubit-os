@@ -1,0 +1,102 @@
+// QubitOS Lyapunov Feedback Controller Specification
+// Copyright 2026 QubitOS Contributors
+// SPDX-License-Identifier: Apache-2.0
+//
+// FeedbackConfig and FeedbackResult describe the v0.7.0 Lyapunov
+// feedback controller that consumes the conditional density matrix
+// from a stochastic master equation solve and emits a real-time
+// correction to the drive Hamiltonian. See SME-FEEDBACK-SPEC sections
+// 1.4 and 5 for the mathematical surface.
+
+syntax = "proto3";
+
+package quantum.pulse.v1;
+
+import "quantum/pulse/v1/sme.proto";
+
+option java_multiple_files = true;
+option java_package = "io.qubitos.pulse.v1";
+
+// Configuration for a feedback controller attached to the SME runtime.
+//
+// The controller_type selects the feedback policy. Only "lyapunov" is
+// implemented in v0.7.0. Other values raise an error from the consumer
+// pointing at the future version that will implement them.
+message FeedbackConfig {
+  // Controller policy identifier. "lyapunov" is the only supported
+  // value in v0.7.0. Reserved future values: "bayesian", "rl".
+  string controller_type = 1;
+
+  // Per-axis feedback gains K_x, K_y, K_z applied to the σ_x, σ_y, σ_z
+  // generators. Length 0 selects single-axis with feedback_gain. Length
+  // 1 applies the same gain to every entry in control_axes. Length 3
+  // is interpreted as the diagonal K = diag(K_x, K_y, K_z).
+  //
+  // Sign convention matches SME-FEEDBACK-SPEC section 1.4:
+  // δΩ_k(t) = -K_k * Tr[ρ_target * [i σ_k / 2, ρ_c]].
+  repeated double feedback_gain = 2;
+
+  // Realistic feedback delay τ_fb in nanoseconds. 0.0 selects the
+  // instantaneous-feedback path (no temporal constraint emitted).
+  // Non-zero values flow through the existing temporal/ machinery as
+  // a SEQUENTIAL TemporalConstraint between the measurement event and
+  // the correction event, and consume DecoherenceBudget per cycle.
+  double feedback_delay_ns = 3;
+
+  // Maximum correction amplitude |δΩ_k(t)| in MHz. Enforces hardware
+  // DAC saturation. Non-positive values disable saturation.
+  double max_correction_amplitude_mhz = 4;
+
+  // Active control axes. Subset of {"x", "y", "z"}. Empty defaults to
+  // ["x"] (single-axis σ_x feedback law).
+  repeated string control_axes = 5;
+
+  // Target conditional density matrix ρ_target. The Lyapunov function
+  // V(ρ_c) = 1 - Tr[ρ_target ρ_c] is evaluated against this state.
+  ComplexMatrix target_density_matrix = 6;
+
+  // Opt-in full 3×3 gain matrix with off-diagonal cross-axis coupling.
+  // Length 0 leaves K diagonal (validated path). Length 9 selects the
+  // full-matrix path (documented opt-in surface, NOT release-gated in
+  // v0.7.0; see SME-FEEDBACK-SPEC section 5).
+  repeated double full_gain_matrix = 7;
+
+  reserved 50 to 100;
+}
+
+// Result of a feedback-controlled SME solve.
+//
+// Embeds an SMEResult so consumers can read the conditional state
+// trajectory and measurement record alongside the feedback diagnostics.
+message FeedbackResult {
+  // SME outputs (conditional state, trajectory, measurement record,
+  // diagnostics) for the controlled run.
+  SMEResult sme_result = 1;
+
+  // Per-axis correction history δΩ_k(t). Stored as concatenated
+  // axis-major arrays of length steps * num_axes; consumers slice by
+  // axis index.
+  repeated double correction_history = 2;
+
+  // Number of active control axes for the run. Length of
+  // correction_history is steps * num_axes.
+  int32 num_axes = 3;
+
+  // Lyapunov function trajectory V(ρ_c(t)). Length equals
+  // SMEResult.fidelity_trajectory length when stored.
+  repeated double lyapunov_trajectory = 4;
+
+  // Cumulative feedback energy cost ∫|δΩ(t)|² dt summed across axes.
+  double feedback_energy_cost = 5;
+
+  // Crossover noise strength γ/γ₀ at which feedback fidelity equals
+  // GRAPE fidelity. Zero when not computed (per-run results do not
+  // populate this field; only the noise sweep does).
+  double crossover_noise_strength = 6;
+
+  // Cumulative DecoherenceBudget consumed by feedback delay
+  // contributions on each qubit. Indexed positionally.
+  repeated double decoherence_budget_consumed = 7;
+
+  reserved 50 to 100;
+}

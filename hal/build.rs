@@ -53,6 +53,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         "quantum/pulse/v1/temporal.proto",
         "quantum/pulse/v1/grape.proto",
         "quantum/pulse/v1/sme.proto",
+        "quantum/pulse/v1/feedback.proto",
         "quantum/error/v1/error_budget.proto",
         "quantum/provenance/v1/provenance.proto",
         "quantum/backend/v1/service.proto",

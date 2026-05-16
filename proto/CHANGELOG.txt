@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.7.0] - 2026-05-16
+
+### Added
+- `quantum.pulse.v1/feedback.proto`: FeedbackConfig and FeedbackResult
+  messages for the Lyapunov feedback controller introduced in QubitOS
+  v0.7.0. FeedbackConfig carries the controller type (only "lyapunov"
+  is implemented in v0.7.0), per-axis feedback gains, optional length-9
+  full 3x3 cross-axis gain matrix (opt-in surface, not validated),
+  feedback delay in nanoseconds, maximum correction amplitude, active
+  control axes, and the target density matrix used by the Lyapunov
+  function. FeedbackResult embeds an SMEResult for the controlled run
+  alongside the per-step correction history, Lyapunov function
+  trajectory, cumulative feedback energy cost, crossover noise
+  strength (populated by the noise-sweep analysis only), and the
+  DecoherenceBudget consumed per qubit by feedback-delay cycles.
+
 ## [0.6.0] - 2026-05-16
 
 ### Added

@@ -1,0 +1,177 @@
+Lyapunov feedback tutorial
+==========================
+
+This example drives a single qubit from |0> to |1> with a Gaussian
+baseline pi-pulse and adds a Lyapunov feedback correction on top of the
+baseline drive. The conditional state is tracked through the SME
+runtime; the feedback law samples it once per nominal step and emits a
+per-axis Hamiltonian correction.
+
+The mathematical surface is:
+
+    V(rho_c)         = 1 - Tr[rho_target rho_c]
+    delta_Omega_k(t) = -K_k * Tr[rho_target * [i sigma_k / 2, rho_c]]
+
+See core/docs/specs/SME-FEEDBACK-SPEC.txt sections 1.4 and 5 for the
+full derivation and convergence references.
+
+Example
+-------
+
+    import numpy as np
+
+    from qubitos.feedback import (
+        AXIS_X, AXIS_Y, AXIS_Z,
+        FeedbackConfig, LyapunovController,
+        solve_with_feedback,
+    )
+    from qubitos.lindblad import CollapseOperator
+    from qubitos.sme import SMEConfig, SMESolver
+
+    rho0 = np.array(
+        [[1.0, 0.0],
+         [0.0, 0.0]],
+        dtype=np.complex128,
+    )
+    rho_target = np.array(
+        [[0.0, 0.0],
+         [0.0, 1.0]],
+        dtype=np.complex128,
+    )
+
+    # Gaussian pi-pulse about x.
+    num_steps = 40
+    duration_ns = 40.0
+    duration_s = duration_ns * 1e-9
+    dt = duration_s / num_steps
+    t = np.arange(num_steps) * dt + 0.5 * dt
+    center = duration_s / 2.0
+    sigma = duration_s / 6.0
+    envelope = np.exp(-0.5 * ((t - center) / sigma) ** 2)
+    area = np.trapezoid(envelope, dx=dt)
+    omega = (np.pi / area) * envelope
+    sigma_x_half = 0.5 * np.array(
+        [[0.0, 1.0],
+         [1.0, 0.0]],
+        dtype=np.complex128,
+    )
+    hamiltonians = [w * sigma_x_half for w in omega]
+
+    collapse_ops = CollapseOperator.from_t1_t2(t1_us=45.0, t2_us=35.0)
+
+    solver = SMESolver(
+        SMEConfig(
+            num_time_steps=num_steps,
+            duration_ns=duration_ns,
+            measurement_efficiency=0.5,
+            random_seed=7,
+            collapse_ops=collapse_ops,
+            store_trajectory=True,
+            positivity_projection=True,
+            adaptive_tolerance=1e-2,
+        ),
+        collapse_ops=collapse_ops,
+    )
+
+    fb_config = FeedbackConfig(
+        gains=(5.0e6,),
+        control_axes=(AXIS_X, AXIS_Y, AXIS_Z),
+        max_correction_amplitude=50.0e6 * 2.0 * np.pi,
+        delay_ns=0.0,
+    )
+    controller = LyapunovController(fb_config, rho_target)
+
+    result = solve_with_feedback(
+        solver,
+        controller,
+        rho0,
+        hamiltonians,
+        target_rho=rho_target,
+    )
+
+    print("Final fidelity:", result.sme_result.final_fidelity)
+    print("V(0):", result.lyapunov_trajectory[0])
+    print("V(T):", result.lyapunov_trajectory[-1])
+    print("Feedback energy:", result.feedback_energy_cost)
+
+What to look for
+----------------
+
+    Final fidelity
+        Above 0.99 at the nominal noise level. The Gaussian baseline
+        already nails the gate; feedback adds a small correction that
+        helps under stronger noise.
+
+    V(0) and V(T)
+        V(0) starts at 1.0 (rho_c = |0> and rho_target = |1> are
+        orthogonal pure states). V(T) approaches 0 as the feedback
+        loop closes.
+
+    Feedback energy
+        Cumulative integral of |delta_Omega(t)|^2 dt. Large values
+        indicate the controller worked hard; small values indicate the
+        open-loop baseline was already close to target.
+
+Visualization
+-------------
+
+    from qubitos.feedback import (
+        plot_bloch_trajectory,
+        plot_lyapunov_trajectory,
+    )
+
+    fig_v = plot_lyapunov_trajectory(result)
+    fig_bloch = plot_bloch_trajectory(result, target_rho=rho_target)
+    fig_v.savefig("lyapunov_trajectory.png")
+    fig_bloch.savefig("bloch_trajectory.png")
+
+What to vary
+------------
+
+    Gain K
+        Smaller K (~1e6) makes the controller passive; the baseline
+        carries the gate. Larger K (~1e8) makes the controller dominant
+        and can over-correct, increasing feedback energy without
+        improving fidelity.
+
+    Control axes
+        Use a single axis (AXIS_X,) when the noise model only requires
+        x-axis correction (e.g., amplitude damping at the equator).
+        Use all three axes for general noise.
+
+    Feedback delay
+        Set delay_ns > 0 to model a finite-latency hardware loop. The
+        controller emits a SEQUENTIAL TemporalConstraint between the
+        measurement event and the correction event; pass a
+        DecoherenceBudget instance to solve_with_feedback to charge the
+        delay per cycle.
+
+Noise sweep
+-----------
+
+To compare open-loop vs closed-loop across a range of noise strengths:
+
+    from qubitos.feedback import (
+        HardwareParams, noise_sweep_comparison, crossover_point,
+    )
+
+    hp = HardwareParams(
+        num_steps=20,
+        duration_ns=20.0,
+        adaptive_tolerance=1e-2,
+    )
+    sweep = noise_sweep_comparison(
+        target_unitary="X",
+        noise_range=[0.1, 1.0, 5.0, 20.0],
+        methods=["gaussian", "lyapunov_feedback"],
+        num_trajectories=4,
+        hardware_params=hp,
+    )
+    gamma_star = crossover_point(
+        sweep, methods=("gaussian", "lyapunov_feedback"),
+    )
+    print("Crossover gamma*:", gamma_star)
+
+The repository ships only a smoke-scale sweep. The full-scale grid (50
+noise points, 1000 trajectories per cell) is a reproducible script that
+the maintainers run out of tree; it is not bundled with the package.

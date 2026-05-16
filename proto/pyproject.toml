@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "qubit-os-proto"
-version = "0.1.0"
+version = "0.7.0"
 description = "Protocol Buffers for QubitOS quantum control kernel"
 readme = "README.txt"
 license = "Apache-2.0"
