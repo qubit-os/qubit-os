@@ -231,7 +231,8 @@ Parsed by `parse_pauli_string()` into a matrix.
 ### Protocol Buffers (protobuf)
 
 The serialization format for gRPC communication between QubitOS core
-and the HAL server. Defined in `qubit-os-proto`.
+and the HAL server. Defined under `proto/quantum/pulse/v1/` in the
+monorepo.
 
 ### Pulse
 

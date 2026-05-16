@@ -1,10 +1,18 @@
 # Stochastic Master Equation & Feedback Control Specification
 ## QubitOS v0.6.0–v0.8.0 — Technical Design for Quantum Feedback Control
 
-**Status:** Design Phase  
-**Author:** Rylan Malarchick  
-**Date:** February 2026  
-**Purpose:** Extend QubitOS from open-loop optimal control (GRAPE/Lindblad) to closed-loop measurement-based quantum feedback control. This is the core technical contribution for the MS thesis.
+**Status:**
+Sections 0–4 (SME solver, validation suite) — **Implemented in v0.6.0**
+(2026-05-16). Sections 5+ (Lyapunov feedback controller, comparison
+framework, 3-level transmon extension) — **Design phase for v0.7.0+**.
+
+**Author:** Rylan Malarchick
+**Originally drafted:** February 2026
+**Last reviewed against implementation:** May 2026
+**Purpose:** Extend QubitOS from open-loop optimal control
+(GRAPE/Lindblad) to closed-loop measurement-based quantum feedback
+control. The SME runtime (v0.6.0) and the Lyapunov controller (v0.7.0)
+together form the core technical contribution for the MS thesis.
 
 ---
 
@@ -12,7 +20,8 @@
 
 ### 0.1 Where We Are
 
-QubitOS v0.5.0 provides a complete open-loop quantum control stack:
+QubitOS v0.6.0 provides a complete open-loop *and* conditional control
+stack. Through v0.5.0 the project shipped:
 
 ```
 HamiltonianSpec → GRAPE Optimizer → PulseShape → Backend → MeasurementResult
@@ -23,6 +32,14 @@ HamiltonianSpec → GRAPE Optimizer → PulseShape → Backend → MeasurementRe
 ```
 
 The Lindblad solver computes *ensemble-averaged* dynamics: what happens to the density matrix ρ when you average over all possible measurement outcomes. This is the right model for characterizing gates, but it ignores a fundamental resource: **information gained from measurement**.
+
+In v0.6.0 the SME runtime (`core/sme/`, `hal/sme/`) was added on top of
+the v0.5.0 stack. SME conditions the state on the measurement record
+and produces a *conditional* density matrix ρ_c(t). The v0.7.0 release
+adds the Lyapunov controller that consumes ρ_c(t) and emits a real-time
+correction to the drive Hamiltonian — the closed-loop side of the
+diagram. Sections 1–4 below describe what has shipped; sections 5+
+describe what is coming.
 
 ### 0.2 The Gap
 

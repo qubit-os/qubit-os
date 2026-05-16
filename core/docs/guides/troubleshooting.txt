@@ -91,7 +91,7 @@ from qubitos.pulsegen import GrapeOptimizer
 
 1. Start the HAL server:
    ```bash
-   cd qubit-os-hardware
+   cd qubit-os/hal
    cargo run --release
    ```
 
@@ -156,7 +156,7 @@ docker ps -a
 
 # Run with explicit port mapping
 docker run --rm -p 50051:50051 -p 8080:8080 \
-    ghcr.io/qubit-os/qubit-os-hardware:latest
+    ghcr.io/qubit-os/qubit-os-hal:latest
 
 # Check logs
 docker logs <container_id>
@@ -419,8 +419,8 @@ cargo run --release 2>&1 | head -50
 
 ### Where to Get Help
 
-- **GitHub Issues**: [qubit-os/qubit-os-core/issues](https://github.com/qubit-os/qubit-os-core/issues)
-- **GitHub Discussions**: [qubit-os/qubit-os-core/discussions](https://github.com/qubit-os/qubit-os-core/discussions)
+- **GitHub Issues**: [qubit-os/qubit-os/issues](https://github.com/qubit-os/qubit-os/issues)
+- **GitHub Discussions**: [qubit-os/qubit-os/discussions](https://github.com/qubit-os/qubit-os/discussions)
 - **Security Issues**: Email maintainers directly (do not open public issues)
 
 ### Reporting Bugs

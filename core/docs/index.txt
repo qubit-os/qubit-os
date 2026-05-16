@@ -2,80 +2,77 @@
 
 **Open-Source Quantum Control Kernel**
 
-QubitOS is a pulse optimization and hardware abstraction layer for quantum computing research. It provides tools for generating high-fidelity control pulses using the GRAPE algorithm and executing them on quantum backends.
+QubitOS sits between the compiler and quantum hardware. It optimizes
+control pulses against live calibration data, schedules them with
+constraint-aware parallelism, and dispatches through a hardware
+abstraction layer.
 
-<div class="grid cards" markdown>
+Current release: **v0.6.0** (stochastic master equation solver, Rust + Rayon).
+Next milestone: **v0.7.0** (Lyapunov feedback controller). See
+[ROADMAP.txt](https://github.com/qubit-os/qubit-os/blob/main/ROADMAP.txt).
 
--   :material-rocket-launch:{ .lg .middle } __Get Started in 15 Minutes__
+## Start here
 
-    ---
+- [Quickstart](guides/quickstart.txt) — first pulse in 20–30 minutes.
+  Install QubitOS, start the HAL server, and execute a quantum gate.
+- [Architecture](concepts/architecture.txt) — the kernel and its five
+  planes (control, calibration, backend ABI, simulation, feedback).
+- [API Reference](api/index.txt) — Python, REST, and gRPC surfaces.
+- [Notebooks](notebooks/01-quickstart.ipynb) — runnable Jupyter
+  examples for pulse generation, optimization, and SME trajectories.
 
-    Install QubitOS, start the HAL server, and execute your first quantum gate pulse.
+## What QubitOS does
 
-    [:octicons-arrow-right-24: Quickstart](guides/quickstart.txt)
+### Pulse optimization (GRAPE)
 
--   :material-book-open-variant:{ .lg .middle } __Learn the Concepts__
-
-    ---
-
-    Understand the architecture, GRAPE optimization, and how pulses control quantum systems.
-
-    [:octicons-arrow-right-24: Architecture](concepts/architecture.txt)
-
--   :material-api:{ .lg .middle } __API Reference__
-
-    ---
-
-    Complete Python, REST, and gRPC API documentation with examples.
-
-    [:octicons-arrow-right-24: API Docs](api/index.txt)
-
--   :material-notebook:{ .lg .middle } __Interactive Notebooks__
-
-    ---
-
-    Hands-on Jupyter notebooks for pulse generation, optimization, and advanced usage.
-
-    [:octicons-arrow-right-24: Notebooks](notebooks/01-quickstart.ipynb)
-
-</div>
-
-## What is QubitOS?
-
-QubitOS provides three core capabilities:
-
-### 1. Pulse Optimization (GRAPE)
-
-Generate optimal control pulses for quantum gates using the **GRadient Ascent Pulse Engineering** algorithm:
+Generate optimal control pulses for quantum gates using gradient ascent:
 
 ```python
 from qubitos.pulsegen import GrapeOptimizer, GrapeConfig
 from qubitos.pulsegen.hamiltonians import get_target_unitary
 
-# Configure optimization
 config = GrapeConfig(
     num_time_steps=100,
     duration_ns=50,
     target_fidelity=0.999,
 )
-
-# Optimize X-gate pulse
 optimizer = GrapeOptimizer(config)
 target = get_target_unitary("X", num_qubits=1)
 result = optimizer.optimize(target, num_qubits=1)
-print(f"Achieved fidelity: {result.fidelity:.4f}")  # result.fidelity is the final gate fidelity
+print(f"Achieved fidelity: {result.fidelity:.4f}")
 ```
 
-### 2. Hardware Abstraction Layer (HAL)
+### Stochastic master equation (v0.6.0)
 
-Execute pulses on quantum backends through a unified gRPC/REST interface:
+Simulate continuously measured open quantum systems with the Itô SDE
+form of the SME. Trajectory and Monte Carlo ensemble; Python reference
+implementation plus Rust + Rayon for parallel ensembles.
+
+```python
+from qubitos.sme import SMESolver, SMEConfig
+from qubitos.lindblad import CollapseOperator
+
+config = SMEConfig(
+    num_time_steps=1000,
+    duration_ns=20.0,
+    measurement_efficiency=0.5,
+    random_seed=42,
+    collapse_ops=CollapseOperator.from_t1_t2(t1_us=45.0, t2_us=35.0),
+)
+solver = SMESolver(config=config)
+result = solver.solve_trajectory(initial_rho=rho0, hamiltonians=h_list,
+                                 target_rho=rho_target)
+print(f"Final fidelity: {result.final_fidelity:.4f}")
+```
+
+### Hardware abstraction
+
+Execute pulses through a unified gRPC/REST interface:
 
 ```python
 from qubitos.client import HALClientSync
 
-# Connect to HAL server
 with HALClientSync("localhost:50051") as client:
-    # Execute the optimized pulse
     result = client.execute_pulse(
         i_envelope=pulse.i_envelope,
         q_envelope=pulse.q_envelope,
@@ -86,83 +83,51 @@ with HALClientSync("localhost:50051") as client:
     print(f"Measurement: {result.bitstring_counts}")
 ```
 
-### 3. Calibration Management
+### Calibration management
 
-Load and validate hardware calibration data:
+Calibration is treated as live runtime state, not a static snapshot:
 
 ```python
 from qubitos.calibrator import CalibrationLoader
 
 loader = CalibrationLoader()
 calibration = loader.load("path/to/calibration.yaml")
-
-# Check calibration is still valid
 if calibration.is_valid:
     print(f"T1: {calibration.t1_us} µs")
     print(f"T2: {calibration.t2_us} µs")
 ```
 
-## Architecture
+## Backend integration honesty
 
-QubitOS follows a three-layer architecture:
+IQM is the primary live integration and the only backend exercised
+against real hardware. IBM Quantum, AWS Braket, and the QuTiP simulator
+are mock-tested and demonstrate the backend abstraction; they are not
+maintained as production cloud integrations.
 
-```
-┌─────────────────────────────────────────────────────┐
-│                    User Layer                        │
-│  ┌─────────┐  ┌─────────────┐  ┌─────────────────┐  │
-│  │   CLI   │  │  Python API │  │ Jupyter Notebooks│  │
-│  └────┬────┘  └──────┬──────┘  └────────┬────────┘  │
-└───────┼──────────────┼──────────────────┼───────────┘
-        │              │                  │
-        ▼              ▼                  ▼
-┌─────────────────────────────────────────────────────┐
-│                   Core Layer                         │
-│  ┌──────────────┐  ┌────────────┐  ┌─────────────┐  │
-│  │  Pulse Gen   │  │ Calibrator │  │  Validation │  │
-│  │   (GRAPE)    │  │            │  │             │  │
-│  └──────┬───────┘  └─────┬──────┘  └──────┬──────┘  │
-└─────────┼────────────────┼────────────────┼─────────┘
-          │                │                │
-          ▼                ▼                ▼
-┌─────────────────────────────────────────────────────┐
-│              Hardware Abstraction Layer              │
-│  ┌───────────────────────────────────────────────┐  │
-│  │         HAL Server (Rust + gRPC/REST)         │  │
-│  └───────────────────────┬───────────────────────┘  │
-│                          │                          │
-│  ┌──────────┐  ┌─────────┴─────────┐  ┌──────────┐ │
-│  │  QuTiP   │  │   IQM Garnet      │  │  Future  │ │
-│  │Simulator │  │   (Hardware)      │  │ Backends │ │
-│  └──────────┘  └───────────────────┘  └──────────┘ │
-└─────────────────────────────────────────────────────┘
-```
+## Repository
 
-## Repository Structure
+QubitOS is a monorepo at
+[qubit-os/qubit-os](https://github.com/qubit-os/qubit-os):
 
-QubitOS is a monorepo at [qubit-os/qubit-os](https://github.com/qubit-os/qubit-os) with three top-level modules:
+| Module    | Purpose                                                 | Language |
+|-----------|---------------------------------------------------------|----------|
+| `core/`   | Python: GRAPE, SME, calibration, scheduling, CLI        | Python   |
+| `hal/`    | Rust: gRPC server, backend dispatch, Lindblad and SME   | Rust     |
+| `proto/`  | Protocol Buffer API contracts                           | Protobuf |
 
-| Module | Purpose | Language |
-|--------|---------|----------|
-| `proto/` | Protocol Buffer API contracts | Protobuf |
-| `hal/` | Hardware Abstraction Layer, solvers, backends | Rust |
-| `core/` | Python modules, GRAPE optimizer, calibration, CLI | Python |
+The previous split repositories (`qubit-os-core`, `qubit-os-hardware`,
+`qubit-os-proto`) are archived and redirect to the monorepo.
 
-## Quick Links
+## Quick links
 
-- [Installation Guide](guides/installation.txt) — setup instructions
-- [Quickstart](guides/quickstart.txt) — first pulse in 15 minutes
-- [CLI Reference](api/cli.txt) — command-line interface
+- [Installation Guide](guides/installation.txt) — setup
 - [Troubleshooting](guides/troubleshooting.txt) — common issues
 - [Design Specifications](specs/README.txt) — per-subsystem technical specs
+- [CLI Reference](api/cli.txt) — command-line interface
+- [Source](https://github.com/qubit-os/qubit-os) — issues, releases, code
+- [Contributing](https://github.com/qubit-os/qubit-os/blob/main/CONTRIBUTING.txt)
 
 ## License
 
-Apache License 2.0. See [LICENSE](https://github.com/qubit-os/qubit-os/blob/main/LICENSE).
-
-## Contributing
-
-See the [Contributing Guide](https://github.com/qubit-os/qubit-os/blob/main/CONTRIBUTING.txt).
-
----
-
-*Built with [MkDocs](https://www.mkdocs.org/) and [Material for MkDocs](https://squidfunk.github.io/mkdocs-material/)*
+Apache License 2.0. See
+[LICENSE](https://github.com/qubit-os/qubit-os/blob/main/LICENSE).
