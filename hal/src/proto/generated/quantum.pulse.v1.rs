@@ -1188,3 +1188,85 @@ pub struct SmeResult {
     #[prost(bool, tag = "16")]
     pub eta_zero_reduced_to_lindblad: bool,
 }
+/// Configuration for a feedback controller attached to the SME runtime.
+///
+/// The controller_type selects the feedback policy. Only "lyapunov" is
+/// implemented in v0.7.0. Other values raise an error from the consumer
+/// pointing at the future version that will implement them.
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct FeedbackConfig {
+    /// Controller policy identifier. "lyapunov" is the only supported
+    /// value in v0.7.0. Reserved future values: "bayesian", "rl".
+    #[prost(string, tag = "1")]
+    pub controller_type: ::prost::alloc::string::String,
+    /// Per-axis feedback gains K_x, K_y, K_z applied to the σ_x, σ_y, σ_z
+    /// generators. Length 0 selects single-axis with feedback_gain. Length
+    /// 1 applies the same gain to every entry in control_axes. Length 3
+    /// is interpreted as the diagonal K = diag(K_x, K_y, K_z).
+    ///
+    /// Sign convention matches SME-FEEDBACK-SPEC section 1.4:
+    /// δΩ_k(t) = -K_k * Tr\[ρ_target * [i σ_k / 2, ρ_c]\].
+    #[prost(double, repeated, tag = "2")]
+    pub feedback_gain: ::prost::alloc::vec::Vec<f64>,
+    /// Realistic feedback delay τ_fb in nanoseconds. 0.0 selects the
+    /// instantaneous-feedback path (no temporal constraint emitted).
+    /// Non-zero values flow through the existing temporal/ machinery as
+    /// a SEQUENTIAL TemporalConstraint between the measurement event and
+    /// the correction event, and consume DecoherenceBudget per cycle.
+    #[prost(double, tag = "3")]
+    pub feedback_delay_ns: f64,
+    /// Maximum correction amplitude |δΩ_k(t)| in MHz. Enforces hardware
+    /// DAC saturation. Non-positive values disable saturation.
+    #[prost(double, tag = "4")]
+    pub max_correction_amplitude_mhz: f64,
+    /// Active control axes. Subset of {"x", "y", "z"}. Empty defaults to
+    /// \["x"\] (single-axis σ_x feedback law).
+    #[prost(string, repeated, tag = "5")]
+    pub control_axes: ::prost::alloc::vec::Vec<::prost::alloc::string::String>,
+    /// Target conditional density matrix ρ_target. The Lyapunov function
+    /// V(ρ_c) = 1 - Tr\[ρ_target ρ_c\] is evaluated against this state.
+    #[prost(message, optional, tag = "6")]
+    pub target_density_matrix: ::core::option::Option<ComplexMatrix>,
+    /// Opt-in full 3×3 gain matrix with off-diagonal cross-axis coupling.
+    /// Length 0 leaves K diagonal (validated path). Length 9 selects the
+    /// full-matrix path (documented opt-in surface, NOT release-gated in
+    /// v0.7.0; see SME-FEEDBACK-SPEC section 5).
+    #[prost(double, repeated, tag = "7")]
+    pub full_gain_matrix: ::prost::alloc::vec::Vec<f64>,
+}
+/// Result of a feedback-controlled SME solve.
+///
+/// Embeds an SMEResult so consumers can read the conditional state
+/// trajectory and measurement record alongside the feedback diagnostics.
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct FeedbackResult {
+    /// SME outputs (conditional state, trajectory, measurement record,
+    /// diagnostics) for the controlled run.
+    #[prost(message, optional, tag = "1")]
+    pub sme_result: ::core::option::Option<SmeResult>,
+    /// Per-axis correction history δΩ_k(t). Stored as concatenated
+    /// axis-major arrays of length steps * num_axes; consumers slice by
+    /// axis index.
+    #[prost(double, repeated, tag = "2")]
+    pub correction_history: ::prost::alloc::vec::Vec<f64>,
+    /// Number of active control axes for the run. Length of
+    /// correction_history is steps * num_axes.
+    #[prost(int32, tag = "3")]
+    pub num_axes: i32,
+    /// Lyapunov function trajectory V(ρ_c(t)). Length equals
+    /// SMEResult.fidelity_trajectory length when stored.
+    #[prost(double, repeated, tag = "4")]
+    pub lyapunov_trajectory: ::prost::alloc::vec::Vec<f64>,
+    /// Cumulative feedback energy cost ∫|δΩ(t)|² dt summed across axes.
+    #[prost(double, tag = "5")]
+    pub feedback_energy_cost: f64,
+    /// Crossover noise strength γ/γ₀ at which feedback fidelity equals
+    /// GRAPE fidelity. Zero when not computed (per-run results do not
+    /// populate this field; only the noise sweep does).
+    #[prost(double, tag = "6")]
+    pub crossover_noise_strength: f64,
+    /// Cumulative DecoherenceBudget consumed by feedback delay
+    /// contributions on each qubit. Indexed positionally.
+    #[prost(double, repeated, tag = "7")]
+    pub decoherence_budget_consumed: ::prost::alloc::vec::Vec<f64>,
+}

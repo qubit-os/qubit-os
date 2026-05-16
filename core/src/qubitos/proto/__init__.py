@@ -49,6 +49,10 @@ from qubitos.proto.quantum.pulse.v1.sme_pb2 import (
     SMEConfig,
     SMEResult,
 )
+from qubitos.proto.quantum.pulse.v1.feedback_pb2 import (
+    FeedbackConfig,
+    FeedbackResult,
+)
 
 # Execution messages (depends on common, pulse)
 from qubitos.proto.quantum.backend.v1.execution_pb2 import (
@@ -104,6 +108,8 @@ __all__ = [
     "CollapseOperatorSpec",
     "SMEConfig",
     "SMEResult",
+    "FeedbackConfig",
+    "FeedbackResult",
     # Common
     "Error",
     "Timestamp",
