@@ -76,7 +76,7 @@ Hardware Abstraction. QuantumBackend trait with pluggable backends. Live:
 IQM. Demonstrated through the abstraction (mock-tested): QuTiP simulator,
 IBM Quantum, AWS Braket.
 
-Provenance. Merkle-tree experiment tracking for thesis reproducibility.
+Provenance. Merkle-tree experiment tracking for reproducible runs.
 
 
 Architecture

@@ -102,7 +102,7 @@ not a maintenance commitment for arbitrary cloud backends.
 A serious execution path, not notebook glue. Rust-native solvers as
 production tier; QuTiP retained as validation oracle only. The C
 bare-metal fast path (v0.6.0 stretch, LANL summer 2026) and the FPGA
-fast path (post-thesis, PhD scope) extend the same propagator algorithm
+fast path (future work) extend the same propagator algorithm
 through additional tiers. See `hal/grape/`, `hal/lindblad/`, `hal/sme/`.
 
 ### 5. Feedback plane
