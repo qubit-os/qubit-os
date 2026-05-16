@@ -108,8 +108,8 @@ pub fn trace_deviation(rho: &Array2<Complex64>) -> f64 {
 /// Absolute deviation from unit trace norm.
 pub fn trace_norm_deviation(rho: &Array2<Complex64>) -> f64 {
     let sym = symmetrize_density_matrix(rho);
-    let (lambda_min, lambda_max) = eigenvalue_bounds_2x2(&sym)
-        .unwrap_or((trace_real(&sym) / 2.0, trace_real(&sym) / 2.0));
+    let (lambda_min, lambda_max) =
+        eigenvalue_bounds_2x2(&sym).unwrap_or((trace_real(&sym) / 2.0, trace_real(&sym) / 2.0));
     (lambda_min.abs() + lambda_max.abs() - 1.0).abs()
 }
 
@@ -166,7 +166,9 @@ fn validate_density_matrix_surface(
     validate_finite_matrix(rho, name)?;
     validate_hermitian(rho, name, atol)?;
     if trace_deviation(rho) > atol {
-        return Err(format!("{name} must have unit trace within atol={atol:.1e}"));
+        return Err(format!(
+            "{name} must have unit trace within atol={atol:.1e}"
+        ));
     }
     let (violation, min_eigenvalue) = has_positivity_violation(rho, atol);
     if violation {

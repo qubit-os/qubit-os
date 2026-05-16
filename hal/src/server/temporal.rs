@@ -36,9 +36,7 @@ impl std::error::Error for TemporalValidationError {}
 /// Validate a pulse sequence against all its temporal constraints.
 ///
 /// Returns a list of all violations found (empty = valid).
-pub fn validate_temporal_constraints(
-    sequence: &PulseSequence,
-) -> Vec<TemporalValidationError> {
+pub fn validate_temporal_constraints(sequence: &PulseSequence) -> Vec<TemporalValidationError> {
     let pulse_map: HashMap<&str, &ScheduledPulse> = sequence
         .pulses
         .iter()
@@ -48,8 +46,7 @@ pub fn validate_temporal_constraints(
     let mut errors = Vec::new();
 
     for (i, constraint) in sequence.constraints.iter().enumerate() {
-        let kind = ConstraintKind::try_from(constraint.kind)
-            .unwrap_or(ConstraintKind::Unspecified);
+        let kind = ConstraintKind::try_from(constraint.kind).unwrap_or(ConstraintKind::Unspecified);
 
         // Resolve referenced pulses
         let pulse_a = pulse_map.get(constraint.pulse_a_id.as_str());
@@ -168,20 +165,13 @@ fn validate_single_constraint(
 
 /// Extract start time in ns from a ScheduledPulse.
 fn pulse_start_ns(p: &ScheduledPulse) -> f64 {
-    p.start_time
-        .as_ref()
-        .map(|t| t.nominal_ns)
-        .unwrap_or(0.0)
+    p.start_time.as_ref().map(|t| t.nominal_ns).unwrap_or(0.0)
 }
 
 /// Extract end time in ns from a ScheduledPulse.
 fn pulse_end_ns(p: &ScheduledPulse) -> f64 {
     let start = pulse_start_ns(p);
-    let dur = p
-        .duration
-        .as_ref()
-        .map(|t| t.nominal_ns)
-        .unwrap_or(0.0);
+    let dur = p.duration.as_ref().map(|t| t.nominal_ns).unwrap_or(0.0);
     start + dur
 }
 
@@ -208,7 +198,12 @@ mod tests {
         }
     }
 
-    fn make_constraint(kind: i32, a: &str, b: &str, tol: f64) -> crate::proto::pulse::TemporalConstraint {
+    fn make_constraint(
+        kind: i32,
+        a: &str,
+        b: &str,
+        tol: f64,
+    ) -> crate::proto::pulse::TemporalConstraint {
         crate::proto::pulse::TemporalConstraint {
             kind,
             pulse_a_id: a.to_string(),
@@ -221,12 +216,12 @@ mod tests {
     #[test]
     fn test_valid_sequential() {
         let seq = PulseSequence {
-            pulses: vec![
-                make_pulse("p0", 0.0, 20.0),
-                make_pulse("p1", 20.0, 20.0),
-            ],
+            pulses: vec![make_pulse("p0", 0.0, 20.0), make_pulse("p1", 20.0, 20.0)],
             constraints: vec![make_constraint(
-                ConstraintKind::Sequential as i32, "p0", "p1", 0.0,
+                ConstraintKind::Sequential as i32,
+                "p0",
+                "p1",
+                0.0,
             )],
             decoherence_budget: None,
             awg_config: None,
@@ -241,10 +236,13 @@ mod tests {
         let seq = PulseSequence {
             pulses: vec![
                 make_pulse("p0", 0.0, 20.0),
-                make_pulse("p1", 10.0, 20.0),  // starts before p0 ends
+                make_pulse("p1", 10.0, 20.0), // starts before p0 ends
             ],
             constraints: vec![make_constraint(
-                ConstraintKind::Sequential as i32, "p0", "p1", 0.0,
+                ConstraintKind::Sequential as i32,
+                "p0",
+                "p1",
+                0.0,
             )],
             decoherence_budget: None,
             awg_config: None,
@@ -258,12 +256,12 @@ mod tests {
     #[test]
     fn test_valid_simultaneous() {
         let seq = PulseSequence {
-            pulses: vec![
-                make_pulse("p0", 0.0, 20.0),
-                make_pulse("p1", 0.0, 15.0),
-            ],
+            pulses: vec![make_pulse("p0", 0.0, 20.0), make_pulse("p1", 0.0, 15.0)],
             constraints: vec![make_constraint(
-                ConstraintKind::Simultaneous as i32, "p0", "p1", 1.0,
+                ConstraintKind::Simultaneous as i32,
+                "p0",
+                "p1",
+                1.0,
             )],
             decoherence_budget: None,
             awg_config: None,
@@ -278,10 +276,13 @@ mod tests {
         let seq = PulseSequence {
             pulses: vec![
                 make_pulse("p0", 0.0, 20.0),
-                make_pulse("p1", 5.0, 15.0),  // 5 ns apart
+                make_pulse("p1", 5.0, 15.0), // 5 ns apart
             ],
             constraints: vec![make_constraint(
-                ConstraintKind::Simultaneous as i32, "p0", "p1", 1.0,
+                ConstraintKind::Simultaneous as i32,
+                "p0",
+                "p1",
+                1.0,
             )],
             decoherence_budget: None,
             awg_config: None,
@@ -297,10 +298,13 @@ mod tests {
         let seq = PulseSequence {
             pulses: vec![
                 make_pulse("p0", 0.0, 20.0),
-                make_pulse("p1", 22.0, 20.0),  // only 2ns gap
+                make_pulse("p1", 22.0, 20.0), // only 2ns gap
             ],
             constraints: vec![make_constraint(
-                ConstraintKind::MinGap as i32, "p0", "p1", 5.0,
+                ConstraintKind::MinGap as i32,
+                "p0",
+                "p1",
+                5.0,
             )],
             decoherence_budget: None,
             awg_config: None,
@@ -316,10 +320,13 @@ mod tests {
         let seq = PulseSequence {
             pulses: vec![
                 make_pulse("p0", 0.0, 20.0),
-                make_pulse("p1", 50.0, 20.0),  // 30ns delay
+                make_pulse("p1", 50.0, 20.0), // 30ns delay
             ],
             constraints: vec![make_constraint(
-                ConstraintKind::MaxDelay as i32, "p0", "p1", 10.0,
+                ConstraintKind::MaxDelay as i32,
+                "p0",
+                "p1",
+                10.0,
             )],
             decoherence_budget: None,
             awg_config: None,
@@ -335,7 +342,10 @@ mod tests {
         let seq = PulseSequence {
             pulses: vec![make_pulse("p0", 0.0, 20.0)],
             constraints: vec![make_constraint(
-                ConstraintKind::Sequential as i32, "p0", "p_missing", 0.0,
+                ConstraintKind::Sequential as i32,
+                "p0",
+                "p_missing",
+                0.0,
             )],
             decoherence_budget: None,
             awg_config: None,
@@ -362,10 +372,7 @@ mod tests {
     #[test]
     fn test_multiple_constraint_violations() {
         let seq = PulseSequence {
-            pulses: vec![
-                make_pulse("p0", 0.0, 20.0),
-                make_pulse("p1", 10.0, 20.0),
-            ],
+            pulses: vec![make_pulse("p0", 0.0, 20.0), make_pulse("p1", 10.0, 20.0)],
             constraints: vec![
                 make_constraint(ConstraintKind::Sequential as i32, "p0", "p1", 0.0),
                 make_constraint(ConstraintKind::MinGap as i32, "p0", "p1", 15.0),

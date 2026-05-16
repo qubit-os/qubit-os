@@ -12,8 +12,8 @@ use crate::lindblad::types::CollapseOperator;
 
 pub mod integrate;
 pub mod measurement;
-pub mod trajectory;
 pub mod pyo3_bindings;
+pub mod trajectory;
 
 pub use trajectory::{solve_sme_ensemble, solve_sme_trajectory};
 
