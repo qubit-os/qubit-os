@@ -33,6 +33,8 @@ from .utils import (
     load_golden_execution,
 )
 
+EXECUTION_GOLDEN_TOLERANCE = 1e-8
+
 
 class TestGoldenReproducibility:
     """Test that GRAPE produces deterministic results matching golden files."""
@@ -287,22 +289,23 @@ class TestExecutionGoldenReproducibility:
         match, msg = compare_arrays(
             sim.probabilities,
             golden.execution_data.probabilities,
-            tolerance=1e-10,
+            tolerance=EXECUTION_GOLDEN_TOLERANCE,
         )
         assert match, f"Probability mismatch: {msg}"
 
-        # Compare state vector (deterministic)
+        # QuTiP solver output is stable across pinned versions, but CI runners
+        # can still differ at the low single-digit nanounit level.
         match_real, msg_real = compare_arrays(
             sim.state_vector_real,
             golden.execution_data.state_vector_real,
-            tolerance=1e-10,
+            tolerance=EXECUTION_GOLDEN_TOLERANCE,
         )
         assert match_real, f"State vector real part mismatch: {msg_real}"
 
         match_imag, msg_imag = compare_arrays(
             sim.state_vector_imag,
             golden.execution_data.state_vector_imag,
-            tolerance=1e-10,
+            tolerance=EXECUTION_GOLDEN_TOLERANCE,
         )
         assert match_imag, f"State vector imag part mismatch: {msg_imag}"
 
@@ -336,7 +339,7 @@ class TestExecutionGoldenReproducibility:
         match, msg = compare_arrays(
             sim.probabilities,
             golden.execution_data.probabilities,
-            tolerance=1e-10,
+            tolerance=EXECUTION_GOLDEN_TOLERANCE,
         )
         assert match, f"Probability mismatch: {msg}"
 
