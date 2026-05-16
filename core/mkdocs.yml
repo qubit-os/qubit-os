@@ -104,11 +104,13 @@ nav:
   - Getting Started:
     - Installation: guides/installation.txt
     - Quickstart: guides/quickstart.txt
+    - SME Solver: guides/sme-solver.txt
     - Troubleshooting: guides/troubleshooting.txt
   - Tutorials:
     - Pulse Generation: tutorials/pulse-generation.txt
     - GRAPE Optimizer: tutorials/grape-optimizer.txt
     - Custom Hamiltonians: tutorials/custom-hamiltonians.txt
+    - SME Trajectory: tutorials/sme-trajectory.txt
   - API Reference:
     - Overview: api/index.txt
     - Python API:

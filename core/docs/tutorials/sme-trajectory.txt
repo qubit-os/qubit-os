@@ -1,0 +1,61 @@
+SME trajectory tutorial
+=======================
+
+This example runs one monitored amplitude-damping trajectory and inspects
+the measurement record.
+
+Example
+-------
+
+    import numpy as np
+
+    from qubitos.lindblad import CollapseOperator
+    from qubitos.sme import SMEConfig, SMESolver
+
+    rho0 = np.array(
+        [[0.0, 0.0],
+         [0.0, 1.0]],
+        dtype=np.complex128,
+    )
+
+    hamiltonians = [
+        np.zeros((2, 2), dtype=np.complex128)
+        for _ in range(400)
+    ]
+
+    config = SMEConfig(
+        num_time_steps=400,
+        duration_ns=500_000.0,
+        measurement_efficiency=1.0,
+        random_seed=3,
+        store_trajectory=True,
+        store_measurement_record=True,
+    )
+
+    solver = SMESolver(
+        config=config,
+        collapse_ops=[CollapseOperator.amplitude_damping(t1_us=50.0)],
+    )
+
+    result = solver.solve_trajectory(rho0, hamiltonians)
+
+    print("ground population:", result.final_density_matrix[0, 0].real)
+    print("accepted substeps:", result.steps)
+    print("positivity violations:", result.positivity_violations)
+    print("largest current sample:", max(abs(x) for x in result.measurement_record))
+
+What to look for
+----------------
+
+    ground population
+        Approaches 1.0 after several T1 lifetimes.
+
+    accepted substeps
+        May exceed num_time_steps if adaptive halving triggers.
+
+    positivity violations
+        Usually zero for modest timesteps. If nonzero, reduce the nominal
+        timestep or enable positivity_projection.
+
+    measurement record
+        Contains the feedback-ready homodyne current exposed by v0.6.0.

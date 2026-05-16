@@ -10,6 +10,7 @@ Modules:
     calibrator: Calibration management, benchmarking, Clifford tableaux,
                 drift monitoring, active recalibration loop
     temporal: Time model, pulse scheduling, decoherence budgets
+    sme: Stochastic master equation solver, single trajectories, ensembles
     error_budget: Cumulative error tracking with per-source breakdown
     provenance: Experiment provenance Merkle tree (incl. drift/recal events)
     client: HAL gRPC client

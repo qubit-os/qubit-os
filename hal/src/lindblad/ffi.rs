@@ -69,7 +69,9 @@ impl std::fmt::Display for LindbladFfiError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::Success => write!(f, "success"),
-            Self::InvalidDimension => write!(f, "invalid dimension (d < 1 or d > {C_SOLVER_MAX_DIM})"),
+            Self::InvalidDimension => {
+                write!(f, "invalid dimension (d < 1 or d > {C_SOLVER_MAX_DIM})")
+            }
             Self::SingularMatrix => write!(f, "singular matrix in Padé approximant"),
             Self::NanDetected => write!(f, "NaN or Inf detected in output"),
             Self::NullPointer => write!(f, "null pointer argument"),
@@ -89,10 +91,10 @@ extern "C" {
     /// # Arguments
     /// * `dim` — Hilbert space dimension d. The Liouvillian is (d²×d²).
     /// * `liouvillian` — Flat row-major (d²×d²) complex matrix [re,im,...].
-    ///                   L = -i·ad(H) + Σ_k γ_k·D(L_k) in superoperator form.
+    ///   L = -i·ad(H) + Σ_k γ_k·D(L_k) in superoperator form.
     /// * `dt` — Time step in seconds.
     /// * `propagator_out` — Output buffer for the (d²×d²) propagator [re,im,...].
-    ///                      Must be pre-allocated with d⁴ * 2 doubles.
+    ///   Must be pre-allocated with d⁴ * 2 doubles.
     ///
     /// # Returns
     /// 0 on success, nonzero error code on failure.
@@ -113,7 +115,7 @@ extern "C" {
     /// * `rho_in` — Input density matrix, flat row-major (d×d) complex [re,im,...].
     /// * `n_steps` — Number of propagator applications.
     /// * `rho_out` — Output density matrix, flat row-major (d×d) complex [re,im,...].
-    ///               Must be pre-allocated with d² * 2 doubles.
+    ///   Must be pre-allocated with d² * 2 doubles.
     ///
     /// # Returns
     /// 0 on success, nonzero error code on failure.
@@ -134,14 +136,14 @@ extern "C" {
     /// # Arguments
     /// * `dim` — Hilbert space dimension d.
     /// * `liouvillians` — Array of `batch_size` flat (d²×d²) Liouvillians,
-    ///                    laid out contiguously: [L_0, L_1, ..., L_{n-1}].
+    ///   laid out contiguously: [L_0, L_1, ..., L_{n-1}].
     /// * `rho_in` — Initial density matrix, flat (d×d) complex.
     /// * `dt` — Time step in seconds.
     /// * `n_steps` — Number of time steps per sweep point.
     /// * `batch_size` — Number of parameter points.
     /// * `rho_out` — Output buffer for `batch_size` density matrices,
-    ///               contiguous: [ρ_0, ρ_1, ..., ρ_{n-1}].
-    ///               Must be pre-allocated with batch_size * d² * 2 doubles.
+    ///   contiguous: [ρ_0, ρ_1, ..., ρ_{n-1}].
+    ///   Must be pre-allocated with batch_size * d² * 2 doubles.
     ///
     /// # Returns
     /// 0 on success, nonzero error code on failure.
@@ -174,13 +176,13 @@ extern "C" {
     /// # Arguments
     /// * `dim` — Hilbert space dimension d. Each Liouvillian is (d²×d²).
     /// * `liouvillians` — Array of `n_segments` flat (d²×d²) Liouvillians,
-    ///                    laid out contiguously: [L_0, L_1, ..., L_{n-1}].
-    ///                    Total size: n_segments * d⁴ * 2 doubles.
+    ///   laid out contiguously: [L_0, L_1, ..., L_{n-1}].
+    ///   Total size: n_segments * d⁴ * 2 doubles.
     /// * `n_segments` — Number of time segments (= number of Liouvillians).
     /// * `dt` — Time step in seconds (uniform across segments).
     /// * `propagators_out` — Output buffer for `n_segments` propagators,
-    ///                       each (d²×d²), laid out contiguously.
-    ///                       Must be pre-allocated with n_segments * d⁴ * 2 doubles.
+    ///   each (d²×d²), laid out contiguously.
+    ///   Must be pre-allocated with n_segments * d⁴ * 2 doubles.
     ///
     /// # Returns
     /// 0 on success, nonzero error code on failure.
@@ -226,23 +228,22 @@ pub fn compute_propagator_c(
     let d2 = liouvillian.nrows();
     let d = (d2 as f64).sqrt() as usize;
     if d * d != d2 {
-        return Err(format!("Liouvillian dimension {d2} is not a perfect square"));
+        return Err(format!(
+            "Liouvillian dimension {d2} is not a perfect square"
+        ));
     }
     if d > C_SOLVER_MAX_DIM {
-        return Err(format!("Dimension {d} exceeds C solver max {C_SOLVER_MAX_DIM}"));
+        return Err(format!(
+            "Dimension {d} exceeds C solver max {C_SOLVER_MAX_DIM}"
+        ));
     }
 
     // Flatten to interleaved [re, im, re, im, ...]
-    let l_flat: Vec<f64> = liouvillian
-        .iter()
-        .flat_map(|c| [c.re, c.im])
-        .collect();
+    let l_flat: Vec<f64> = liouvillian.iter().flat_map(|c| [c.re, c.im]).collect();
 
     let mut p_flat = vec![0.0f64; d2 * d2 * 2];
 
-    let rc = unsafe {
-        qos_lindblad_propagator(d as i32, l_flat.as_ptr(), dt, p_flat.as_mut_ptr())
-    };
+    let rc = unsafe { qos_lindblad_propagator(d as i32, l_flat.as_ptr(), dt, p_flat.as_mut_ptr()) };
 
     let err = LindbladFfiError::from_code(rc);
     if !err.is_success() {
@@ -255,8 +256,7 @@ pub fn compute_propagator_c(
         .map(|c| Complex64::new(c[0], c[1]))
         .collect();
 
-    Array2::from_shape_vec((d2, d2), data)
-        .map_err(|e| format!("Failed to reshape propagator: {e}"))
+    Array2::from_shape_vec((d2, d2), data).map_err(|e| format!("Failed to reshape propagator: {e}"))
 }
 
 /// Evolve a density matrix through n_steps via the C fast path.
@@ -267,7 +267,9 @@ pub fn evolve_c(
 ) -> Result<Array2<Complex64>, String> {
     let d = rho.nrows();
     if d > C_SOLVER_MAX_DIM {
-        return Err(format!("Dimension {d} exceeds C solver max {C_SOLVER_MAX_DIM}"));
+        return Err(format!(
+            "Dimension {d} exceeds C solver max {C_SOLVER_MAX_DIM}"
+        ));
     }
 
     let p_flat: Vec<f64> = propagator.iter().flat_map(|c| [c.re, c.im]).collect();
@@ -294,8 +296,7 @@ pub fn evolve_c(
         .map(|c| Complex64::new(c[0], c[1]))
         .collect();
 
-    Array2::from_shape_vec((d, d), data)
-        .map_err(|e| format!("Failed to reshape output: {e}"))
+    Array2::from_shape_vec((d, d), data).map_err(|e| format!("Failed to reshape output: {e}"))
 }
 
 /// Compute propagators for a piecewise-constant pulse sequence via the C fast path.
@@ -314,10 +315,14 @@ pub fn compute_propagator_sequence_c(
     let d2 = liouvillians[0].nrows();
     let d = (d2 as f64).sqrt() as usize;
     if d * d != d2 {
-        return Err(format!("Liouvillian dimension {d2} is not a perfect square"));
+        return Err(format!(
+            "Liouvillian dimension {d2} is not a perfect square"
+        ));
     }
     if d > C_SOLVER_MAX_DIM {
-        return Err(format!("Dimension {d} exceeds C solver max {C_SOLVER_MAX_DIM}"));
+        return Err(format!(
+            "Dimension {d} exceeds C solver max {C_SOLVER_MAX_DIM}"
+        ));
     }
 
     let n_segments = liouvillians.len();
@@ -377,8 +382,14 @@ mod tests {
         assert!(LindbladFfiError::Success.is_success());
         assert!(!LindbladFfiError::SingularMatrix.is_success());
         assert_eq!(LindbladFfiError::from_code(0), LindbladFfiError::Success);
-        assert_eq!(LindbladFfiError::from_code(2), LindbladFfiError::SingularMatrix);
-        assert_eq!(LindbladFfiError::from_code(99), LindbladFfiError::NanDetected);
+        assert_eq!(
+            LindbladFfiError::from_code(2),
+            LindbladFfiError::SingularMatrix
+        );
+        assert_eq!(
+            LindbladFfiError::from_code(99),
+            LindbladFfiError::NanDetected
+        );
     }
 
     #[test]

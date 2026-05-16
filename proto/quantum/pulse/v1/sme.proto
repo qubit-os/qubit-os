@@ -1,0 +1,110 @@
+// QubitOS Stochastic Master Equation Specification
+// Copyright 2026 QubitOS Contributors
+// SPDX-License-Identifier: Apache-2.0
+
+syntax = "proto3";
+
+package quantum.pulse.v1;
+
+option java_multiple_files = true;
+option java_package = "io.qubitos.pulse.v1";
+
+// Dense complex matrix in row-major form.
+//
+// The real and imaginary arrays must each have rows * cols entries.
+message ComplexMatrix {
+  int32 rows = 1;
+  int32 cols = 2;
+  repeated double real = 3;
+  repeated double imag = 4;
+
+  reserved 50 to 100;
+}
+
+// Collapse operator used by Lindblad and SME solvers.
+message CollapseOperatorSpec {
+  ComplexMatrix matrix = 1;
+  double rate_hz = 2;
+  string label = 3;
+
+  reserved 50 to 100;
+}
+
+// Configuration for a stochastic master equation solve.
+message SMEConfig {
+  // Number of integration steps on the nominal time grid.
+  int32 num_time_steps = 1;
+
+  // Total evolution time in nanoseconds.
+  double duration_ns = 2;
+
+  // Measurement efficiency η in [0, 1].
+  // η = 0 reduces to Lindblad, η = 1 is perfect detection.
+  double measurement_efficiency = 3;
+
+  // Random seed for reproducible Wiener increments.
+  int32 random_seed = 4;
+
+  // Whether to store the full conditional state history.
+  bool store_trajectory = 5;
+
+  // Whether to store the simulated homodyne measurement record.
+  bool store_measurement_record = 6;
+
+  // Dissipative channels.
+  repeated CollapseOperatorSpec collapse_ops = 7;
+
+  // Measurement operator c. If omitted, the first collapse operator is used.
+  ComplexMatrix measurement_operator = 8;
+
+  // If true, clamp negative eigenvalues after each step and renormalize.
+  bool positivity_projection = 9;
+
+  // Retry threshold for adaptive timestep control.
+  double adaptive_tolerance = 10;
+
+  // Eigenvalue threshold used when counting positivity violations.
+  double positivity_tolerance = 11;
+
+  // Number of trajectories for an ensemble solve.
+  int32 ensemble_size = 12;
+
+  reserved 50 to 100;
+}
+
+// Result of a single-trajectory or ensemble SME solve.
+message SMEResult {
+  // Final conditional density matrix for a trajectory solve.
+  ComplexMatrix final_density_matrix = 1;
+
+  // Hilbert space dimension.
+  int32 hilbert_dim = 2;
+
+  // Final fidelity Tr[ρ_target ρ(T)] if a target was provided.
+  double final_fidelity = 3;
+
+  // Final purity Tr[ρ(T)^2].
+  double final_purity = 4;
+
+  // Optional trajectory diagnostics.
+  repeated double fidelity_trajectory = 5;
+  repeated double purity_trajectory = 6;
+  repeated double measurement_record = 7;
+
+  // Numerical diagnostics.
+  double max_trace_deviation = 8;
+  int32 positivity_violations = 9;
+  double max_nonhermitian_residue = 10;
+
+  // Ensemble outputs. For a trajectory solve these fields may be empty.
+  ComplexMatrix mean_density_matrix = 11;
+  repeated double variance_real = 12;
+  repeated double variance_imag = 13;
+  repeated double convergence_trace_distance = 14;
+  int32 num_trajectories = 15;
+
+  // True when the η = 0 dispatch reduced to the Lindblad path.
+  bool eta_zero_reduced_to_lindblad = 16;
+
+  reserved 50 to 100;
+}

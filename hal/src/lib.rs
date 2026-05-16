@@ -36,6 +36,7 @@ pub mod error;
 pub mod grape;
 pub mod lindblad;
 pub mod proto;
+pub mod sme;
 pub mod server;
 pub mod temporal;
 pub mod validation;

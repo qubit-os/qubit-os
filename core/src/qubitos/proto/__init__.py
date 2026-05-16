@@ -43,6 +43,12 @@ from qubitos.proto.quantum.pulse.v1.pulse_pb2 import (
     PulseLibraryEntry,
     PulseShape,
 )
+from qubitos.proto.quantum.pulse.v1.sme_pb2 import (
+    CollapseOperatorSpec,
+    ComplexMatrix,
+    SMEConfig,
+    SMEResult,
+)
 
 # Execution messages (depends on common, pulse)
 from qubitos.proto.quantum.backend.v1.execution_pb2 import (
@@ -94,6 +100,10 @@ __all__ = [
     "PulseLibrary",
     "PulseLibraryEntry",
     "GateType",
+    "ComplexMatrix",
+    "CollapseOperatorSpec",
+    "SMEConfig",
+    "SMEResult",
     # Common
     "Error",
     "Timestamp",
