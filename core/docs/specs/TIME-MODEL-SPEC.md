@@ -4026,7 +4026,7 @@ do not set these fields get the pre-v0.2.0 behavior.
 
 - Golden file tests (Section 11, category G).
 - Property-based tests (Section 11, category P).
-- Documentation: update `QubitOS-Design-v0.4.1-Final.md` and `CONTRIBUTING.md`.
+- Documentation: update the design notes and `CONTRIBUTING.txt`.
 - Performance benchmarking: ensure < 1 ms overhead for 100-pulse sequences.
 - Code review and merge.
 - Deliverable: v0.2.0 release candidate.
@@ -4037,7 +4037,7 @@ do not set these fields get the pre-v0.2.0 behavior.
 
 Tests are organized by data structure and integration level. All tests
 use `pytest` with `@pytest.mark.parametrize` where applicable (per
-CONTRIBUTING.md). Rust tests use `#[test]` with `rstest` for
+CONTRIBUTING.txt). Rust tests use `#[test]` with `rstest` for
 parameterized cases.
 
 ### 11.1 TimePoint Tests
@@ -4682,10 +4682,10 @@ from qubitos.temporal import validate_pulse_sequence
 result = validate_pulse_sequence(sequence)
 print(f"\nValidation: {'PASS' if result.valid else 'FAIL'}")
 for cr in result.constraint_results:
-    sym = "✓" if cr.satisfied else "✗"
+    sym = "yes" if cr.satisfied else "no"
     print(f"  {sym} {cr.constraint}: margin={cr.margin_ns:+.1f} ns")
 # Validation: PASS
-#   ✓ SEQUENTIAL x90_q0 → meas_q0: margin=+20.0 ns
+#   yes SEQUENTIAL x90_q0 → meas_q0: margin=+20.0 ns
 ```
 
 ---

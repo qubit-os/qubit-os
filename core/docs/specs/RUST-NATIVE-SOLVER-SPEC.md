@@ -1730,7 +1730,7 @@ link different LAPACK implementations, affecting numerical reproducibility.
 
 **Mitigation:**
 - Use `openblas-src` with static linking for reproducible builds.
-- Document LAPACK installation in `CONTRIBUTING.md`.
+- Document LAPACK installation in `CONTRIBUTING.txt`.
 - Provide a `Dockerfile` with all dependencies pre-installed.
 - Feature flag `--features bundled-blas` for static LAPACK.
 

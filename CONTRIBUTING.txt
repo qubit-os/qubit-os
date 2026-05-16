@@ -1,0 +1,275 @@
+Contributing to QubitOS
+=======================
+
+This document is the contribution policy for QubitOS. Be respectful,
+constructive, and professional. We build scientific software; focus on
+technical merit and clear communication.
+
+
+CI/CD-first development (mandatory)
+-----------------------------------
+
+QubitOS follows a strict CI/CD-first development policy.
+
+The golden rule: if CI is red, nothing else matters until it is green.
+
+Before every push, you must run the local CI check script:
+
+    ./scripts/ci-check.sh
+
+If the script fails, do not push. Fix the issues first.
+
+
+Local CI commands
+-----------------
+
+hal (Rust):
+
+    cd hal
+    cargo fmt --check
+    cargo clippy -- -D warnings
+    cargo test
+
+core (Python):
+
+    cd core
+    ruff check src/
+    ruff format --check src/
+    pytest tests/
+
+proto:
+
+    cd proto
+    buf lint
+    buf format -d --exit-code
+    python -m build
+
+
+Pre-commit hooks
+----------------
+
+    cd core
+    pip install pre-commit
+    pre-commit install
+
+
+Repository structure
+--------------------
+
+QubitOS is a monorepo with three modules:
+
+    proto/    Protocol Buffer definitions   (Protobuf)
+    hal/      Hardware Abstraction Layer    (Rust)
+    core/     Python modules and CLI        (Python)
+
+
+Development setup
+-----------------
+
+Clone the monorepo:
+
+    git clone https://github.com/qubit-os/qubit-os.git
+    cd qubit-os
+
+Proto (buf required):
+
+    brew install bufbuild/buf/buf
+    cd proto
+    buf lint
+    python -m build
+
+HAL (Rust 1.85+, Python 3.11+):
+
+    cd hal
+    cargo build
+    cargo test
+
+Core (Python 3.11+):
+
+    cd core
+    python3 -m venv .venv
+    source .venv/bin/activate
+    pip install -e ".[dev]"
+    pytest tests/
+
+
+Workflow
+--------
+
+1. Check CI is green before starting work.
+2. Create a branch (or work on main if you are the primary maintainer).
+3. Make changes.
+4. Run ./scripts/ci-check.sh and fix any failures.
+5. Commit with a clear message.
+6. Push.
+7. Verify CI passes on GitHub.
+
+
+Branch strategy
+---------------
+
+    main is the primary branch.
+    Direct pushes to main are allowed for the primary maintainer.
+    External contributions should use Pull Requests.
+    Branch names: feature/description, fix/description, docs/description.
+
+
+Commit messages
+---------------
+
+Use clear, descriptive commit messages:
+
+    <type>: <short description>
+
+    <optional longer description>
+
+    <optional references>
+
+Types: feat, fix, docs, test, refactor, chore, ci.
+
+Example:
+
+    feat: add CZ gate support to GRAPE optimizer
+
+    Implements two-qubit CZ gate optimization with proper gradient
+    computation for the coupling Hamiltonian.
+
+    Refs: #42
+
+
+Code style
+----------
+
+Python:
+
+  * Use ruff for linting and formatting.
+  * Type hints required for all public functions.
+  * Docstrings in Google style.
+  * Maximum line length: 100 characters.
+
+Rust:
+
+  * Use rustfmt for formatting.
+  * Use clippy with -D warnings.
+  * Document all public items.
+  * Prefer explicit error handling over panics.
+
+Protocol Buffers:
+
+  * Use proto3 syntax.
+  * Document all messages and fields.
+  * Follow buf lint rules.
+  * Use path-based versioning.
+
+
+Testing
+-------
+
+All new features must include tests. Bug fixes should include regression
+tests. Coverage targets:
+
+    HAL:    >= 85%
+    Core:   >= 80%
+    Protos: 100% round-trip coverage
+
+Test organization:
+
+    tests/
+        unit/         Unit tests (no external dependencies)
+        integration/  Integration tests (may need running services)
+        fixtures/     Test data files
+        golden/       Golden files for reproducibility tests
+
+Running tests:
+
+    # Python
+    pytest tests/unit/
+    pytest tests/ --cov=qubitos
+    pytest -k "test_grape"
+
+    # Rust
+    cargo test
+    cargo test --test integration
+    cargo test -- --nocapture
+
+
+Pull request process
+--------------------
+
+Before opening a PR:
+
+1. Run ./scripts/ci-check.sh; it must pass.
+2. Review your changes (git diff).
+3. Check for secrets; no passwords, tokens, or keys.
+4. Update tests; new code needs new tests.
+5. Update docs if user-facing.
+
+PR checklist:
+
+    [ ] ./scripts/ci-check.sh passes locally
+    [ ] Code follows style guidelines
+    [ ] Tests added or updated
+    [ ] Documentation updated
+    [ ] CHANGELOG.txt updated for significant changes
+    [ ] No secrets or credentials in code
+
+After opening a PR:
+
+1. Wait for CI; all checks must pass.
+2. Address feedback.
+3. Keep it green; if CI fails, fix it.
+4. Squash and merge; keep history clean.
+
+
+Handling CI failures
+--------------------
+
+If CI fails on your push, fix it immediately. A new commit, not force push.
+
+Common failures and fixes:
+
+    cargo fmt failure       Run cargo fmt
+    ruff check failure      Run ruff check --fix src/
+    ruff format failure     Run ruff format src/
+    buf lint failure        Check proto file against buf.yaml rules
+    test failure            Debug and fix the test or code
+
+
+Documentation
+-------------
+
+Update documentation for all user-facing changes. Include docstrings or
+doc comments. Update CHANGELOG.txt. Add examples for new features.
+
+Documentation files in this repo are plain text (.txt) where practical. The
+top-level README, CONTRIBUTING, AGENTS, and SECURITY may be .txt or .md
+depending on tooling requirements; either way, content stays minimally
+formatted.
+
+
+Reporting issues
+----------------
+
+Bug reports should include:
+
+    QubitOS version
+    Python / Rust version
+    Operating system
+    Steps to reproduce
+    Expected vs actual behavior
+    Relevant logs or output
+
+Feature requests should include:
+
+    Use case description
+    Proposed solution
+    Alternatives considered
+    Willingness to contribute
+
+
+Getting help
+------------
+
+    Questions:  Open a Discussion on GitHub
+    Bugs:       Open an Issue
+    Security:   Email maintainers directly (do not open public issues)

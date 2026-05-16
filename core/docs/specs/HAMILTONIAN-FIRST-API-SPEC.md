@@ -94,30 +94,30 @@ pre-computed target unitaries, not a fundamental architectural concept.
 ### 2.1 The 3-Way Mismatch
 
 The table below shows every gate representation across the three source-of-truth
-locations. A checkmark (✓) indicates the gate is present; a dash (—) indicates
+locations. A checkmark (yes) indicates the gate is present; a dash (—) indicates
 it is absent.
 
 | Gate       | Proto `GateType`       | Python `GateType` (grape.py) | `STANDARD_GATES` (hamiltonians.py) | Notes                        |
 |------------|------------------------|------------------------------|------------------------------------|------------------------------|
-| UNSPECIFIED | ✓ (0)                | —                            | —                                  | Proto only, sentinel value   |
-| I          | —                      | —                            | ✓ (PAULI_I)                        | Identity, dict only          |
-| X          | ✓ GATE_TYPE_X (1)     | ✓ X = "X"                   | ✓ GATE_X                           | Consistent                   |
-| Y          | ✓ GATE_TYPE_Y (2)     | ✓ Y = "Y"                   | ✓ GATE_Y                           | Consistent                   |
-| Z          | ✓ GATE_TYPE_Z (3)     | ✓ Z = "Z"                   | ✓ GATE_Z                           | Consistent                   |
-| SX         | ✓ GATE_TYPE_SX (4)    | ✓ SX = "SX"                 | ✓ GATE_SX                          | Consistent                   |
-| H          | ✓ GATE_TYPE_H (5)     | ✓ H = "H"                   | ✓ GATE_H                           | Consistent                   |
-| RX         | ✓ GATE_TYPE_RX (6)    | ✓ RX = "RX"                 | — (via `rotation_gate()`)          | Parametric, handled by func  |
-| RY         | ✓ GATE_TYPE_RY (7)    | ✓ RY = "RY"                 | — (via `rotation_gate()`)          | Parametric, handled by func  |
-| RZ         | ✓ GATE_TYPE_RZ (8)    | ✓ RZ = "RZ"                 | — (via `rotation_gate()`)          | Parametric, handled by func  |
-| **S**      | ✓ GATE_TYPE_S (9)     | **— MISSING**                | ✓ GATE_S                           | **Python enum gap**          |
-| **T**      | ✓ GATE_TYPE_T (10)    | **— MISSING**                | ✓ GATE_T                           | **Python enum gap**          |
-| CZ         | ✓ GATE_TYPE_CZ (20)   | ✓ CZ = "CZ"                 | ✓ GATE_CZ                          | Consistent                   |
-| CNOT       | ✓ GATE_TYPE_CNOT (21) | ✓ CNOT = "CNOT"             | ✓ GATE_CNOT                        | Consistent                   |
-| ISWAP      | ✓ GATE_TYPE_ISWAP (22)| ✓ ISWAP = "iSWAP"           | ✓ GATE_ISWAP                       | Value mismatch: "iSWAP"≠"ISWAP" |
-| **SQISWAP**| ✓ GATE_TYPE_SQISWAP(23)| **— MISSING**               | **— MISSING**                      | **Proto only, no impl**     |
-| **CX**     | ✓ GATE_TYPE_CX (24)   | **— MISSING**                | ✓ (alias → GATE_CNOT)             | **Proto has it, Python doesn't** |
-| **SWAP**   | ✓ GATE_TYPE_SWAP (25) | **— MISSING**                | ✓ GATE_SWAP                        | **Python enum gap**          |
-| CUSTOM     | ✓ GATE_TYPE_CUSTOM(99)| ✓ CUSTOM = "CUSTOM"          | —                                  | Expected: custom = no preset |
+| UNSPECIFIED | yes (0)                | —                            | —                                  | Proto only, sentinel value   |
+| I          | —                      | —                            | yes (PAULI_I)                        | Identity, dict only          |
+| X          | yes GATE_TYPE_X (1)     | yes X = "X"                   | yes GATE_X                           | Consistent                   |
+| Y          | yes GATE_TYPE_Y (2)     | yes Y = "Y"                   | yes GATE_Y                           | Consistent                   |
+| Z          | yes GATE_TYPE_Z (3)     | yes Z = "Z"                   | yes GATE_Z                           | Consistent                   |
+| SX         | yes GATE_TYPE_SX (4)    | yes SX = "SX"                 | yes GATE_SX                          | Consistent                   |
+| H          | yes GATE_TYPE_H (5)     | yes H = "H"                   | yes GATE_H                           | Consistent                   |
+| RX         | yes GATE_TYPE_RX (6)    | yes RX = "RX"                 | — (via `rotation_gate()`)          | Parametric, handled by func  |
+| RY         | yes GATE_TYPE_RY (7)    | yes RY = "RY"                 | — (via `rotation_gate()`)          | Parametric, handled by func  |
+| RZ         | yes GATE_TYPE_RZ (8)    | yes RZ = "RZ"                 | — (via `rotation_gate()`)          | Parametric, handled by func  |
+| **S**      | yes GATE_TYPE_S (9)     | **— MISSING**                | yes GATE_S                           | **Python enum gap**          |
+| **T**      | yes GATE_TYPE_T (10)    | **— MISSING**                | yes GATE_T                           | **Python enum gap**          |
+| CZ         | yes GATE_TYPE_CZ (20)   | yes CZ = "CZ"                 | yes GATE_CZ                          | Consistent                   |
+| CNOT       | yes GATE_TYPE_CNOT (21) | yes CNOT = "CNOT"             | yes GATE_CNOT                        | Consistent                   |
+| ISWAP      | yes GATE_TYPE_ISWAP (22)| yes ISWAP = "iSWAP"           | yes GATE_ISWAP                       | Value mismatch: "iSWAP"≠"ISWAP" |
+| **SQISWAP**| yes GATE_TYPE_SQISWAP(23)| **— MISSING**               | **— MISSING**                      | **Proto only, no impl**     |
+| **CX**     | yes GATE_TYPE_CX (24)   | **— MISSING**                | yes (alias → GATE_CNOT)             | **Proto has it, Python doesn't** |
+| **SWAP**   | yes GATE_TYPE_SWAP (25) | **— MISSING**                | yes GATE_SWAP                        | **Python enum gap**          |
+| CUSTOM     | yes GATE_TYPE_CUSTOM(99)| yes CUSTOM = "CUSTOM"          | —                                  | Expected: custom = no preset |
 
 **Summary of discrepancies:**
 

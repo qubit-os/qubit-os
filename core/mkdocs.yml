@@ -4,10 +4,10 @@
 site_name: QubitOS
 site_description: Open-Source Quantum Control Kernel - Pulse Optimization and Hardware Abstraction
 site_author: QubitOS Contributors
-site_url: https://qubit-os.github.io/qubit-os-core/
+site_url: https://qubit-os.github.io/qubit-os/
 
-repo_name: qubit-os/qubit-os-core
-repo_url: https://github.com/qubit-os/qubit-os-core
+repo_name: qubit-os/qubit-os
+repo_url: https://github.com/qubit-os/qubit-os
 
 copyright: Copyright &copy; 2026 QubitOS Contributors
 
@@ -121,7 +121,14 @@ nav:
     - GRAPE Optimization: notebooks/02-grape-optimization.ipynb
     - Custom Hamiltonians: notebooks/03-custom-hamiltonians.ipynb
   - Specifications:
-    - Design Document: specs/QubitOS-Design-v0.5.0.md
+    - Overview: specs/README.md
+    - Time Model: specs/TIME-MODEL-SPEC.md
+    - Error Budget: specs/ERROR-BUDGET-SPEC.md
+    - Hamiltonian-First API: specs/HAMILTONIAN-FIRST-API-SPEC.md
+    - Experiment Provenance: specs/EXPERIMENT-PROVENANCE-SPEC.md
+    - Multi-Qubit: specs/MULTI-QUBIT-SPEC.md
+    - Rust-Native Solver: specs/RUST-NATIVE-SOLVER-SPEC.md
+    - SME + Feedback (v0.6.0+): specs/SME-FEEDBACK-SPEC.md
 
 extra:
   social:

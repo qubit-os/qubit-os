@@ -39,8 +39,8 @@ For the complete QubitOS experience, you need both the Python package and the HA
 === "From Source"
 
     ```bash
-    git clone https://github.com/qubit-os/qubit-os-core.git
-    cd qubit-os-core
+    git clone https://github.com/qubit-os/qubit-os.git
+    cd qubit-os/core
     pip install -e ".[dev]"
     ```
 
@@ -57,13 +57,13 @@ The HAL server is written in Rust and provides the quantum backend interface.
 === "From Source (Recommended)"
 
     ```bash
-    # Clone the repository
-    git clone https://github.com/qubit-os/qubit-os-hardware.git
-    cd qubit-os-hardware
-    
+    # Clone the monorepo
+    git clone https://github.com/qubit-os/qubit-os.git
+    cd qubit-os/hal
+
     # Build in release mode
     cargo build --release
-    
+
     # The binary will be at target/release/qubit-os-hal
     ```
 
@@ -71,11 +71,11 @@ The HAL server is written in Rust and provides the quantum backend interface.
 
     ```bash
     # Pull the image
-    docker pull ghcr.io/qubit-os/qubit-os-hardware:latest
-    
+    docker pull ghcr.io/qubit-os/qubit-os-hal:latest
+
     # Run the server
     docker run -p 50051:50051 -p 8080:8080 \
-        ghcr.io/qubit-os/qubit-os-hardware:latest
+        ghcr.io/qubit-os/qubit-os-hal:latest
     ```
 
 === "Pre-built Binary"
@@ -86,7 +86,7 @@ The HAL server is written in Rust and provides the quantum backend interface.
 
 ```bash
 # Start the HAL server (in one terminal)
-cd qubit-os-hardware
+cd qubit-os/hal
 cargo run --release
 
 # In another terminal, test the connection
@@ -149,13 +149,12 @@ wsl --install -d Ubuntu
 For contributing to QubitOS:
 
 ```bash
-# Clone all repositories
-git clone https://github.com/qubit-os/qubit-os-proto.git
-git clone https://github.com/qubit-os/qubit-os-hardware.git
-git clone https://github.com/qubit-os/qubit-os-core.git
+# Clone the monorepo
+git clone https://github.com/qubit-os/qubit-os.git
+cd qubit-os
 
-# Set up Python environment
-cd qubit-os-core
+# Set up Python environment (core)
+cd core
 python -m venv .venv
 source .venv/bin/activate
 pip install -e ".[dev,docs]"

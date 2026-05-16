@@ -20,4 +20,4 @@
 - [ ] New code has tests
 - [ ] Physics implementations cite source papers (DOI/arXiv)
 - [ ] Docstrings follow Google style
-- [ ] CHANGELOG.md updated (if user-facing)
+- [ ] CHANGELOG.txt updated (if user-facing)

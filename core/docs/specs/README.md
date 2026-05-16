@@ -4,11 +4,9 @@ This directory contains feature-level design specifications for QubitOS.
 
 ## Architecture
 
-The overall design document lives at the repository root:
-- **QubitOS-Design-v0.4.1-Final.md** — Canonical architecture document
-- **QubitOS-Design-v0.5.0.md** — v0.5.0 additions (backends, Lindblad solver)
-
-These are the single source of truth for system architecture.
+System architecture is described in the top-level [README.md](../../../README.md)
+and the release plan in [ROADMAP.md](../../../ROADMAP.md). The feature specs below
+are the canonical design for each subsystem.
 
 ## Feature Specifications
 

@@ -1,0 +1,17 @@
+# Local-only agent and planning pointers.
+# These files are for internal workflow and are never committed.
+AGENTS.local.md
+AGENTS.local.txt
+*.local.md
+*.local.txt
+
+# Local editor / OS junk.
+.DS_Store
+*.swp
+*.swo
+*~
+
+# Local environment overrides (each module has its own ignores for build
+# outputs and virtualenvs).
+.env
+.env.local

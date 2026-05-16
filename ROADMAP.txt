@@ -1,0 +1,946 @@
+QubitOS Development Roadmap
+===========================
+
+
+Overview
+--------
+
+QubitOS is an open-source quantum control kernel providing Hamiltonian-level
+pulse optimization, hardware abstraction, and calibration management for
+quantum computing research. The monorepo contains three modules: proto/
+(Protocol Buffer definitions), hal/ (Rust HAL server), and core/ (Python
+client, optimizer, and calibration). v0.5.0 is complete; all five
+architecture gaps addressed, Rust-native GRAPE and Lindblad solver
+operational, IBM/AWS/IQM backends integrated. Next milestone: v0.6.0.
+
+
+CI/CD-first development policy
+------------------------------
+
+All development follows a CI/CD-first approach. This is not negotiable.
+
+The CI/CD contract:
+
+1. Green CI is a prerequisite for any phase transition.
+   No phase can begin until the previous phase's CI is passing.
+   No commits to main if CI is red (except CI fixes).
+
+2. Local validation before push.
+   Run scripts/ci-check.sh before every push.
+   Pre-commit hooks must be installed and active.
+
+3. No bypassing branch protection.
+   Branch protection rules exist for a reason.
+   If you must bypass, you MUST fix CI in the next commit.
+
+CI check commands:
+
+    # hal (Rust)
+    cd hal
+    cargo fmt --check && cargo clippy -- -D warnings && cargo test
+
+    # core (Python)
+    cd core
+    source .venv/bin/activate
+    ruff check src/ && ruff format --check src/ && pytest tests/
+
+    # proto
+    cd proto
+    buf lint && buf format -d --exit-code
+    python -m build
+
+
+Completed phases (v0.1.0 to v0.5.0)
+-----------------------------------
+
+Phase 0: Design and Foundation (done)
+
+    Project structure and governance: design document v0.5.0 defining the
+    Hamiltonian-first architecture, 3-repo structure (proto, hardware,
+    core), Protocol Buffer API definitions, CI/CD workflows for all repos,
+    default calibration data, README files, Apache 2.0 licensing,
+    pre-commit hooks, issue templates, Dependabot configuration.
+
+Phase 1: Core Implementation (done)
+
+    Built the working single-qubit control stack: Rust HAL server (tonic
+    gRPC + axum REST), QuTiP simulation backend via PyO3, GRAPE optimizer
+    achieving 99.9% fidelity on X-gate, full qubit-os CLI, Python client
+    library, completed a 12-item security audit. End-to-end test passing:
+    X-gate optimization through pulse execution to measurement results.
+
+Phase 2: Integration and Testing (done)
+
+    Achieved production-quality test coverage and documentation: 93%
+    Python coverage (464 tests), 85%+ Rust coverage (149 tests), MkDocs
+    documentation site, 3 tutorial notebooks (quickstart, GRAPE deep dive,
+    custom Hamiltonians), 5 golden file test suites for reproducibility
+    validation, mypy clean, troubleshooting guide, API reference (Sphinx,
+    rustdoc, OpenAPI, buf).
+
+Phase 3: IQM Integration (done)
+
+    Connected to real quantum hardware: IQM Resonance API client in Rust
+    with exponential backoff retry and SecretString credential handling,
+    Hellinger distance crosscheck validation between simulation and
+    hardware, T1/T2 fitting from hardware measurements, randomized
+    benchmarking with 24 single-qubit Cliffords (BFS over generators),
+    automated calibration runner with drift detection via fingerprinting.
+
+Phase 4: v0.1.0 Release (done)
+
+    v0.1.0 tagged across all three repositories, CHANGELOGs finalized,
+    Python package published to PyPI, Docker images pushed to GHCR,
+    documentation site deployed, release notes written.
+
+
+v0.2.0: Foundation Hardening (done)
+-----------------------------------
+
+Theme: address structural gaps before scaling to multi-qubit.
+
+Five structural gaps were identified in the v0.1.0 stack: no first-class
+time model (GAP 1), no cumulative error tracking (GAP 2), Python-only solver
+hot path (GAP 3), no experiment provenance (GAP 4), and gate-model framing
+leaking into the Hamiltonian-first API (GAP 5). Multi-qubit expansion
+(v0.3.0) would have amplified each of these into serious problems. v0.2.0
+hardens the foundations before building the next floor.
+
+Design specifications:
+
+    specs/time-model.md          Time Model and Temporal Constraints   GAP 1
+    specs/error-budget.md        Error Budget System                   GAP 2
+    specs/target-unitary.md      Hamiltonian-First API Restructure     GAP 5
+    specs/provenance-tree.md     Experiment Provenance Merkle Tree     GAP 4
+    specs/proto-consistency.md   Proto / Python Consistency Fixes
+
+
+0.2.1 Time Model and Temporal Constraints
+
+Priority: HIGH. Estimate: 4-6 weeks. Addresses: GAP 1.
+
+Deliverables (all complete):
+
+  [x] TimePoint type with nominal_ns, precision_ns, jitter_bound_ns fields
+  [x] TemporalConstraint system supporting Simultaneous, Sequential,
+      Aligned, and MaxDelay constraint kinds
+  [x] PulseSequence data structure with constraint validation at
+      construction time
+  [x] DecoherenceBudget tracking cumulative T1/T2 consumption across a
+      pulse sequence
+  [x] AWG clock alignment: pulse durations quantized to AWG sample period
+      (integer multiples)
+  [x] Proto extensions: TimePoint, TemporalConstraint, PulseSequence, and
+      DecoherenceBudget messages in quantum.pulse.v1
+  [x] Rust-side temporal constraint validation in HAL server (reject
+      invalid sequences before execution)
+  [x] Python PulseSequence builder with decoherence budget warnings at
+      construction time
+  [x] Fix duration_ns type mismatch: proto defines int32, Python uses
+      float; unified via TimePoint
+  [x] Integration tests: constraint violation detection, AWG alignment
+      enforcement, decoherence budget warnings, round-trip proto
+      serialization
+
+Exit criteria (all met).
+
+
+0.2.2 Error Budget System
+
+Priority: HIGH. Estimate: 3-4 weeks. Addresses: GAP 2.
+
+Deliverables (all complete):
+
+  [x] ErrorBudget dataclass tracking cumulative infidelity, decoherence
+      cost, leakage estimate, crosstalk penalty
+  [x] projected_fidelity() method estimating total sequence fidelity
+  [x] can_append() check returning whether appending a gate stays within
+      the remaining error budget
+  [x] Configurable warning thresholds (default: warn at 50%, reject at 90%)
+  [x] Integration with PulseSequence: error budget updated automatically
+  [x] Integration with calibration T1/T2 data: decoherence cost computed
+      from measured coherence times
+  [x] CLI output showing error budget status after optimization and before
+      execution
+  [x] Proto extensions: ErrorBudget message, projected_fidelity field on
+      MeasurementResult
+  [x] Unit tests validating error accumulation math (multiplicative
+      fidelity, additive infidelity bounds, decoherence decay)
+
+
+0.2.3 Hamiltonian-First API Restructure
+
+Priority: MEDIUM. Estimate: 2-3 weeks. Addresses: GAP 5.
+
+Deliverables (all complete):
+
+  [x] Rename GateType to TargetUnitary across all three modules
+  [x] Deprecation alias GateType = TargetUnitary with DeprecationWarning
+  [x] Sync enum values: add S, T, SQISWAP, SWAP, CX to Python TargetUnitary
+  [x] Restructure documentation: Hamiltonian and pulse examples primary,
+      gate convenience secondary
+  [x] Update quickstart guide to lead with HamiltonianSpec plus Pauli string
+  [x] Update all 3 tutorial notebooks to use Hamiltonian-first examples
+  [x] Reconcile duplicate v0.5.0 design docs; single source of truth
+  [x] Reconcile generated code policy (committed vs build-time)
+
+
+0.2.4 Experiment Provenance / Merkle Tree
+
+Priority: MEDIUM. Estimate: 2-3 weeks. Addresses: GAP 4.
+
+Deliverables (all complete):
+
+  [x] Merkle tree node types: CalibrationNode, PulseSequenceNode,
+      GRAPEConfigNode, SoftwareVersionNode
+  [x] Root hash computed from tree and attached to every MeasurementResult
+  [x] diff(hash_a, hash_b) function identifying changed tree nodes
+  [x] Integration with existing FingerprintStore
+  [x] Proto extensions: ProvenanceTree message, provenance_hash field
+  [x] Storage format: JSON-serializable tree structure
+  [x] Python API: experiment.provenance(); experiment.diff(other)
+  [x] Unit tests: tree construction, hash stability, diff correctness
+
+
+0.2.5 Proto / Python Consistency Fixes
+
+Priority: LOW. Estimate: 1 week. (all complete)
+
+
+0.2.6 Technical Debt Cleanup
+
+Priority: LOW. Estimate: 1-2 weeks. (all complete)
+
+
+v0.2.0 exit criteria
+
+  * Time model implemented; unit + integration tests pass.
+  * Error budget system; unit tests validate accumulation math.
+  * TargetUnitary rename; grep for GateType returns only alias.
+  * Experiment provenance; tests pass.
+  * Proto / Python consistency; serialization tests pass.
+  * Backward compatibility; v0.1.0 test suite passes.
+  * >= 80 new tests across all repos.
+  * Documentation updated; docs build clean.
+  * CI green; all 3 repos passing.
+
+
+v0.3.0: Multi-Qubit Expansion (done)
+------------------------------------
+
+Theme: scale up with confidence, building on the v0.2.0 foundation.
+
+
+0.3.1 Multi-qubit support (complete)
+
+  [x] 3+ qubit Hamiltonian construction and validation
+  [x] Multi-qubit GRAPE optimization
+  [x] Performance profiling for n=3, 4, 5 qubits
+  [x] Memory management strategy for large state vectors
+  [x] Sparse matrix support in optimizer hot path
+
+
+0.3.2 Pulse scheduling (complete)
+
+  [x] Pulse scheduler using PulseSequence + TemporalConstraint
+  [x] Parallel execution of independent pulses on different qubits
+  [x] Crosstalk-aware scheduling
+  [x] Schedule visualization (timeline diagram output)
+  [x] Integration with error budget
+
+
+0.3.3 Advanced two-qubit gates (complete)
+
+  [x] Parametric two-qubit gates
+  [x] fSim gate family optimization (Google-style)
+  [x] Cross-resonance gate optimization (IBM-style)
+  [x] Error budget integration
+  [x] Golden file tests for all two-qubit gate types
+
+
+0.3.4 Multi-qubit benchmarking (complete)
+
+  [x] Symplectic Clifford group representation (Aaronson & Gottesman 2004)
+  [x] Interleaved randomized benchmarking
+  [x] Process tomography
+  [x] Benchmarking results integrated with provenance tree
+
+
+v0.3.0 exit criteria
+
+  * Multi-qubit GRAPE; n <= 5 qubits optimized.
+  * Pulse scheduling; constraints respected, parallel execution verified.
+  * Error budget (multi-qubit); cumulative tracking across sequences.
+  * Symplectic RB; n-qubit Clifford sampling, interleaved RB working.
+  * Performance; 3-qubit GRAPE completes in under 60 seconds.
+  * CI green; all 3 repos passing.
+
+
+v0.4.0: Active Calibration and GRAPE-in-Rust (done)
+---------------------------------------------------
+
+
+0.4.1 Active calibration (complete)
+
+  [x] Online drift detection
+  [x] Automatic recalibration triggers
+  [x] Feedback control loop
+  [x] Adaptive pulse updates
+  [x] Provenance integration
+
+
+0.4.2 GRAPE in Rust (GAP 3, Phase 1) (complete)
+
+  [x] Rust GRAPE optimizer using ndarray
+  [x] Matrix exponentiation (Pade(13) scaling-and-squaring, Higham 2005)
+  [x] Gradient computation matching Python implementation
+  [x] PyO3 binding: Rust GRAPE callable from Python as drop-in replacement
+  [x] Benchmarks: >= 5x speedup (achieved 10.4x) over Python GRAPE
+  [x] Validation: matches Python golden files to machine precision
+  [x] Python GRAPE kept as validation oracle
+
+
+v0.4.0 exit criteria
+
+  * Recalibration loop end-to-end.
+  * Rust GRAPE matches Python golden files to machine precision.
+  * Rust GRAPE >= 5x speedup.
+  * Drift triggers recalibration; configurable thresholds.
+  * CI green.
+
+
+v0.5.0: Additional Backends and Rust-Native Solver (done)
+---------------------------------------------------------
+
+
+0.5.1 Additional backends (complete)
+
+  [x] IBM Quantum backend (Qiskit Runtime integration)
+  [x] AWS Braket backend
+  [x] Custom backend SDK; trait/interface for third-party backend authors
+  [x] Common "pulse to native gate" compilation trait
+
+Note (Feb 2026): the NativeGateCompiler trait and ZXZCompiler default
+implementation exist. Backend-specific implementations (IQM to CZ+PRX,
+IBM to SX+RZ+CX) use their own inline decomposition that predates the
+trait. Wiring them through the common interface is deferred to a future
+release; the trait is defined, the default works, and the Backend SDK
+documents how third-party authors implement it. Focus has shifted to
+v0.6.0 (SME solver) as the thesis-critical path.
+
+
+0.5.2 Rust-native solver (GAP 3, Phase 2) (complete)
+
+  [x] Lindblad master equation solver in Rust
+  [x] T1/T2 decoherence models
+  [x] Hamiltonian exponentiation with decoherence
+  [x] Validation against QuTiP mesolve (Hellinger distance < 0.01)
+  [x] Decoherence-aware GRAPE
+
+
+v0.5.0 exit criteria
+
+  * IBM backend submitting and retrieving jobs.
+  * AWS Braket backend submitting and retrieving jobs.
+  * Backend SDK documented with example custom backend.
+  * Rust Lindblad solver matches QuTiP mesolve to Hellinger < 0.01.
+  * CI green.
+
+
+v0.6.0: Stochastic Master Equation Solver
+-----------------------------------------
+
+Theme: from ensemble averages to single quantum trajectories.
+Thesis connection: mathematical foundation for measurement-based feedback
+control (MS thesis core).
+
+The Lindblad equation (v0.5.0) computes ensemble-averaged dynamics. The SME
+conditions state evolution on a continuous measurement record, producing a
+conditional density matrix rho_c(t); our best knowledge of the quantum
+state given everything we have measured.
+
+Design spec: core/docs/specs/SME-FEEDBACK-SPEC.txt
+
+Release-gating path: the v0.6.0 release ships on the Rust solver with
+Rayon-parallel ensemble. The bare-metal C fast path (0.6.4) is a stretch
+track tied to the LANL QCSS summer 2026 deliverable; it is bonus
+performance for v0.8.0's compute budget, not a dependency for cutting
+v0.6.0.
+
+Validation backbone: every numerical surface introduced in this version is
+decorated through the project's correctness checker before it lands.
+Density matrices emitted per timestep are validated for Hermiticity,
+positive-semidefiniteness, and trace preservation (with stochastic-
+tolerance override for SME trajectories). See the "Validation Decoration"
+deliverable in each sub-phase.
+
+
+0.6.1 SME solver (Python + Rust)
+
+  [ ] Euler-Maruyama integrator for Ito SDE (Wiseman & Milburn 2009, Ch. 4)
+  [ ] Measurement superoperator H[c]rho = c rho + rho c-dagger
+      - Tr[(c+c-dagger)rho] rho
+  [ ] Homodyne measurement record simulation:
+      I(t) dt = sqrt(eta) Tr[(c+c-dagger) rho_c] dt + dW
+  [ ] Configurable measurement efficiency eta in [0,1]; eta=0 reduces to
+      Lindblad, eta=1 is perfect detection
+  [ ] Single trajectory solver with optional full state history
+  [ ] Monte Carlo ensemble solver with statistics (mean, variance,
+      convergence diagnostics)
+  [ ] Adaptive timestep (trace-norm monitoring)
+  [ ] Positivity monitoring and optional projection onto positive cone
+  [ ] Proto messages: SMEConfig, SMEResult
+  [ ] Validation decoration: per-timestep density matrix output validated
+      for Hermiticity, PSD, and trace preservation at the module boundary
+      (stochastic-tolerance override applied to single-trajectory output;
+      strict tolerance applied to ensemble-averaged output)
+
+
+0.6.2 Validation suite
+
+  [ ] eta=0 reduces exactly to Lindblad (numerical identity, atol=1e-10)
+  [ ] Ensemble average (N to infinity) converges to Lindblad at rate
+      1/sqrt(N)
+  [ ] Analytical benchmark: driven qubit steady-state purity (Wiseman 1994)
+  [ ] Analytical benchmark: spontaneous emission quantum jump signature
+      (eta=1)
+  [ ] Cross-validation against QuTiP smesolve (ensemble expectations,
+      atol=0.05)
+  [ ] Golden file tests for reproducibility (seed-deterministic
+      trajectories)
+
+
+0.6.3 Rust SME solver
+
+  [ ] src/sme/ module: measurement.rs, integrate.rs, trajectory.rs
+  [ ] PyO3 bindings: RustSMESolver Python class (drop-in for Python solver)
+  [ ] Thread-parallel ensemble via Rayon
+  [ ] Benchmark: >= 5x speedup over Python SME
+
+
+0.6.4 Bare-metal Lindblad fast path (stretch; LANL summer 2026)
+
+Status: stretch track, not release-gating for v0.6.0. The Rust solver with
+Rayon-parallel ensemble is the v0.6.0 release path. This subsection lands
+when the LANL summer deliverable lands; if it slips past v0.6.0, it ships
+in a later patch release or rolls into v0.8.0's compute campaign without
+blocking v0.7.0.
+
+Context: the LANL QCSS summer project produces a standalone C library
+(lindblad/) for SIMD-optimized Lindblad propagation. This subsection
+integrates it into QubitOS as a high-performance backend for the existing
+solver stack.
+
+Why: the systematic v0.8.0 experiments (5 gates x 50 noise points x 4
+methods x 1000 trajectories) benefit from the C fast path's speedup over
+Rust+Rayon. Inside v0.6.0 itself, the Rust solver is sufficient for the
+validation suite and the single-trajectory / ensemble-of-thousands API
+surface.
+
+Architecture (two-tier solver dispatch):
+
+    QubitOS Python API
+        |
+        v
+    solver.evolve(H, rho0, tlist, c_ops)
+        |
+        v
+    [dispatch logic]
+        |
+        +-- d <= 27 AND time-independent  --> Tier 2: C fast path (FFI)
+        |     - Precompute propagator P = exp(L * dt) via Pade [13/13]
+        |     - SIMD matvec per timestep (AVX2/AVX-512)
+        |     - OpenMP-parallel batch sweeps
+        |     - Returns NumPy array (zero-copy)
+        |
+        +-- otherwise                       --> Tier 1: general Rust solver
+              - Adaptive RK4/RK45 integration
+              - Sparse matrix support
+              - Arbitrary dimension
+
+Deliverables (stretch):
+
+  [ ] FFI bridge: extern "C" bindings in hal/src/lindblad/ffi.rs
+  [ ] C library build integration: CMake subproject or pkg-config discovery
+  [ ] Automatic dispatch: dimension check + time-independence check in
+      Python solver
+  [ ] Validation: C fast path matches Rust solver to machine precision
+      (atol=1e-12)
+  [ ] Benchmark: >= 50x speedup for d=3 robustness landscapes vs current
+      Rust solver
+  [ ] Batch sweep API: solver.batch_sweep(H_func, param_grid, rho0,
+      target) returning 2D fidelity array
+  [ ] Fallback: graceful fallback to Rust solver with warning if C library
+      not installed
+  [ ] Proto extension: SolverBackend enum field on LindbladConfig (AUTO,
+      RUST, C_FAST_PATH)
+
+Future (PhD scope, not v0.6.0):
+
+    Tier 3: FPGA fast path
+        - Same propagator algorithm, fixed-point arithmetic
+        - Deterministic ~35-70 ns per timestep
+          (vs ~50-100 ns C, vs ~10-30 ms QuTiP)
+        - USB/SPI host interface for propagator upload
+        - Real-time feedback capable (sub-microsecond latency)
+
+
+v0.6.0 exit criteria
+
+Release-gating:
+
+  * SME solver functional; single trajectory + ensemble, Rust + Python.
+  * eta=0 to Lindblad; numerical identity (atol=1e-10).
+  * Ensemble convergence; mean trace distance to Lindblad < 5/sqrt(N).
+  * QuTiP cross-validation; ensemble expectations match smesolve
+    (atol=0.05).
+  * Analytical benchmarks; >= 2 known solutions reproduced.
+  * Validation decoration; SME density matrix outputs validated for
+    Hermiticity, PSD, and trace preservation at module boundary
+    (stochastic-tolerance override for trajectories, strict tolerance for
+    ensemble averages).
+  * Rust+Rayon ensemble; parallel speedup demonstrated and documented in
+    benchmark suite.
+  * New test count >= 60 SME tests.
+  * CI green; all modules passing.
+
+Stretch (not release-gating; may ship in patch release or roll into v0.8.0):
+
+  * C fast path integrated; FFI bridge working, auto-dispatch for d <= 27.
+  * C fast path validated; matches Rust solver to atol=1e-12.
+  * Batch sweep API; solver.batch_sweep() functional with C backend.
+  * C fast path tests >= 20.
+
+
+v0.7.0: Lyapunov Feedback Controller
+------------------------------------
+
+Theme: close the loop.
+Thesis connection: the core technical contribution; the first open-source
+continuous quantum feedback controller with production-grade engineering.
+
+
+0.7.1 Controller design
+
+  [ ] Lyapunov function: V(rho_c) = 1 - Tr[rho_target * rho_c]
+  [ ] Single-axis feedback law:
+      delta-Omega(t) = -K * Tr[rho_target * [i*sigma_k/2, rho_c]]
+  [ ] Multi-axis (full SU(2)) feedback: independent gains K_x, K_y, K_z on
+      three generators
+  [ ] Configurable feedback delay (tau_fb >= 0; realistic values
+      ~10-100 ns)
+  [ ] Amplitude saturation: |delta-Omega(t)| <= delta-Omega_max (hardware
+      DAC constraint)
+  [ ] Feedback energy tracking: integral of |delta-Omega(t)|^2 dt
+  [ ] Proto messages: FeedbackConfig, FeedbackResult
+  [ ] Validation decoration: Lyapunov function trajectory V(t) validated
+      for finiteness and bounded range; ensemble mean V(t) checked for
+      monotone-in-mean property at the module boundary
+
+
+0.7.2 Integration with SME
+
+  [ ] solver.solve_with_feedback(); SME step then controller step then
+      update Hamiltonian
+  [ ] Feedback-controlled trajectory with full correction history
+  [ ] Feedback-controlled ensemble for statistical analysis
+  [ ] Provenance: feedback parameters recorded in Merkle tree
+
+
+0.7.3 Comparison framework
+
+  [ ] noise_sweep_comparison(); fidelity vs noise strength for GRAPE, DRAG,
+      Gaussian, Lyapunov
+  [ ] Crossover point detection: gamma* where feedback fidelity =
+      GRAPE fidelity
+  [ ] Publication-quality plotting (matplotlib, reproducible scripts)
+  [ ] Tabular output for paper inclusion
+
+
+0.7.4 Stability analysis tools
+
+  [ ] Lyapunov function trajectory visualization (V(t) for individual and
+      ensemble-averaged trajectories)
+  [ ] Bloch sphere trajectory visualization (rho_c(t) on the Bloch sphere
+      with feedback arrows)
+  [ ] Convergence rate estimation (exponential fit to V(t))
+
+
+v0.7.0 exit criteria
+
+  * Feedback controller; Lyapunov, single + multi-axis, configurable
+    gain/delay.
+  * Zero gain equals open loop; numerical identity with zero-gain feedback
+    and open-loop SME.
+  * V-dot < 0 on average; Lyapunov function non-increasing in ensemble
+    mean.
+  * Crossover plot; >= 1 comparison figure (GRAPE vs feedback vs noise).
+  * Feedback delay; realistic delay (>= 10 ns) demonstrated and
+    characterized.
+  * Validation decoration; Lyapunov function trajectory decorated at
+    module boundary (finiteness, bounded range, ensemble-mean
+    monotonicity).
+  * New test count >= 50.
+  * CI green; all modules.
+
+
+v0.8.0: 3-Level Transmon and Hardware-Representative Comparison
+---------------------------------------------------------------
+
+Theme: real physics on a realistic device model.
+Thesis connection: elevates the results from toy-model to publishable.
+3-level transmon with IQM Garnet parameters is the differentiator vs
+existing literature.
+
+
+0.8.1 3-level transmon model
+
+  [ ] 3-level Hamiltonian:
+      H = omega_q * |1><1| + (2*omega_q + alpha) * |2><2| + Omega(t)/2 *
+      (a + a-dagger), alpha approx -330 MHz
+  [ ] Multi-level collapse operators: |2> to |1> decay (gamma_2 approx
+      2/T1), |1> to |0> decay, per-transition dephasing
+  [ ] 3-level SME solver (extends 2-level code to d=3)
+  [ ] IQM Garnet parameter set as default configuration
+
+
+0.8.2 Leakage-aware control
+
+  [ ] Leakage-penalized Lyapunov function:
+      V_3 = (1 - Tr[rho_target * rho_c]) + lambda * <2|rho_c|2>
+  [ ] Leakage rate tracking: population in |2> over time
+  [ ] GRAPE vs DRAG vs Lyapunov leakage comparison on 3-level model
+  [ ] Leakage suppression analysis
+
+
+0.8.3 Full experimental campaign
+
+  [ ] Gate set: X, Y, H, S, T (single-qubit) on 3-level transmon
+  [ ] Noise sweep: gamma/gamma_0 in [0.1, 10.0] with 50 points, 1000
+      trajectories each
+  [ ] Duration sweep: gate times 10-100 ns
+  [ ] 4-way comparison: Gaussian, DRAG, GRAPE, Lyapunov feedback
+  [ ] Reproducible scripts in scripts/paper_experiments/
+  [ ] All results stored as JSON with provenance hashes
+
+
+v0.8.0 exit criteria
+
+  * 3-level model; Hamiltonian + collapse ops + SME working for d=3.
+  * Leakage tracking; population in |2> computed and reported.
+  * Crossover characterization; gamma* quantified for 3-level transmon.
+  * Experimental campaign; >= 5 gate types x 50 noise points x 4 methods.
+  * Paper-ready figures; >= 3 publication-quality figures generated.
+  * CI green; all repos.
+
+
+v0.9.0: Integration, HPC Scaling, and Paper Preparation
+-------------------------------------------------------
+
+Theme: production-grade feedback and thesis-ready results.
+Thesis connection: HPC scaling on VEGA, Paper 1 draft.
+
+
+0.9.1 Full pipeline integration
+
+  [ ] End-to-end: HamiltonianSpec to GRAPE to SME to Feedback to Adaptive
+      Pulse to Backend
+  [ ] Feedback events in provenance Merkle tree
+  [ ] Feedback corrections in error budget model
+  [ ] Backend integration: feedback loop callable through HAL interface
+
+
+0.9.2 HPC parallelization
+
+  [ ] MPI-parallel Monte Carlo trajectories (mpi4py + VEGA cluster)
+  [ ] Scaling analysis: wall time vs cores for 10^3, 10^4, 10^5
+      trajectories
+  [ ] GPU acceleration: batch matrix ops with CuPy (stretch goal)
+  [ ] Benchmark scripts with SLURM job files
+
+
+0.9.3 Paper 1 support
+
+  [ ] All experimental data finalized and archived
+  [ ] Figures generated by reproducible scripts (scripts/paper_experiments/)
+  [ ] Statistical analysis: confidence intervals, convergence diagnostics
+  [ ] Comparison table: gate fidelity (mean +/- std) across methods and
+      noise levels
+
+
+v0.9.0 exit criteria
+
+  * Full pipeline; Hamiltonian to feedback-controlled execution, end-to-end.
+  * HPC scaling; demonstrated on VEGA (>= 16 cores).
+  * Data complete; all thesis experiments reproducible from scripts.
+  * Paper 1 draft; complete draft ready for advisor review.
+
+
+v1.0.0: Thesis Defense Release
+------------------------------
+
+Theme: the open-source quantum feedback control system.
+Target: Spring 2028 thesis defense.
+
+This release represents the complete, stable, documented system as
+described in the MS thesis.
+
+Deliverables:
+
+  * Stable API; semantic versioning enforced, no breaking changes without
+    a major version bump.
+  * Full Rust-native production path; HAL to Rust GRAPE to Rust
+    Lindblad/SME to Rust feedback controller to backend.
+  * Comprehensive documentation; architecture guide, theory guide (SME +
+    Lyapunov), API reference, tutorials, backend author guide.
+  * Published benchmarks; open-loop vs closed-loop comparison on 2-level
+    and 3-level transmon, reproducible scripts.
+  * Thesis alignment; all code referenced in thesis document available at
+    tagged release.
+  * External security audit; independent review of credential handling
+    and input validation.
+  * Community governance; RFC process, maintainer guide, code of conduct.
+  * Plugin/extension architecture; hooks for custom optimizers, custom
+    feedback controllers, custom backends without forking.
+
+
+CI/CD standards
+---------------
+
+Golden rule: if CI is red, nothing else matters until it is green.
+
+Per-module CI requirements:
+
+    proto:
+        buf lint
+        buf format -d --exit-code
+        cargo build
+        python -m build
+        python -c "from quantum..."
+
+    hal:
+        cargo fmt --check
+        cargo clippy -- -D warnings
+        cargo build --release
+        cargo test
+        docker build .
+
+    core:
+        ruff check src/
+        ruff format --check src/
+        pytest tests/
+        mypy src/qubitos/
+        pytest --cov
+
+
+Pre-push checklist:
+
+    ./scripts/ci-check.sh
+    git diff --cached | grep -E "(password|token|key|secret)" && echo "STOP!"
+    git log -1 --oneline
+    git push
+
+
+Minimum version specifications:
+
+    Rust    1.85    MSRV bumped in v0.5.0
+    Python  3.11    Type hint syntax
+    buf     1.47    Proto tooling
+    tonic   0.12    gRPC server
+    prost   0.13    Proto codegen
+    ruff    0.2.0   Linting
+    pytest  8.0.0   Testing
+    qutip   5.0.0   Simulation
+
+
+Risk mitigation
+---------------
+
+CI drift                    Mandatory local checks, pre-commit hooks,
+                            golden rule enforcement.
+QuTiP version incompatibility   Pin version, test on updates, long-term
+                                migrate to bare-metal C + Rust solvers.
+IQM API changes             Abstract behind backend trait, version client,
+                            integration tests.
+Numerical instability in GRAPE   Extensive testing, gradient clipping,
+                                 golden file regression tests.
+Performance bottlenecks (multi-qubit)   Profile early, sparse matrices,
+                                        benchmark at each qubit count.
+Scope creep                 Strict phase boundaries, defer features,
+                            design specs before code.
+Time model complexity       Start with minimal constraints, extend
+                            incrementally.
+Rust ecosystem gaps         Evaluate libraries early, prototype matrix
+                            exp before committing.
+Backward compatibility breaks   Deprecation aliases for one release
+                                cycle, semver discipline, migration guides.
+SME numerical stiffness     Adaptive timestep, trace-norm monitoring,
+                            Milstein fallback, QuTiP validation.
+Stochastic convergence      Report confidence intervals, require >= 1000
+                            trajectories for published results.
+Lyapunov stability proof gaps   Work with Drakunov on LaSalle invariance;
+                                cite Mirrahimi & van Handel 2007.
+3-level Hilbert space scaling   d=3 is small; only a concern at d >= 64
+                                (already handled by sparse expm).
+Thesis timeline pressure    v0.6.0 is self-contained; v0.7.0 builds on
+                            it; each version is independently publishable.
+
+
+Success metrics
+---------------
+
+v0.1.0 (done):
+  * Clean install works on Linux/macOS.
+  * Quickstart completable in 15 minutes.
+  * 464 Python tests passing at 93% coverage.
+  * 149 Rust tests passing.
+  * IQM hardware execution demonstrated.
+  * Golden file reproducibility validated.
+
+v0.2.0 (done):
+  * Time model expressible; temporal constraints between pulses work in
+    API and are validated.
+  * Error budget; projected_fidelity() shown before execution.
+  * TargetUnitary adopted everywhere; GateType deprecated.
+  * Provenance hash on all measurement results; diff() identifies changes.
+  * >= 80 new tests; all CI green; backward compatibility maintained.
+
+v0.3.0 (done):
+  * 5-qubit GRAPE optimization completing successfully.
+  * Pulse scheduling with temporal constraints demonstrated.
+  * Multi-qubit RB with symplectic Cliffords operational.
+  * 3-qubit GRAPE completes in under 60 seconds.
+
+v0.4.0 (done):
+  * Drift-triggered recalibration demonstrated end-to-end.
+  * Rust GRAPE >= 5x faster than Python (achieved 10.4x).
+  * Active calibration loop running without manual intervention.
+
+v0.5.0 (done):
+  * IBM and AWS backends submitting and retrieving jobs (mock-tested).
+  * Rust Lindblad solver matching QuTiP to trace distance < 1e-6.
+  * Backend SDK documented with step-by-step author guide.
+  * ~1,286 total tests (1,006 Python + 280 Rust).
+  * All 5 architecture gaps fully addressed.
+
+v0.6.0:
+  * SME solver functional in Python and Rust.
+  * eta=0 reduces to Lindblad (numerical identity).
+  * Ensemble average converges to Lindblad at 1/sqrt(N) rate.
+  * >= 2 analytical benchmarks reproduced.
+  * QuTiP smesolve cross-validation passing.
+  * Rust + Rayon parallel ensemble is the release-default solver path.
+  * SME numerical surfaces decorated for Hermiticity, PSD, and trace
+    preservation at module boundary.
+  * (Stretch, LANL summer) Bare-metal C fast path integrated via FFI
+    (auto-dispatch for d <= 27), >= 50x speedup over Rust solver for d=3
+    robustness landscapes, batch sweep API functional.
+
+v0.7.0:
+  * Lyapunov feedback controller operational (single + multi-axis).
+  * Crossover plot generated: GRAPE vs feedback vs noise strength.
+  * V-dot < 0 demonstrated in ensemble average.
+  * Realistic feedback delay characterized.
+
+v0.8.0:
+  * 3-level transmon model with IQM Garnet parameters.
+  * Leakage-aware feedback demonstrated.
+  * Full experimental campaign: 5 gates x 50 noise points x 4 methods.
+  * >= 3 publication-quality figures.
+
+v0.9.0:
+  * Full pipeline integrated (Hamiltonian to feedback to backend).
+  * HPC scaling demonstrated on VEGA cluster.
+  * Paper 1 draft complete.
+
+v1.0.0:
+  * Stable API with semver guarantees.
+  * Full Rust-native production path operational.
+  * MS thesis defended with qubit-os as implementation.
+  * >= 2 papers published or submitted from the codebase.
+  * External security audit passed.
+  * Community governance established.
+
+
+Development principles
+----------------------
+
+Code quality:
+
+  * All code reviewed before merge.
+  * CI must pass (all enabled jobs green).
+  * Test coverage targets enforced per phase.
+  * Documentation required for all new features.
+  * Functions <= 50 lines (Python), <= 60 lines (C++/Rust), single
+    responsibility.
+
+Reproducibility:
+
+  * Every result traceable to code + seed + calibration via provenance
+    hash.
+  * Golden file tests for all numerical code.
+  * Pinned dependencies in lock files.
+  * Provenance Merkle tree covering calibration, pulse sequence,
+    optimizer config, software versions.
+
+Physics correctness:
+
+  * Cite papers for all non-trivial physics (DOI or arXiv ID in code
+    comments and docs).
+  * Validate unitarity of all gate/unitary constructions.
+  * Validate normalization of all quantum states.
+  * Validate physical bounds (amplitudes, frequencies, durations).
+  * Decoherence budget tracked and reported; never silently exceeded.
+  * Error accumulation modeled across pulse sequences, not just
+    per-gate.
+
+
+Long-term vision: bare-metal solver stack
+-----------------------------------------
+
+Added March 2026.
+
+QubitOS's solver stack is evolving toward eliminating Python numerical
+dependencies (QuTiP, SciPy) from the performance-critical path. The
+trajectory:
+
+    v0.1.0 to v0.4.0    QuTiP via PyO3      Python    Retired as primary
+    v0.5.0              Rust ndarray solver Rust      Current production
+    v0.6.0              C bare-metal fast path  C     In progress; LANL Summer 2026
+    Post-thesis         FPGA fast path      Verilog   Planned; PhD scope
+
+Why this matters:
+
+  * QuTiP remains as a validation oracle (testing only), never in the
+    hot path.
+  * Each tier is independently validated against the tier above it.
+  * The C fast path is a standalone open-source artifact (lindblad/
+    library), usable outside QubitOS.
+  * The FPGA tier uses the same fixed-size propagator algorithm as the C
+    tier.
+  * The architecture supports future GPU acceleration (CUDA/ROCm) as an
+    additional backend.
+
+End state: QubitOS's simulation engine is a multi-backend dispatcher that
+selects the fastest available solver for the problem size and available
+hardware, with all backends validated to machine precision against a
+common reference.
+
+
+Contributing
+------------
+
+See CONTRIBUTING.txt for contribution guidelines, including:
+
+  * Repository setup and development environment.
+  * Branch naming and commit message conventions.
+  * CI/CD requirements and pre-push checklist.
+  * Code review process.
+  * How to add a new backend or optimizer.
+
+
+Last updated: 2026-05-15.
+
+References: core/docs/specs/SME-FEEDBACK-SPEC.txt for the stochastic master
+equation and feedback controller design. Design specifications for all
+sub-phases are published under core/docs/specs/.

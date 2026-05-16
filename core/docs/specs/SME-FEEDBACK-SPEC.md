@@ -102,8 +102,8 @@ def measurement_superoperator(c: NDArray, rho: NDArray) -> NDArray:
 ```
 
 **Critical properties to validate:**
-- H[c]ρ preserves trace: Tr[H[c]ρ] = 0 ✓
-- H[c]ρ preserves Hermiticity: (H[c]ρ)† = H[c]ρ ✓
+- H[c]ρ preserves trace: Tr[H[c]ρ] = 0 yes
+- H[c]ρ preserves Hermiticity: (H[c]ρ)† = H[c]ρ yes
 - H[c]ρ does NOT preserve positivity (the stochastic term can temporarily violate positivity; this is physical and expected for individual trajectories)
 
 ### 1.4 Lyapunov Feedback Controller

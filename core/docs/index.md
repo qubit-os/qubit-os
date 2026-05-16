@@ -139,29 +139,29 @@ QubitOS follows a three-layer architecture:
 
 ## Repository Structure
 
-QubitOS consists of three repositories:
+QubitOS is a monorepo at [qubit-os/qubit-os](https://github.com/qubit-os/qubit-os) with three top-level modules:
 
-| Repository | Purpose | Language |
-|------------|---------|----------|
-| [qubit-os-proto](https://github.com/qubit-os/qubit-os-proto) | Protocol Buffers definitions | Protobuf |
-| [qubit-os-hardware](https://github.com/qubit-os/qubit-os-hardware) | Hardware Abstraction Layer | Rust |
-| [qubit-os-core](https://github.com/qubit-os/qubit-os-core) | Python modules and CLI | Python |
+| Module | Purpose | Language |
+|--------|---------|----------|
+| `proto/` | Protocol Buffer API contracts | Protobuf |
+| `hal/` | Hardware Abstraction Layer, solvers, backends | Rust |
+| `core/` | Python modules, GRAPE optimizer, calibration, CLI | Python |
 
 ## Quick Links
 
-- **[Installation Guide](guides/installation.md)** - Detailed setup instructions
-- **[Quickstart](guides/quickstart.md)** - Your first pulse in 15 minutes
-- **[CLI Reference](api/cli.md)** - Command-line interface documentation
-- **[Troubleshooting](guides/troubleshooting.md)** - Common issues and solutions
-- **[Design Document](specs/QubitOS-Design-v0.5.0.md)** - Technical specification
+- [Installation Guide](guides/installation.md) — setup instructions
+- [Quickstart](guides/quickstart.md) — first pulse in 15 minutes
+- [CLI Reference](api/cli.md) — command-line interface
+- [Troubleshooting](guides/troubleshooting.md) — common issues
+- [Design Specifications](specs/README.md) — per-subsystem technical specs
 
 ## License
 
-QubitOS is released under the [Apache License 2.0](https://www.apache.org/licenses/LICENSE-2.0).
+Apache License 2.0. See [LICENSE](https://github.com/qubit-os/qubit-os/blob/main/LICENSE).
 
 ## Contributing
 
-We welcome contributions! See our [Contributing Guide](https://github.com/qubit-os/qubit-os-core/blob/main/CONTRIBUTING.md) for details.
+See the [Contributing Guide](https://github.com/qubit-os/qubit-os/blob/main/CONTRIBUTING.txt).
 
 ---
 

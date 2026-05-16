@@ -4,7 +4,7 @@
 **Status:** Design
 **Author:** Rylan Malarchick
 **Date:** February 8, 2026
-**Refs:** ARCHITECTURE-REVIEW.md GAP 1/3, ROADMAP.md §0.3.1–0.3.3
+**Refs:** v0.1.0 architecture gaps 1 and 3 (see internal planning notes), ROADMAP.txt §0.3.1–0.3.3
 
 ---
 

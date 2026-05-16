@@ -1,0 +1,69 @@
+Agent Instructions
+==================
+
+QubitOS is a pulse-first quantum control kernel. This file is the minimal
+contract for agents (human or AI) making changes here. Keep edits scoped to
+what the task requires and consult ROADMAP.txt before introducing new
+subsystems.
+
+
+Repo layout
+-----------
+
+    core/    Python: GRAPE optimizer, calibration, scheduling, CLI, gRPC client
+    hal/     Rust: gRPC/REST server, backend dispatch, Lindblad solver
+    proto/   Protocol Buffer API contracts (committed generated code)
+
+
+Build and test
+--------------
+
+Python:
+
+    cd core && pip install -e ".[dev]" && pytest
+
+Rust:
+
+    cd hal && cargo fmt --check && cargo clippy -- -D warnings && cargo test
+
+Proto:
+
+    cd proto && buf lint && buf format -d --exit-code
+
+Run scripts/ci-check.sh from the repo root before pushing.
+
+
+Hard rules
+----------
+
+  * CI must be green before merging. If CI is red, fix CI first.
+
+  * Do not bypass pre-commit hooks or branch protection (--no-verify,
+    force-push).
+
+  * Density matrices, unitaries, and probability vectors must be validated
+    at the module boundary where they are emitted (Hermiticity, positive-
+    semidefiniteness, trace preservation, normalization). Use stochastic-
+    tolerance overrides for single-trajectory stochastic outputs.
+
+  * New physics or numerical algorithms require a paper citation (DOI or
+    arXiv ID) in the code and in the relevant design spec.
+
+  * Scope is superconducting / transmon pulse-level control. Do not add
+    hardware modalities, generic circuit-SDK frontends, or cloud-backend
+    feature parity unless ROADMAP.txt explicitly calls for it.
+
+  * Backend integration honesty. IQM is the live backend. IBM, AWS, and
+    QuTiP are demonstrated through the backend abstraction (mock-tested).
+    Do not promote a demonstrated backend to "live" without hardware
+    validation.
+
+
+Where to look
+-------------
+
+    ROADMAP.txt                       Release plan and current milestone
+    core/docs/specs/                  Per-subsystem design specifications
+    CONTRIBUTING.txt                  Contribution and CI policy
+    hal/docs/BACKEND-SDK.txt          Backend author guide
+    core/docs/                        User guides and tutorials

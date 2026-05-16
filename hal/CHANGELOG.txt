@@ -37,7 +37,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Mock client for deterministic testing
 
 #### Backend SDK Documentation
-- `docs/BACKEND-SDK.md`: Step-by-step guide for third-party backend authors
+- `docs/BACKEND-SDK.txt`: Step-by-step guide for third-party backend authors
 
 ### Changed
 - MSRV bumped from 1.83 to 1.85
@@ -53,7 +53,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Graceful shutdown with configurable timeout (30s default)
 - Error message sanitization for production builds
 - Comprehensive validation module with DoS protection
-- Proto size limits documentation (see qubit-os-proto/LIMITS.md)
+- Proto size limits documentation (see proto/LIMITS.txt)
 
 ### Changed
 - Default host binding changed from 0.0.0.0 to 127.0.0.1 (security)
