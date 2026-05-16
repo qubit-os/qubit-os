@@ -373,6 +373,17 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#lyapunov-feedback-controller-v070" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Lyapunov feedback controller (v0.7.0)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#hardware-abstraction" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1760,6 +1771,17 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#lyapunov-feedback-controller-v070" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Lyapunov feedback controller (v0.7.0)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#hardware-abstraction" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1856,8 +1878,10 @@
 control pulses against live calibration data, schedules them with
 constraint-aware parallelism, and dispatches through a hardware
 abstraction layer.</p>
-<p>Current release: <strong>v0.6.0</strong> (stochastic master equation solver, Rust + Rayon).
-Next milestone: <strong>v0.7.0</strong> (Lyapunov feedback controller). See
+<p>Current release: <strong>v0.7.0</strong> (Lyapunov feedback controller, open-loop vs
+closed-loop comparison framework, Rust feedback hot path).
+Next milestone: <strong>v0.8.0</strong> (3-level transmon with leakage-aware
+Lyapunov control). See
 <a href="https://github.com/qubit-os/qubit-os/blob/main/ROADMAP.txt">ROADMAP.txt</a>.</p>
 <h2 id="start-here">Start here<a class="headerlink" href="#start-here" title="Permanent link">&para;</a></h2>
 <ul>
@@ -1904,29 +1928,54 @@ implementation plus Rust + Rayon for parallel ensembles.</p>
 </span><span id="__span-1-13"><a id="__codelineno-1-13" name="__codelineno-1-13" href="#__codelineno-1-13"></a>                                 <span class="n">target_rho</span><span class="o">=</span><span class="n">rho_target</span><span class="p">)</span>
 </span><span id="__span-1-14"><a id="__codelineno-1-14" name="__codelineno-1-14" href="#__codelineno-1-14"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Final fidelity: </span><span class="si">{</span><span class="n">result</span><span class="o">.</span><span class="n">final_fidelity</span><span class="si">:</span><span class="s2">.4f</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
 </span></code></pre></div>
+<h3 id="lyapunov-feedback-controller-v070">Lyapunov feedback controller (v0.7.0)<a class="headerlink" href="#lyapunov-feedback-controller-v070" title="Permanent link">&para;</a></h3>
+<p>Close the loop on the SME runtime. A Lyapunov function V(rho_c) =
+1 - Tr[rho_target rho_c] drives a per-axis feedback law that adds a
+real-time correction to the baseline drive Hamiltonian. The
+<code>noise_sweep_comparison</code> API produces the open-loop vs closed-loop
+fidelity curves; <code>crossover_point</code> returns the noise strength where
+the closed loop starts to win.</p>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">qubitos.feedback</span><span class="w"> </span><span class="kn">import</span> <span class="p">(</span>
+</span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a>    <span class="n">AXIS_X</span><span class="p">,</span> <span class="n">AXIS_Y</span><span class="p">,</span> <span class="n">AXIS_Z</span><span class="p">,</span>
+</span><span id="__span-2-3"><a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a>    <span class="n">FeedbackConfig</span><span class="p">,</span> <span class="n">LyapunovController</span><span class="p">,</span>
+</span><span id="__span-2-4"><a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a>    <span class="n">solve_with_feedback</span><span class="p">,</span>
+</span><span id="__span-2-5"><a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a><span class="p">)</span>
+</span><span id="__span-2-6"><a id="__codelineno-2-6" name="__codelineno-2-6" href="#__codelineno-2-6"></a>
+</span><span id="__span-2-7"><a id="__codelineno-2-7" name="__codelineno-2-7" href="#__codelineno-2-7"></a><span class="n">fb_config</span> <span class="o">=</span> <span class="n">FeedbackConfig</span><span class="p">(</span>
+</span><span id="__span-2-8"><a id="__codelineno-2-8" name="__codelineno-2-8" href="#__codelineno-2-8"></a>    <span class="n">gains</span><span class="o">=</span><span class="p">(</span><span class="mf">5.0e6</span><span class="p">,),</span>
+</span><span id="__span-2-9"><a id="__codelineno-2-9" name="__codelineno-2-9" href="#__codelineno-2-9"></a>    <span class="n">control_axes</span><span class="o">=</span><span class="p">(</span><span class="n">AXIS_X</span><span class="p">,</span> <span class="n">AXIS_Y</span><span class="p">,</span> <span class="n">AXIS_Z</span><span class="p">),</span>
+</span><span id="__span-2-10"><a id="__codelineno-2-10" name="__codelineno-2-10" href="#__codelineno-2-10"></a>    <span class="n">max_correction_amplitude</span><span class="o">=</span><span class="mf">50.0e6</span> <span class="o">*</span> <span class="mf">2.0</span> <span class="o">*</span> <span class="mf">3.14159</span><span class="p">,</span>
+</span><span id="__span-2-11"><a id="__codelineno-2-11" name="__codelineno-2-11" href="#__codelineno-2-11"></a>    <span class="n">delay_ns</span><span class="o">=</span><span class="mf">0.0</span><span class="p">,</span>
+</span><span id="__span-2-12"><a id="__codelineno-2-12" name="__codelineno-2-12" href="#__codelineno-2-12"></a><span class="p">)</span>
+</span><span id="__span-2-13"><a id="__codelineno-2-13" name="__codelineno-2-13" href="#__codelineno-2-13"></a><span class="n">controller</span> <span class="o">=</span> <span class="n">LyapunovController</span><span class="p">(</span><span class="n">fb_config</span><span class="p">,</span> <span class="n">rho_target</span><span class="p">)</span>
+</span><span id="__span-2-14"><a id="__codelineno-2-14" name="__codelineno-2-14" href="#__codelineno-2-14"></a><span class="n">result</span> <span class="o">=</span> <span class="n">solve_with_feedback</span><span class="p">(</span><span class="n">solver</span><span class="p">,</span> <span class="n">controller</span><span class="p">,</span> <span class="n">rho0</span><span class="p">,</span> <span class="n">hamiltonians</span><span class="p">,</span>
+</span><span id="__span-2-15"><a id="__codelineno-2-15" name="__codelineno-2-15" href="#__codelineno-2-15"></a>                             <span class="n">target_rho</span><span class="o">=</span><span class="n">rho_target</span><span class="p">)</span>
+</span><span id="__span-2-16"><a id="__codelineno-2-16" name="__codelineno-2-16" href="#__codelineno-2-16"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Final fidelity: </span><span class="si">{</span><span class="n">result</span><span class="o">.</span><span class="n">sme_result</span><span class="o">.</span><span class="n">final_fidelity</span><span class="si">:</span><span class="s2">.4f</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+</span><span id="__span-2-17"><a id="__codelineno-2-17" name="__codelineno-2-17" href="#__codelineno-2-17"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;V(T):           </span><span class="si">{</span><span class="n">result</span><span class="o">.</span><span class="n">lyapunov_trajectory</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span><span class="si">:</span><span class="s2">.4f</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+</span></code></pre></div>
 <h3 id="hardware-abstraction">Hardware abstraction<a class="headerlink" href="#hardware-abstraction" title="Permanent link">&para;</a></h3>
 <p>Execute pulses through a unified gRPC/REST interface:</p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">qubitos.client</span><span class="w"> </span><span class="kn">import</span> <span class="n">HALClientSync</span>
-</span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a>
-</span><span id="__span-2-3"><a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a><span class="k">with</span> <span class="n">HALClientSync</span><span class="p">(</span><span class="s2">&quot;localhost:50051&quot;</span><span class="p">)</span> <span class="k">as</span> <span class="n">client</span><span class="p">:</span>
-</span><span id="__span-2-4"><a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a>    <span class="n">result</span> <span class="o">=</span> <span class="n">client</span><span class="o">.</span><span class="n">execute_pulse</span><span class="p">(</span>
-</span><span id="__span-2-5"><a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a>        <span class="n">i_envelope</span><span class="o">=</span><span class="n">pulse</span><span class="o">.</span><span class="n">i_envelope</span><span class="p">,</span>
-</span><span id="__span-2-6"><a id="__codelineno-2-6" name="__codelineno-2-6" href="#__codelineno-2-6"></a>        <span class="n">q_envelope</span><span class="o">=</span><span class="n">pulse</span><span class="o">.</span><span class="n">q_envelope</span><span class="p">,</span>
-</span><span id="__span-2-7"><a id="__codelineno-2-7" name="__codelineno-2-7" href="#__codelineno-2-7"></a>        <span class="n">duration_ns</span><span class="o">=</span><span class="mi">50</span><span class="p">,</span>
-</span><span id="__span-2-8"><a id="__codelineno-2-8" name="__codelineno-2-8" href="#__codelineno-2-8"></a>        <span class="n">target_qubits</span><span class="o">=</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span>
-</span><span id="__span-2-9"><a id="__codelineno-2-9" name="__codelineno-2-9" href="#__codelineno-2-9"></a>        <span class="n">num_shots</span><span class="o">=</span><span class="mi">1024</span><span class="p">,</span>
-</span><span id="__span-2-10"><a id="__codelineno-2-10" name="__codelineno-2-10" href="#__codelineno-2-10"></a>    <span class="p">)</span>
-</span><span id="__span-2-11"><a id="__codelineno-2-11" name="__codelineno-2-11" href="#__codelineno-2-11"></a>    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Measurement: </span><span class="si">{</span><span class="n">result</span><span class="o">.</span><span class="n">bitstring_counts</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">qubitos.client</span><span class="w"> </span><span class="kn">import</span> <span class="n">HALClientSync</span>
+</span><span id="__span-3-2"><a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a>
+</span><span id="__span-3-3"><a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a><span class="k">with</span> <span class="n">HALClientSync</span><span class="p">(</span><span class="s2">&quot;localhost:50051&quot;</span><span class="p">)</span> <span class="k">as</span> <span class="n">client</span><span class="p">:</span>
+</span><span id="__span-3-4"><a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a>    <span class="n">result</span> <span class="o">=</span> <span class="n">client</span><span class="o">.</span><span class="n">execute_pulse</span><span class="p">(</span>
+</span><span id="__span-3-5"><a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a>        <span class="n">i_envelope</span><span class="o">=</span><span class="n">pulse</span><span class="o">.</span><span class="n">i_envelope</span><span class="p">,</span>
+</span><span id="__span-3-6"><a id="__codelineno-3-6" name="__codelineno-3-6" href="#__codelineno-3-6"></a>        <span class="n">q_envelope</span><span class="o">=</span><span class="n">pulse</span><span class="o">.</span><span class="n">q_envelope</span><span class="p">,</span>
+</span><span id="__span-3-7"><a id="__codelineno-3-7" name="__codelineno-3-7" href="#__codelineno-3-7"></a>        <span class="n">duration_ns</span><span class="o">=</span><span class="mi">50</span><span class="p">,</span>
+</span><span id="__span-3-8"><a id="__codelineno-3-8" name="__codelineno-3-8" href="#__codelineno-3-8"></a>        <span class="n">target_qubits</span><span class="o">=</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span>
+</span><span id="__span-3-9"><a id="__codelineno-3-9" name="__codelineno-3-9" href="#__codelineno-3-9"></a>        <span class="n">num_shots</span><span class="o">=</span><span class="mi">1024</span><span class="p">,</span>
+</span><span id="__span-3-10"><a id="__codelineno-3-10" name="__codelineno-3-10" href="#__codelineno-3-10"></a>    <span class="p">)</span>
+</span><span id="__span-3-11"><a id="__codelineno-3-11" name="__codelineno-3-11" href="#__codelineno-3-11"></a>    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Measurement: </span><span class="si">{</span><span class="n">result</span><span class="o">.</span><span class="n">bitstring_counts</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
 </span></code></pre></div>
 <h3 id="calibration-management">Calibration management<a class="headerlink" href="#calibration-management" title="Permanent link">&para;</a></h3>
 <p>Calibration is treated as live runtime state, not a static snapshot:</p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">qubitos.calibrator</span><span class="w"> </span><span class="kn">import</span> <span class="n">CalibrationLoader</span>
-</span><span id="__span-3-2"><a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a>
-</span><span id="__span-3-3"><a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a><span class="n">loader</span> <span class="o">=</span> <span class="n">CalibrationLoader</span><span class="p">()</span>
-</span><span id="__span-3-4"><a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a><span class="n">calibration</span> <span class="o">=</span> <span class="n">loader</span><span class="o">.</span><span class="n">load</span><span class="p">(</span><span class="s2">&quot;path/to/calibration.yaml&quot;</span><span class="p">)</span>
-</span><span id="__span-3-5"><a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a><span class="k">if</span> <span class="n">calibration</span><span class="o">.</span><span class="n">is_valid</span><span class="p">:</span>
-</span><span id="__span-3-6"><a id="__codelineno-3-6" name="__codelineno-3-6" href="#__codelineno-3-6"></a>    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;T1: </span><span class="si">{</span><span class="n">calibration</span><span class="o">.</span><span class="n">t1_us</span><span class="si">}</span><span class="s2"> µs&quot;</span><span class="p">)</span>
-</span><span id="__span-3-7"><a id="__codelineno-3-7" name="__codelineno-3-7" href="#__codelineno-3-7"></a>    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;T2: </span><span class="si">{</span><span class="n">calibration</span><span class="o">.</span><span class="n">t2_us</span><span class="si">}</span><span class="s2"> µs&quot;</span><span class="p">)</span>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">qubitos.calibrator</span><span class="w"> </span><span class="kn">import</span> <span class="n">CalibrationLoader</span>
+</span><span id="__span-4-2"><a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a>
+</span><span id="__span-4-3"><a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a><span class="n">loader</span> <span class="o">=</span> <span class="n">CalibrationLoader</span><span class="p">()</span>
+</span><span id="__span-4-4"><a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a><span class="n">calibration</span> <span class="o">=</span> <span class="n">loader</span><span class="o">.</span><span class="n">load</span><span class="p">(</span><span class="s2">&quot;path/to/calibration.yaml&quot;</span><span class="p">)</span>
+</span><span id="__span-4-5"><a id="__codelineno-4-5" name="__codelineno-4-5" href="#__codelineno-4-5"></a><span class="k">if</span> <span class="n">calibration</span><span class="o">.</span><span class="n">is_valid</span><span class="p">:</span>
+</span><span id="__span-4-6"><a id="__codelineno-4-6" name="__codelineno-4-6" href="#__codelineno-4-6"></a>    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;T1: </span><span class="si">{</span><span class="n">calibration</span><span class="o">.</span><span class="n">t1_us</span><span class="si">}</span><span class="s2"> µs&quot;</span><span class="p">)</span>
+</span><span id="__span-4-7"><a id="__codelineno-4-7" name="__codelineno-4-7" href="#__codelineno-4-7"></a>    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;T2: </span><span class="si">{</span><span class="n">calibration</span><span class="o">.</span><span class="n">t2_us</span><span class="si">}</span><span class="s2"> µs&quot;</span><span class="p">)</span>
 </span></code></pre></div>
 <h2 id="backend-integration-honesty">Backend integration honesty<a class="headerlink" href="#backend-integration-honesty" title="Permanent link">&para;</a></h2>
 <p>IQM is the primary live integration and the only backend exercised

@@ -12,31 +12,27 @@
         <meta name="author" content="QubitOS Contributors">
       
       
-        <link rel="canonical" href="https://qubit-os.github.io/qubit-os/specs/">
+        <link rel="canonical" href="https://qubit-os.github.io/qubit-os/tutorials/lyapunov-feedback/">
       
       
-        <link rel="prev" href="../notebooks/03-custom-hamiltonians/">
-      
-      
-        <link rel="next" href="TIME-MODEL-SPEC/">
       
       
         
       
       
-      <link rel="icon" href="../assets/images/favicon.png">
+      <link rel="icon" href="../../assets/images/favicon.png">
       <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.6">
     
     
       
-        <title>Overview - QubitOS</title>
+        <title>Lyapunov feedback tutorial - QubitOS</title>
       
     
     
-      <link rel="stylesheet" href="../assets/stylesheets/main.484c7ddc.min.css">
+      <link rel="stylesheet" href="../../assets/stylesheets/main.484c7ddc.min.css">
       
         
-        <link rel="stylesheet" href="../assets/stylesheets/palette.ab4e12ef.min.css">
+        <link rel="stylesheet" href="../../assets/stylesheets/palette.ab4e12ef.min.css">
       
       
 
@@ -55,9 +51,9 @@
       
     
     
-      <link rel="stylesheet" href="../assets/_mkdocstrings.css">
+      <link rel="stylesheet" href="../../assets/_mkdocstrings.css">
     
-    <script>__md_scope=new URL("..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    <script>__md_scope=new URL("../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
     
       
 
@@ -82,7 +78,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#qubitos-specification-documents" class="md-skip">
+        <a href="#lyapunov-feedback-tutorial" class="md-skip">
           Skip to content
         </a>
       
@@ -102,7 +98,7 @@
 
 <header class="md-header md-header--shadow" data-md-component="header">
   <nav class="md-header__inner md-grid" aria-label="Header">
-    <a href=".." title="QubitOS" class="md-header__button md-logo" aria-label="QubitOS" data-md-component="logo">
+    <a href="../.." title="QubitOS" class="md-header__button md-logo" aria-label="QubitOS" data-md-component="logo">
       
   
   <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
@@ -122,7 +118,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              Overview
+              Lyapunov feedback tutorial
             
           </span>
         </div>
@@ -240,7 +236,7 @@
 
 <nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
   <label class="md-nav__title" for="__drawer">
-    <a href=".." title="QubitOS" class="md-nav__button md-logo" aria-label="QubitOS" data-md-component="logo">
+    <a href="../.." title="QubitOS" class="md-nav__button md-logo" aria-label="QubitOS" data-md-component="logo">
       
   
   <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
@@ -270,7 +266,7 @@
   
   
     <li class="md-nav__item">
-      <a href=".." class="md-nav__link">
+      <a href="../.." class="md-nav__link">
         
   
   
@@ -351,7 +347,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../guides/installation/" class="md-nav__link">
+      <a href="../../guides/installation/" class="md-nav__link">
         
   
   
@@ -379,7 +375,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../guides/quickstart/" class="md-nav__link">
+      <a href="../../guides/quickstart/" class="md-nav__link">
         
   
   
@@ -407,7 +403,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../guides/sme-solver/" class="md-nav__link">
+      <a href="../../guides/sme-solver/" class="md-nav__link">
         
   
   
@@ -435,7 +431,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../guides/troubleshooting/" class="md-nav__link">
+      <a href="../../guides/troubleshooting/" class="md-nav__link">
         
   
   
@@ -524,7 +520,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../tutorials/pulse-generation/" class="md-nav__link">
+      <a href="../pulse-generation/" class="md-nav__link">
         
   
   
@@ -552,7 +548,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../tutorials/grape-optimizer/" class="md-nav__link">
+      <a href="../grape-optimizer/" class="md-nav__link">
         
   
   
@@ -580,7 +576,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../tutorials/custom-hamiltonians/" class="md-nav__link">
+      <a href="../custom-hamiltonians/" class="md-nav__link">
         
   
   
@@ -608,7 +604,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../tutorials/sme-trajectory/" class="md-nav__link">
+      <a href="../sme-trajectory/" class="md-nav__link">
         
   
   
@@ -697,7 +693,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../api/" class="md-nav__link">
+      <a href="../../api/" class="md-nav__link">
         
   
   
@@ -776,7 +772,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../api/client/" class="md-nav__link">
+      <a href="../../api/client/" class="md-nav__link">
         
   
   
@@ -804,7 +800,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../api/pulsegen/" class="md-nav__link">
+      <a href="../../api/pulsegen/" class="md-nav__link">
         
   
   
@@ -832,7 +828,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../api/calibrator/" class="md-nav__link">
+      <a href="../../api/calibrator/" class="md-nav__link">
         
   
   
@@ -860,7 +856,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../api/validation/" class="md-nav__link">
+      <a href="../../api/validation/" class="md-nav__link">
         
   
   
@@ -896,7 +892,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../api/cli/" class="md-nav__link">
+      <a href="../../api/cli/" class="md-nav__link">
         
   
   
@@ -924,7 +920,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../api/rest/" class="md-nav__link">
+      <a href="../../api/rest/" class="md-nav__link">
         
   
   
@@ -952,7 +948,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../api/grpc/" class="md-nav__link">
+      <a href="../../api/grpc/" class="md-nav__link">
         
   
   
@@ -1041,7 +1037,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../concepts/architecture/" class="md-nav__link">
+      <a href="../../concepts/architecture/" class="md-nav__link">
         
   
   
@@ -1069,7 +1065,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../concepts/glossary/" class="md-nav__link">
+      <a href="../../concepts/glossary/" class="md-nav__link">
         
   
   
@@ -1158,7 +1154,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../notebooks/01-quickstart/" class="md-nav__link">
+      <a href="../../notebooks/01-quickstart/" class="md-nav__link">
         
   
   
@@ -1186,7 +1182,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../notebooks/02-grape-optimization/" class="md-nav__link">
+      <a href="../../notebooks/02-grape-optimization/" class="md-nav__link">
         
   
   
@@ -1214,7 +1210,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../notebooks/03-custom-hamiltonians/" class="md-nav__link">
+      <a href="../../notebooks/03-custom-hamiltonians/" class="md-nav__link">
         
   
   
@@ -1246,8 +1242,6 @@
       
   
   
-    
-  
   
   
     
@@ -1260,11 +1254,13 @@
       
     
     
-    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_7" checked>
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_7" >
         
           
           <label class="md-nav__link" for="__nav_7" id="__nav_7_label" tabindex="">
@@ -1285,7 +1281,7 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_7_label" aria-expanded="true">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_7_label" aria-expanded="false">
           <label class="md-nav__title" for="__nav_7">
             <span class="md-nav__icon md-icon"></span>
             
@@ -1300,37 +1296,10 @@
                 
   
   
-    
   
   
-  
-    <li class="md-nav__item md-nav__item--active">
-      
-      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
-      
-      
-        
-      
-      
-        <label class="md-nav__link md-nav__link--active" for="__toc">
-          
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Overview
-  
-
-    
-  </span>
-  
-  
-
-          <span class="md-nav__icon md-icon"></span>
-        </label>
-      
-      <a href="./" class="md-nav__link md-nav__link--active">
+    <li class="md-nav__item">
+      <a href="../../specs/" class="md-nav__link">
         
   
   
@@ -1346,59 +1315,6 @@
   
 
       </a>
-      
-        
-
-<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
-  
-  
-  
-    
-  
-  
-    <label class="md-nav__title" for="__toc">
-      <span class="md-nav__icon md-icon"></span>
-      Table of contents
-    </label>
-    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
-      
-        <li class="md-nav__item">
-  <a href="#architecture" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Architecture
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#feature-specifications" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Feature Specifications
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#policy-generated-code" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Policy: Generated Code
-      
-    </span>
-  </a>
-  
-</li>
-      
-    </ul>
-  
-</nav>
-      
     </li>
   
 
@@ -1411,7 +1327,7 @@
   
   
     <li class="md-nav__item">
-      <a href="TIME-MODEL-SPEC/" class="md-nav__link">
+      <a href="../../specs/TIME-MODEL-SPEC/" class="md-nav__link">
         
   
   
@@ -1439,7 +1355,7 @@
   
   
     <li class="md-nav__item">
-      <a href="ERROR-BUDGET-SPEC/" class="md-nav__link">
+      <a href="../../specs/ERROR-BUDGET-SPEC/" class="md-nav__link">
         
   
   
@@ -1467,7 +1383,7 @@
   
   
     <li class="md-nav__item">
-      <a href="HAMILTONIAN-FIRST-API-SPEC/" class="md-nav__link">
+      <a href="../../specs/HAMILTONIAN-FIRST-API-SPEC/" class="md-nav__link">
         
   
   
@@ -1495,7 +1411,7 @@
   
   
     <li class="md-nav__item">
-      <a href="EXPERIMENT-PROVENANCE-SPEC/" class="md-nav__link">
+      <a href="../../specs/EXPERIMENT-PROVENANCE-SPEC/" class="md-nav__link">
         
   
   
@@ -1523,7 +1439,7 @@
   
   
     <li class="md-nav__item">
-      <a href="MULTI-QUBIT-SPEC/" class="md-nav__link">
+      <a href="../../specs/MULTI-QUBIT-SPEC/" class="md-nav__link">
         
   
   
@@ -1551,7 +1467,7 @@
   
   
     <li class="md-nav__item">
-      <a href="RUST-NATIVE-SOLVER-SPEC/" class="md-nav__link">
+      <a href="../../specs/RUST-NATIVE-SOLVER-SPEC/" class="md-nav__link">
         
   
   
@@ -1579,7 +1495,7 @@
   
   
     <li class="md-nav__item">
-      <a href="SME-FEEDBACK-SPEC/" class="md-nav__link">
+      <a href="../../specs/SME-FEEDBACK-SPEC/" class="md-nav__link">
         
   
   
@@ -1634,10 +1550,10 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#architecture" class="md-nav__link">
+  <a href="#example" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Architecture
+        Example
       
     </span>
   </a>
@@ -1645,10 +1561,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#feature-specifications" class="md-nav__link">
+  <a href="#what-to-look-for" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Feature Specifications
+        What to look for
       
     </span>
   </a>
@@ -1656,10 +1572,32 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#policy-generated-code" class="md-nav__link">
+  <a href="#visualization" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Policy: Generated Code
+        Visualization
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#what-to-vary" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What to vary
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#noise-sweep" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Noise sweep
       
     </span>
   </a>
@@ -1686,71 +1624,167 @@
   
 
 
-<h1 id="qubitos-specification-documents">QubitOS Specification Documents<a class="headerlink" href="#qubitos-specification-documents" title="Permanent link">&para;</a></h1>
-<p>This directory contains feature-level design specifications for QubitOS.</p>
-<h2 id="architecture">Architecture<a class="headerlink" href="#architecture" title="Permanent link">&para;</a></h2>
-<p>System architecture is described in the top-level
-<a href="https://github.com/qubit-os/qubit-os/blob/main/README.txt">README.txt</a>
-and the release plan in
-<a href="https://github.com/qubit-os/qubit-os/blob/main/ROADMAP.txt">ROADMAP.txt</a>. The feature specs below
-are the canonical design for each subsystem.</p>
-<h2 id="feature-specifications">Feature Specifications<a class="headerlink" href="#feature-specifications" title="Permanent link">&para;</a></h2>
-<table>
-<thead>
-<tr>
-<th>Spec</th>
-<th>Phase</th>
-<th>Status</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td><a href="TIME-MODEL-SPEC/">TIME-MODEL-SPEC.txt</a></td>
-<td>v0.2.1</td>
-<td>Implemented</td>
-</tr>
-<tr>
-<td><a href="ERROR-BUDGET-SPEC/">ERROR-BUDGET-SPEC.txt</a></td>
-<td>v0.2.2</td>
-<td>Implemented</td>
-</tr>
-<tr>
-<td><a href="HAMILTONIAN-FIRST-API-SPEC/">HAMILTONIAN-FIRST-API-SPEC.txt</a></td>
-<td>v0.2.3</td>
-<td>Implemented</td>
-</tr>
-<tr>
-<td><a href="EXPERIMENT-PROVENANCE-SPEC/">EXPERIMENT-PROVENANCE-SPEC.txt</a></td>
-<td>v0.2.4</td>
-<td>Implemented</td>
-</tr>
-<tr>
-<td><a href="MULTI-QUBIT-SPEC/">MULTI-QUBIT-SPEC.txt</a></td>
-<td>v0.3.0</td>
-<td>Implemented</td>
-</tr>
-<tr>
-<td><a href="RUST-NATIVE-SOLVER-SPEC/">RUST-NATIVE-SOLVER-SPEC.txt</a></td>
-<td>v0.5.0</td>
-<td>Implemented</td>
-</tr>
-<tr>
-<td><a href="SME-FEEDBACK-SPEC/">SME-FEEDBACK-SPEC.txt</a></td>
-<td>v0.6.0-v0.8.0</td>
-<td>v0.6.0 SME + v0.7.0 feedback implemented; section 5 (3-level transmon) is design phase</td>
-</tr>
-</tbody>
-</table>
-<h2 id="policy-generated-code">Policy: Generated Code<a class="headerlink" href="#policy-generated-code" title="Permanent link">&para;</a></h2>
-<p><strong>Decision:</strong> Proto-generated Python code is committed to the repository.</p>
-<p><strong>Rationale:</strong> Committing generated code ensures:
-1. CI can run without protoc/buf installed
-2. Consumers can <code>pip install</code> without build tools
-3. Deterministic builds (no version skew between protoc versions)</p>
-<p><strong>Process:</strong> When <code>.proto</code> files change, regenerate with:
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nb">cd</span><span class="w"> </span>proto<span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span>make<span class="w"> </span>generate
-</span></code></pre></div>
-Then commit the generated files.</p>
+<h1 id="lyapunov-feedback-tutorial">Lyapunov feedback tutorial<a class="headerlink" href="#lyapunov-feedback-tutorial" title="Permanent link">&para;</a></h1>
+<p>This example drives a single qubit from |0&gt; to |1&gt; with a Gaussian
+baseline pi-pulse and adds a Lyapunov feedback correction on top of the
+baseline drive. The conditional state is tracked through the SME
+runtime; the feedback law samples it once per nominal step and emits a
+per-axis Hamiltonian correction.</p>
+<p>The mathematical surface is:</p>
+<div class="language-text highlight"><pre><span></span><code>V(rho_c)         = 1 - Tr[rho_target rho_c]
+delta_Omega_k(t) = -K_k * Tr[rho_target * [i sigma_k / 2, rho_c]]
+</code></pre></div>
+<p>See core/docs/specs/SME-FEEDBACK-SPEC.txt sections 1.4 and 5 for the
+full derivation and convergence references.</p>
+<h2 id="example">Example<a class="headerlink" href="#example" title="Permanent link">&para;</a></h2>
+<div class="language-text highlight"><pre><span></span><code>import numpy as np
+
+from qubitos.feedback import (
+    AXIS_X, AXIS_Y, AXIS_Z,
+    FeedbackConfig, LyapunovController,
+    solve_with_feedback,
+)
+from qubitos.lindblad import CollapseOperator
+from qubitos.sme import SMEConfig, SMESolver
+
+rho0 = np.array(
+    [[1.0, 0.0],
+     [0.0, 0.0]],
+    dtype=np.complex128,
+)
+rho_target = np.array(
+    [[0.0, 0.0],
+     [0.0, 1.0]],
+    dtype=np.complex128,
+)
+
+# Gaussian pi-pulse about x.
+num_steps = 40
+duration_ns = 40.0
+duration_s = duration_ns * 1e-9
+dt = duration_s / num_steps
+t = np.arange(num_steps) * dt + 0.5 * dt
+center = duration_s / 2.0
+sigma = duration_s / 6.0
+envelope = np.exp(-0.5 * ((t - center) / sigma) ** 2)
+area = np.trapezoid(envelope, dx=dt)
+omega = (np.pi / area) * envelope
+sigma_x_half = 0.5 * np.array(
+    [[0.0, 1.0],
+     [1.0, 0.0]],
+    dtype=np.complex128,
+)
+hamiltonians = [w * sigma_x_half for w in omega]
+
+collapse_ops = CollapseOperator.from_t1_t2(t1_us=45.0, t2_us=35.0)
+
+solver = SMESolver(
+    SMEConfig(
+        num_time_steps=num_steps,
+        duration_ns=duration_ns,
+        measurement_efficiency=0.5,
+        random_seed=7,
+        collapse_ops=collapse_ops,
+        store_trajectory=True,
+        positivity_projection=True,
+        adaptive_tolerance=1e-2,
+    ),
+    collapse_ops=collapse_ops,
+)
+
+fb_config = FeedbackConfig(
+    gains=(5.0e6,),
+    control_axes=(AXIS_X, AXIS_Y, AXIS_Z),
+    max_correction_amplitude=50.0e6 * 2.0 * np.pi,
+    delay_ns=0.0,
+)
+controller = LyapunovController(fb_config, rho_target)
+
+result = solve_with_feedback(
+    solver,
+    controller,
+    rho0,
+    hamiltonians,
+    target_rho=rho_target,
+)
+
+print(&quot;Final fidelity:&quot;, result.sme_result.final_fidelity)
+print(&quot;V(0):&quot;, result.lyapunov_trajectory[0])
+print(&quot;V(T):&quot;, result.lyapunov_trajectory[-1])
+print(&quot;Feedback energy:&quot;, result.feedback_energy_cost)
+</code></pre></div>
+<h2 id="what-to-look-for">What to look for<a class="headerlink" href="#what-to-look-for" title="Permanent link">&para;</a></h2>
+<div class="language-text highlight"><pre><span></span><code>Final fidelity
+    Above 0.99 at the nominal noise level. The Gaussian baseline
+    already nails the gate; feedback adds a small correction that
+    helps under stronger noise.
+
+V(0) and V(T)
+    V(0) starts at 1.0 (rho_c = |0&gt; and rho_target = |1&gt; are
+    orthogonal pure states). V(T) approaches 0 as the feedback
+    loop closes.
+
+Feedback energy
+    Cumulative integral of |delta_Omega(t)|^2 dt. Large values
+    indicate the controller worked hard; small values indicate the
+    open-loop baseline was already close to target.
+</code></pre></div>
+<h2 id="visualization">Visualization<a class="headerlink" href="#visualization" title="Permanent link">&para;</a></h2>
+<div class="language-text highlight"><pre><span></span><code>from qubitos.feedback import (
+    plot_bloch_trajectory,
+    plot_lyapunov_trajectory,
+)
+
+fig_v = plot_lyapunov_trajectory(result)
+fig_bloch = plot_bloch_trajectory(result, target_rho=rho_target)
+fig_v.savefig(&quot;lyapunov_trajectory.png&quot;)
+fig_bloch.savefig(&quot;bloch_trajectory.png&quot;)
+</code></pre></div>
+<h2 id="what-to-vary">What to vary<a class="headerlink" href="#what-to-vary" title="Permanent link">&para;</a></h2>
+<div class="language-text highlight"><pre><span></span><code>Gain K
+    Smaller K (~1e6) makes the controller passive; the baseline
+    carries the gate. Larger K (~1e8) makes the controller dominant
+    and can over-correct, increasing feedback energy without
+    improving fidelity.
+
+Control axes
+    Use a single axis (AXIS_X,) when the noise model only requires
+    x-axis correction (e.g., amplitude damping at the equator).
+    Use all three axes for general noise.
+
+Feedback delay
+    Set delay_ns &gt; 0 to model a finite-latency hardware loop. The
+    controller emits a SEQUENTIAL TemporalConstraint between the
+    measurement event and the correction event; pass a
+    DecoherenceBudget instance to solve_with_feedback to charge the
+    delay per cycle.
+</code></pre></div>
+<h2 id="noise-sweep">Noise sweep<a class="headerlink" href="#noise-sweep" title="Permanent link">&para;</a></h2>
+<p>To compare open-loop vs closed-loop across a range of noise strengths:</p>
+<div class="language-text highlight"><pre><span></span><code>from qubitos.feedback import (
+    HardwareParams, noise_sweep_comparison, crossover_point,
+)
+
+hp = HardwareParams(
+    num_steps=20,
+    duration_ns=20.0,
+    adaptive_tolerance=1e-2,
+)
+sweep = noise_sweep_comparison(
+    target_unitary=&quot;X&quot;,
+    noise_range=[0.1, 1.0, 5.0, 20.0],
+    methods=[&quot;gaussian&quot;, &quot;lyapunov_feedback&quot;],
+    num_trajectories=4,
+    hardware_params=hp,
+)
+gamma_star = crossover_point(
+    sweep, methods=(&quot;gaussian&quot;, &quot;lyapunov_feedback&quot;),
+)
+print(&quot;Crossover gamma*:&quot;, gamma_star)
+</code></pre></div>
+<p>The repository ships only a smoke-scale sweep. The full-scale grid (50
+noise points, 1000 trajectories per cell) is a reproducible script that
+the maintainers run out of tree; it is not bundled with the package.</p>
 
 
 
@@ -1826,12 +1860,12 @@ Then commit the generated files.</p>
     
       
       
-      <script id="__config" type="application/json">{"annotate": null, "base": "..", "features": ["navigation.instant", "navigation.tracking", "navigation.sections", "navigation.expand", "navigation.top", "toc.follow", "search.suggest", "search.highlight", "content.code.copy", "content.code.annotate"], "search": "../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": {"provider": "mike"}}</script>
+      <script id="__config" type="application/json">{"annotate": null, "base": "../..", "features": ["navigation.instant", "navigation.tracking", "navigation.sections", "navigation.expand", "navigation.top", "toc.follow", "search.suggest", "search.highlight", "content.code.copy", "content.code.annotate"], "search": "../../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": {"provider": "mike"}}</script>
     
     
-      <script src="../assets/javascripts/bundle.79ae519e.min.js"></script>
+      <script src="../../assets/javascripts/bundle.79ae519e.min.js"></script>
       
-        <script src="../javascripts/mathjax.js"></script>
+        <script src="../../javascripts/mathjax.js"></script>
       
         <script src="https://polyfill.io/v3/polyfill.min.js?features=es6"></script>
       

@@ -2171,35 +2171,39 @@ during gates, crosstalk, leakage, and feedback latency.</p>
 </span><span id="__span-0-9"><a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a>|  pulsegen/     GRAPE optimizer, Hamiltonian construction,     |
 </span><span id="__span-0-10"><a id="__codelineno-0-10" name="__codelineno-0-10" href="#__codelineno-0-10"></a>|                pulse shapes (DRAG, Gaussian, square)          |
 </span><span id="__span-0-11"><a id="__codelineno-0-11" name="__codelineno-0-11" href="#__codelineno-0-11"></a>|  sme/          Stochastic master equation solver (v0.6.0)     |
-</span><span id="__span-0-12"><a id="__codelineno-0-12" name="__codelineno-0-12" href="#__codelineno-0-12"></a>|  lindblad/     Lindblad master equation solver                |
-</span><span id="__span-0-13"><a id="__codelineno-0-13" name="__codelineno-0-13" href="#__codelineno-0-13"></a>|  calibrator/   T1/T2 fitting, drift detection, fingerprinting |
-</span><span id="__span-0-14"><a id="__codelineno-0-14" name="__codelineno-0-14" href="#__codelineno-0-14"></a>|  temporal/     TimePoint, TemporalConstraint, PulseSequence,  |
-</span><span id="__span-0-15"><a id="__codelineno-0-15" name="__codelineno-0-15" href="#__codelineno-0-15"></a>|                DecoherenceBudget                              |
-</span><span id="__span-0-16"><a id="__codelineno-0-16" name="__codelineno-0-16" href="#__codelineno-0-16"></a>|  error_budget/ Cumulative error accounting                    |
-</span><span id="__span-0-17"><a id="__codelineno-0-17" name="__codelineno-0-17" href="#__codelineno-0-17"></a>|  provenance/   Merkle tree experiment provenance              |
-</span><span id="__span-0-18"><a id="__codelineno-0-18" name="__codelineno-0-18" href="#__codelineno-0-18"></a>|  compilation/  Native gate compilation traits                 |
-</span><span id="__span-0-19"><a id="__codelineno-0-19" name="__codelineno-0-19" href="#__codelineno-0-19"></a>|  validation/   Input validation; agentbible decoration        |
-</span><span id="__span-0-20"><a id="__codelineno-0-20" name="__codelineno-0-20" href="#__codelineno-0-20"></a>|  client/       gRPC client to HAL                             |
-</span><span id="__span-0-21"><a id="__codelineno-0-21" name="__codelineno-0-21" href="#__codelineno-0-21"></a>|  cli/          qubit-os entry point                           |
-</span><span id="__span-0-22"><a id="__codelineno-0-22" name="__codelineno-0-22" href="#__codelineno-0-22"></a>+--------------------------------------------------------------+
-</span><span id="__span-0-23"><a id="__codelineno-0-23" name="__codelineno-0-23" href="#__codelineno-0-23"></a>                              |
-</span><span id="__span-0-24"><a id="__codelineno-0-24" name="__codelineno-0-24" href="#__codelineno-0-24"></a>                              | gRPC / REST   (or --local: in-process)
-</span><span id="__span-0-25"><a id="__codelineno-0-25" name="__codelineno-0-25" href="#__codelineno-0-25"></a>                              v
-</span><span id="__span-0-26"><a id="__codelineno-0-26" name="__codelineno-0-26" href="#__codelineno-0-26"></a>+--------------------------------------------------------------+
-</span><span id="__span-0-27"><a id="__codelineno-0-27" name="__codelineno-0-27" href="#__codelineno-0-27"></a>|                             hal/                              |
-</span><span id="__span-0-28"><a id="__codelineno-0-28" name="__codelineno-0-28" href="#__codelineno-0-28"></a>|                                                               |
-</span><span id="__span-0-29"><a id="__codelineno-0-29" name="__codelineno-0-29" href="#__codelineno-0-29"></a>|  server/       tonic gRPC + axum REST                         |
-</span><span id="__span-0-30"><a id="__codelineno-0-30" name="__codelineno-0-30" href="#__codelineno-0-30"></a>|  grape/        Rust-native GRAPE (Pade [13/13]), ~10x Python  |
-</span><span id="__span-0-31"><a id="__codelineno-0-31" name="__codelineno-0-31" href="#__codelineno-0-31"></a>|  lindblad/     Rust-native Lindblad solver; FFI bridge for    |
-</span><span id="__span-0-32"><a id="__codelineno-0-32" name="__codelineno-0-32" href="#__codelineno-0-32"></a>|                the C fast path (LANL summer stretch)          |
-</span><span id="__span-0-33"><a id="__codelineno-0-33" name="__codelineno-0-33" href="#__codelineno-0-33"></a>|  sme/          Rust-native SME (Itô SDE), Rayon-parallel      |
-</span><span id="__span-0-34"><a id="__codelineno-0-34" name="__codelineno-0-34" href="#__codelineno-0-34"></a>|                ensemble                                        |
-</span><span id="__span-0-35"><a id="__codelineno-0-35" name="__codelineno-0-35" href="#__codelineno-0-35"></a>|  backend/      Backend dispatch: QuTiP, IQM, IBM, AWS         |
-</span><span id="__span-0-36"><a id="__codelineno-0-36" name="__codelineno-0-36" href="#__codelineno-0-36"></a>|  temporal/     Rust mirror of core/temporal/ validation       |
-</span><span id="__span-0-37"><a id="__codelineno-0-37" name="__codelineno-0-37" href="#__codelineno-0-37"></a>+--------------------------------------------------------------+
-</span><span id="__span-0-38"><a id="__codelineno-0-38" name="__codelineno-0-38" href="#__codelineno-0-38"></a>                              |
-</span><span id="__span-0-39"><a id="__codelineno-0-39" name="__codelineno-0-39" href="#__codelineno-0-39"></a>                              v
-</span><span id="__span-0-40"><a id="__codelineno-0-40" name="__codelineno-0-40" href="#__codelineno-0-40"></a>                    Backend (see &quot;Backend integration honesty&quot;)
+</span><span id="__span-0-12"><a id="__codelineno-0-12" name="__codelineno-0-12" href="#__codelineno-0-12"></a>|  feedback/     Lyapunov feedback controller, comparison       |
+</span><span id="__span-0-13"><a id="__codelineno-0-13" name="__codelineno-0-13" href="#__codelineno-0-13"></a>|                framework, visualization (v0.7.0)              |
+</span><span id="__span-0-14"><a id="__codelineno-0-14" name="__codelineno-0-14" href="#__codelineno-0-14"></a>|  lindblad/     Lindblad master equation solver                |
+</span><span id="__span-0-15"><a id="__codelineno-0-15" name="__codelineno-0-15" href="#__codelineno-0-15"></a>|  calibrator/   T1/T2 fitting, drift detection, fingerprinting |
+</span><span id="__span-0-16"><a id="__codelineno-0-16" name="__codelineno-0-16" href="#__codelineno-0-16"></a>|  temporal/     TimePoint, TemporalConstraint, PulseSequence,  |
+</span><span id="__span-0-17"><a id="__codelineno-0-17" name="__codelineno-0-17" href="#__codelineno-0-17"></a>|                DecoherenceBudget                              |
+</span><span id="__span-0-18"><a id="__codelineno-0-18" name="__codelineno-0-18" href="#__codelineno-0-18"></a>|  error_budget/ Cumulative error accounting                    |
+</span><span id="__span-0-19"><a id="__codelineno-0-19" name="__codelineno-0-19" href="#__codelineno-0-19"></a>|  provenance/   Merkle tree experiment provenance              |
+</span><span id="__span-0-20"><a id="__codelineno-0-20" name="__codelineno-0-20" href="#__codelineno-0-20"></a>|  compilation/  Native gate compilation traits                 |
+</span><span id="__span-0-21"><a id="__codelineno-0-21" name="__codelineno-0-21" href="#__codelineno-0-21"></a>|  validation/   Input validation; agentbible decoration        |
+</span><span id="__span-0-22"><a id="__codelineno-0-22" name="__codelineno-0-22" href="#__codelineno-0-22"></a>|  client/       gRPC client to HAL                             |
+</span><span id="__span-0-23"><a id="__codelineno-0-23" name="__codelineno-0-23" href="#__codelineno-0-23"></a>|  cli/          qubit-os entry point                           |
+</span><span id="__span-0-24"><a id="__codelineno-0-24" name="__codelineno-0-24" href="#__codelineno-0-24"></a>+--------------------------------------------------------------+
+</span><span id="__span-0-25"><a id="__codelineno-0-25" name="__codelineno-0-25" href="#__codelineno-0-25"></a>                              |
+</span><span id="__span-0-26"><a id="__codelineno-0-26" name="__codelineno-0-26" href="#__codelineno-0-26"></a>                              | gRPC / REST   (or --local: in-process)
+</span><span id="__span-0-27"><a id="__codelineno-0-27" name="__codelineno-0-27" href="#__codelineno-0-27"></a>                              v
+</span><span id="__span-0-28"><a id="__codelineno-0-28" name="__codelineno-0-28" href="#__codelineno-0-28"></a>+--------------------------------------------------------------+
+</span><span id="__span-0-29"><a id="__codelineno-0-29" name="__codelineno-0-29" href="#__codelineno-0-29"></a>|                             hal/                              |
+</span><span id="__span-0-30"><a id="__codelineno-0-30" name="__codelineno-0-30" href="#__codelineno-0-30"></a>|                                                               |
+</span><span id="__span-0-31"><a id="__codelineno-0-31" name="__codelineno-0-31" href="#__codelineno-0-31"></a>|  server/       tonic gRPC + axum REST                         |
+</span><span id="__span-0-32"><a id="__codelineno-0-32" name="__codelineno-0-32" href="#__codelineno-0-32"></a>|  grape/        Rust-native GRAPE (Pade [13/13]), ~10x Python  |
+</span><span id="__span-0-33"><a id="__codelineno-0-33" name="__codelineno-0-33" href="#__codelineno-0-33"></a>|  lindblad/     Rust-native Lindblad solver; FFI bridge for    |
+</span><span id="__span-0-34"><a id="__codelineno-0-34" name="__codelineno-0-34" href="#__codelineno-0-34"></a>|                the C fast path (LANL summer stretch)          |
+</span><span id="__span-0-35"><a id="__codelineno-0-35" name="__codelineno-0-35" href="#__codelineno-0-35"></a>|  sme/          Rust-native SME (Itô SDE), Rayon-parallel      |
+</span><span id="__span-0-36"><a id="__codelineno-0-36" name="__codelineno-0-36" href="#__codelineno-0-36"></a>|                ensemble                                        |
+</span><span id="__span-0-37"><a id="__codelineno-0-37" name="__codelineno-0-37" href="#__codelineno-0-37"></a>|  feedback/     Rust Lyapunov feedback law hot path (v0.7.0),  |
+</span><span id="__span-0-38"><a id="__codelineno-0-38" name="__codelineno-0-38" href="#__codelineno-0-38"></a>|                ~150x faster than the Python reference         |
+</span><span id="__span-0-39"><a id="__codelineno-0-39" name="__codelineno-0-39" href="#__codelineno-0-39"></a>|  backend/      Backend dispatch: QuTiP, IQM, IBM, AWS         |
+</span><span id="__span-0-40"><a id="__codelineno-0-40" name="__codelineno-0-40" href="#__codelineno-0-40"></a>|  temporal/     Rust mirror of core/temporal/ validation       |
+</span><span id="__span-0-41"><a id="__codelineno-0-41" name="__codelineno-0-41" href="#__codelineno-0-41"></a>+--------------------------------------------------------------+
+</span><span id="__span-0-42"><a id="__codelineno-0-42" name="__codelineno-0-42" href="#__codelineno-0-42"></a>                              |
+</span><span id="__span-0-43"><a id="__codelineno-0-43" name="__codelineno-0-43" href="#__codelineno-0-43"></a>                              v
+</span><span id="__span-0-44"><a id="__codelineno-0-44" name="__codelineno-0-44" href="#__codelineno-0-44"></a>                    Backend (see &quot;Backend integration honesty&quot;)
 </span></code></pre></div>
 <h2 id="the-five-planes">The five planes<a class="headerlink" href="#the-five-planes" title="Permanent link">&para;</a></h2>
 <p>The kernel is the union of five concerns. Each plane has its own module
@@ -2207,9 +2211,9 @@ boundaries in <code>core/</code> and <code>hal/</code>, and each is meant to be 
 without rewriting the others.</p>
 <h3 id="1-control-kernel">1. Control kernel<a class="headerlink" href="#1-control-kernel" title="Permanent link">&para;</a></h3>
 <p>Hamiltonian in, optimized pulses out. GRAPE / DRAG / Gaussian /
-(v0.7.0) Lyapunov feedback. Pulse scheduling, timing constraints,
-hardware-aware validation. Lives in <code>core/pulsegen/</code>, <code>hal/grape/</code>,
-and (forthcoming) <code>core/feedback/</code> plus <code>hal/feedback/</code>.</p>
+Lyapunov feedback (v0.7.0). Pulse scheduling, timing constraints,
+hardware-aware validation. Lives in <code>core/pulsegen/</code>, <code>core/feedback/</code>,
+<code>hal/grape/</code>, and <code>hal/feedback/</code>.</p>
 <h3 id="2-calibration-state-plane">2. Calibration / state plane<a class="headerlink" href="#2-calibration-state-plane" title="Permanent link">&para;</a></h3>
 <p>Device state as live runtime state, not static config. Calibration
 loading, drift detection, T1/T2 fitting, error budgets, experiment
