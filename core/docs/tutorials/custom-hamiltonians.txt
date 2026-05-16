@@ -7,7 +7,7 @@ optimization starts from the physics of your system.
 
 ## Prerequisites
 
-- Completed [Quickstart Guide](../guides/quickstart.md)
+- Completed [Quickstart Guide](../guides/quickstart.txt)
 - Understanding of Pauli operators ($\sigma_x, \sigma_y, \sigma_z$)
 
 ---
@@ -554,6 +554,6 @@ print(f"Pulse samples: {len(result.i_envelope)}")
 
 ## Next Steps
 
-- [API Reference](../api/pulsegen.md) - Complete Hamiltonian API
+- [API Reference](../api/pulsegen.txt) - Complete Hamiltonian API
 - [Notebooks](../notebooks/03-custom-hamiltonians.ipynb) - Interactive examples
-- [Architecture](../concepts/architecture.md) - System design overview
+- [Architecture](../concepts/architecture.txt) - System design overview

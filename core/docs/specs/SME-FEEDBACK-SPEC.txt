@@ -159,7 +159,7 @@ The SME above is in **Itô** form. QuTiP uses Itô. We use Itô. This matters fo
 ### 2.1 New Modules
 
 ```
-qubit-os-core/src/qubitos/
+core/src/qubitos/
 ├── sme/                          # v0.6.0: Stochastic Master Equation
 │   ├── __init__.py               # Public API: SMESolver, SMEResult, SMEConfig
 │   ├── integrator.py             # Euler-Maruyama + Milstein integrators
@@ -176,7 +176,7 @@ qubit-os-core/src/qubitos/
 └── lindblad/                     # Existing (v0.5.0) — minor extensions
     └── __init__.py               # Add: from_sme_ensemble() convergence check
 
-qubit-os-hardware/src/
+hal/src/
 ├── sme/                          # v0.6.0: Rust SME solver
 │   ├── mod.rs                    # Public API
 │   ├── measurement.rs            # H[c] superoperator
@@ -652,4 +652,4 @@ Each module MUST cite its primary references in the module docstring.
 
 ---
 
-*End of SME-FEEDBACK-SPEC.md*
+*End of SME-FEEDBACK-SPEC.txt*

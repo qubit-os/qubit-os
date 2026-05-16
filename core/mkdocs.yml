@@ -64,6 +64,12 @@ plugins:
       include_source: true
       execute: false  # Don't execute notebooks on build
 
+# Hooks. txt_support lets mkdocs treat .txt files (kernel-style plain text)
+# as documentation pages by transiently renaming them to .md during build
+# and restoring after. See docs_hooks/txt_support.py.
+hooks:
+  - docs_hooks/txt_support.py
+
 markdown_extensions:
   - admonition
   - pymdownx.details
@@ -94,41 +100,41 @@ extra_javascript:
   - https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js
 
 nav:
-  - Home: index.md
+  - Home: index.txt
   - Getting Started:
-    - Installation: guides/installation.md
-    - Quickstart: guides/quickstart.md
-    - Troubleshooting: guides/troubleshooting.md
+    - Installation: guides/installation.txt
+    - Quickstart: guides/quickstart.txt
+    - Troubleshooting: guides/troubleshooting.txt
   - Tutorials:
-    - Pulse Generation: tutorials/pulse-generation.md
-    - GRAPE Optimizer: tutorials/grape-optimizer.md
-    - Custom Hamiltonians: tutorials/custom-hamiltonians.md
+    - Pulse Generation: tutorials/pulse-generation.txt
+    - GRAPE Optimizer: tutorials/grape-optimizer.txt
+    - Custom Hamiltonians: tutorials/custom-hamiltonians.txt
   - API Reference:
-    - Overview: api/index.md
+    - Overview: api/index.txt
     - Python API:
-      - Client: api/client.md
-      - Pulse Generation: api/pulsegen.md
-      - Calibration: api/calibrator.md
-      - Validation: api/validation.md
-    - CLI Reference: api/cli.md
-    - REST API: api/rest.md
-    - gRPC API: api/grpc.md
+      - Client: api/client.txt
+      - Pulse Generation: api/pulsegen.txt
+      - Calibration: api/calibrator.txt
+      - Validation: api/validation.txt
+    - CLI Reference: api/cli.txt
+    - REST API: api/rest.txt
+    - gRPC API: api/grpc.txt
   - Concepts:
-    - Architecture: concepts/architecture.md
-    - Glossary: concepts/glossary.md
+    - Architecture: concepts/architecture.txt
+    - Glossary: concepts/glossary.txt
   - Notebooks:
     - Quickstart: notebooks/01-quickstart.ipynb
     - GRAPE Optimization: notebooks/02-grape-optimization.ipynb
     - Custom Hamiltonians: notebooks/03-custom-hamiltonians.ipynb
   - Specifications:
-    - Overview: specs/README.md
-    - Time Model: specs/TIME-MODEL-SPEC.md
-    - Error Budget: specs/ERROR-BUDGET-SPEC.md
-    - Hamiltonian-First API: specs/HAMILTONIAN-FIRST-API-SPEC.md
-    - Experiment Provenance: specs/EXPERIMENT-PROVENANCE-SPEC.md
-    - Multi-Qubit: specs/MULTI-QUBIT-SPEC.md
-    - Rust-Native Solver: specs/RUST-NATIVE-SOLVER-SPEC.md
-    - SME + Feedback (v0.6.0+): specs/SME-FEEDBACK-SPEC.md
+    - Overview: specs/README.txt
+    - Time Model: specs/TIME-MODEL-SPEC.txt
+    - Error Budget: specs/ERROR-BUDGET-SPEC.txt
+    - Hamiltonian-First API: specs/HAMILTONIAN-FIRST-API-SPEC.txt
+    - Experiment Provenance: specs/EXPERIMENT-PROVENANCE-SPEC.txt
+    - Multi-Qubit: specs/MULTI-QUBIT-SPEC.txt
+    - Rust-Native Solver: specs/RUST-NATIVE-SOLVER-SPEC.txt
+    - SME + Feedback (v0.6.0+): specs/SME-FEEDBACK-SPEC.txt
 
 extra:
   social:

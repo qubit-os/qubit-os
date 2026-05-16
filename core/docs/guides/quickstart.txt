@@ -17,7 +17,7 @@ desired unitary evolution.
 
 ## Prerequisites
 
-- QubitOS installed ([Installation Guide](installation.md))
+- QubitOS installed ([Installation Guide](installation.txt))
 - Basic Python knowledge
 - Basic understanding of quantum mechanics
 
@@ -283,10 +283,10 @@ You've learned the core QubitOS workflow:
 
 ### Continue Learning
 
-- **[Pulse Generation Tutorial](../tutorials/pulse-generation.md)**: Pulse shapes and parametric gates
-- **[GRAPE Optimizer Deep Dive](../tutorials/grape-optimizer.md)**: Optimization strategies and convergence
-- **[Custom Hamiltonians](../tutorials/custom-hamiltonians.md)**: Multi-qubit systems and advanced Hamiltonians
-- **[API Reference](../api/index.md)**: Complete API documentation
+- **[Pulse Generation Tutorial](../tutorials/pulse-generation.txt)**: Pulse shapes and parametric gates
+- **[GRAPE Optimizer Deep Dive](../tutorials/grape-optimizer.txt)**: Optimization strategies and convergence
+- **[Custom Hamiltonians](../tutorials/custom-hamiltonians.txt)**: Multi-qubit systems and advanced Hamiltonians
+- **[API Reference](../api/index.txt)**: Complete API documentation
 
 ### Exercises
 

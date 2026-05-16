@@ -31,7 +31,7 @@
 ## 1. Problem Statement
 
 QubitOS is, by design, a **pulse-first quantum control kernel**. The architecture
-review (ARCHITECTURE-REVIEW.md) identifies this as the project's most important
+review (ARCHITECTURE-REVIEW.txt) identifies this as the project's most important
 design decision:
 
 > Most of the quantum ecosystem (Qiskit, Cirq, Pennylane) thinks in gates and
@@ -140,9 +140,9 @@ Unknown gate strings silently fall back to `GATE_TYPE_CUSTOM` with no warning.
 The current documentation hierarchy as linked from the quickstart:
 
 ```
-docs/guides/quickstart.md          ← Leads with --gate X, gate_type="X"
-docs/tutorials/grape-optimizer.md  ← Uses GateType (linked as "deep dive")
-docs/tutorials/custom-hamiltonians.md  ← HamiltonianSpec (linked as "advanced")
+docs/guides/quickstart.txt          ← Leads with --gate X, gate_type="X"
+docs/tutorials/grape-optimizer.txt  ← Uses GateType (linked as "deep dive")
+docs/tutorials/custom-hamiltonians.txt  ← HamiltonianSpec (linked as "advanced")
 ```
 
 Problems:
@@ -168,12 +168,12 @@ Problems:
 
 #### 2.3.1 Duplicate v0.5.0 Design Docs
 
-Two copies of `QubitOS-Design-v0.5.0.md` exist:
+Two copies of `QubitOS-Design-v0.5.0.txt` exist:
 
 | Location | Generated Code Policy (§14.5) |
 |----------|-------------------------------|
-| `qubit-os/QubitOS-Design-v0.5.0.md` (root) | "Proto-generated code (Python and Rust bindings) **is committed** to `generated/` and verified by CI" |
-| `qubit-os-core/docs/specs/QubitOS-Design-v0.5.0.md` | "Proto-generated code is built at compile/install time, **NOT committed**" |
+| `qubit-os/QubitOS-Design-v0.5.0.txt` (root) | "Proto-generated code (Python and Rust bindings) **is committed** to `generated/` and verified by CI" |
+| `qubit-os-core/docs/specs/QubitOS-Design-v0.5.0.txt` | "Proto-generated code is built at compile/install time, **NOT committed**" |
 
 The **core copy is correct**: the actual build system uses `build.rs` + tonic-build
 for Rust and `setup.py` + grpcio-tools for Python. Generated code is not committed.
@@ -190,7 +190,7 @@ This discrepancy was noted in the architecture review:
 
 The `PulseShape.duration_ns` field is defined as `int32` in pulse.proto but
 treated as `float` in `GrapeConfig.duration_ns` in grape.py. This is tracked
-separately (see TIME-MODEL-SPEC.md), but the rename in this spec
+separately (see TIME-MODEL-SPEC.txt), but the rename in this spec
 (§8) provides a natural point to also fix the type if desired.
 
 Note: This spec does NOT address the type mismatch. It is mentioned for
@@ -687,17 +687,17 @@ The tutorial hierarchy is restructured to lead with Hamiltonians:
 
 ```
 docs/guides/
-  quickstart.md           ← GateType.X, --gate X
+  quickstart.txt         ← GateType.X, --gate X
 docs/tutorials/
-  grape-optimizer.md      ← "basic" (GateType-centric)
-  custom-hamiltonians.md  ← "advanced" (HamiltonianSpec)
+  grape-optimizer.txt    ← "basic" (GateType-centric)
+  custom-hamiltonians.txt← "advanced" (HamiltonianSpec)
 ```
 
 **New structure:**
 
 ```
 docs/guides/
-  quickstart.md                      ← REWRITTEN: HamiltonianSpec-first
+  quickstart.txt                    ← REWRITTEN: HamiltonianSpec-first
 docs/tutorials/
   01-hamiltonian-basics.md           ← PROMOTED from "advanced"
   02-pulse-optimization.md           ← GRAPE with Hamiltonian, not GateType
@@ -723,7 +723,7 @@ Hamiltonians last.
 
 #### 6.2.1 Quickstart — Before and After
 
-**BEFORE (current quickstart.md, Python section):**
+**BEFORE (current quickstart.txt, Python section):**
 
 ```python
 from qubitos.pulsegen import GrapeOptimizer, GrapeConfig
@@ -747,7 +747,7 @@ optimizer = GrapeOptimizer(config, hamiltonian)
 result = optimizer.optimize(gate_type="X", qubit=0)
 ```
 
-**AFTER (rewritten quickstart.md, Python section):**
+**AFTER (rewritten quickstart.txt, Python section):**
 
 ```python
 from qubitos.pulsegen import GrapeOptimizer, GrapeConfig
@@ -850,7 +850,7 @@ qubit-os pulse generate --gate X --duration 50 --fidelity 0.999
 
 #### 6.2.2 GRAPE Tutorial — Before and After
 
-**BEFORE (grape-optimizer.md, typical example):**
+**BEFORE (grape-optimizer.txt, typical example):**
 
 ```python
 from qubitos.pulsegen.grape import GateType, GrapeConfig, generate_pulse
@@ -858,7 +858,7 @@ from qubitos.pulsegen.grape import GateType, GrapeConfig, generate_pulse
 result = generate_pulse(GateType.CZ, num_qubits=2, duration_ns=80)
 ```
 
-**AFTER (02-pulse-optimization.md):**
+**AFTER (02-pulse-optimization.txt):**
 
 ```python
 from qubitos.pulsegen import generate_pulse, GrapeOptimizer, GrapeConfig
@@ -953,7 +953,7 @@ for tu in TargetUnitary:
 
 | Property | Decision |
 |----------|----------|
-| **Canonical location** | `qubit-os-core/docs/specs/QubitOS-Design-v0.5.0.md` |
+| **Canonical location** | `qubit-os-core/docs/specs/QubitOS-Design-v0.5.0.txt` |
 | **Root copy** | Replace contents with redirect note (§7.2) |
 | **Generated code policy** | "NOT committed" is correct. `build.rs` and `setup.py` generate at build time. |
 | **When to reconcile** | As part of the v0.2.0 release, in the same PR as the TargetUnitary rename |
@@ -964,14 +964,14 @@ and that the root-level copy was retired in v0.2.0.
 
 ### 7.2 Root Redirect Content
 
-Replace the entire contents of `qubit-os/QubitOS-Design-v0.5.0.md` with:
+Replace the entire contents of `qubit-os/QubitOS-Design-v0.5.0.txt` with:
 
 ```markdown
 # QubitOS Design Document v0.5.0
 
 > **This file is a redirect.** The canonical design document has moved to:
 >
-> [`qubit-os-core/docs/specs/QubitOS-Design-v0.5.0.md`](qubit-os-core/docs/specs/QubitOS-Design-v0.5.0.md)
+> [`qubit-os-core/docs/specs/QubitOS-Design-v0.5.0.txt`](qubit-os-core/docs/specs/QubitOS-Design-v0.5.0.txt)
 >
 > This root-level copy was retired in v0.2.0 to eliminate a discrepancy in
 > Section 14.5 (Generated Code Policy). The canonical version correctly states
@@ -979,7 +979,7 @@ Replace the entire contents of `qubit-os/QubitOS-Design-v0.5.0.md` with:
 > compile/install time by `build.rs` (Rust) and `setup.py` (Python).
 >
 > **Moved:** February 2026
-> **Reason:** HAMILTONIAN-FIRST-API-SPEC.md, §7 (Design Doc Reconciliation)
+> **Reason:** HAMILTONIAN-FIRST-API-SPEC.txt, §7 (Design Doc Reconciliation)
 ```
 
 ---
@@ -1012,7 +1012,7 @@ option java_package = "io.qubitos.pulse.v1";
 // directly via custom_unitary_json.
 //
 // BREAKING CHANGE in v0.2.0: Renamed from GateType, field numbers changed.
-// See HAMILTONIAN-FIRST-API-SPEC.md for migration guide.
+// See HAMILTONIAN-FIRST-API-SPEC.txt for migration guide.
 //
 // Numbering convention:
 //   0       = UNSPECIFIED (proto3 required sentinel)
@@ -2029,7 +2029,7 @@ import sys
 
 def test_quickstart_example_runs():
     """The quickstart Python example executes without error."""
-    # Extract code blocks from quickstart.md and run them
+    # Extract code blocks from quickstart.txt and run them
     # (implementation: parse markdown fences, concatenate, exec())
     # This is a smoke test, not a full integration test.
     code = """
@@ -2243,11 +2243,11 @@ essential for:
    DOI: [10.1016/j.jmr.2004.11.004](https://doi.org/10.1016/j.jmr.2004.11.004)
    — The original GRAPE paper. Works with Hamiltonians, not gates.
 
-3. **ARCHITECTURE-REVIEW.md** — QubitOS architecture review, February 2026.
+3. **ARCHITECTURE-REVIEW.txt** — QubitOS architecture review, February 2026.
    GAP 5: "The GateType Enum is a Trojan Horse."
 
-4. **QubitOS-Design-v0.5.0.md** — Canonical design document.
-   Location: `qubit-os-core/docs/specs/QubitOS-Design-v0.5.0.md`
+4. **QubitOS-Design-v0.5.0.txt** — Canonical design document.
+   Location: `qubit-os-core/docs/specs/QubitOS-Design-v0.5.0.txt`
 
 ---
 
@@ -2265,7 +2265,7 @@ All files that must be modified for this spec:
 | qubit-os-core | `src/qubitos/client/hal.py` | Modified (rename parse func, expand mapping) |
 | qubit-os-core | CLI module | Modified (add --target-unitary, deprecate --gate) |
 | qubit-os-core | `tests/unit/test_hal_client.py` | Modified (update test class name and assertions) |
-| qubit-os-core | `docs/guides/quickstart.md` | **Rewritten** |
+| qubit-os-core | `docs/guides/quickstart.txt` | **Rewritten** |
 | qubit-os-core | `docs/tutorials/` | **Restructured** |
 | qubit-os-proto | `quantum/pulse/v1/pulse.proto` | Modified (rename enum, renumber) |
 | qubit-os-proto | `quantum/pulse/v1/grape.proto` | Modified (rename field) |
@@ -2274,7 +2274,7 @@ All files that must be modified for this spec:
 | qubit-os-hardware | `src/proto/mod.rs` | Modified (rename references) |
 | qubit-os-hardware | `src/backend/iqm/mod.rs` | Modified (rename references) |
 | qubit-os-hardware | Other `*.rs` files with GateType refs | Modified (rename references) |
-| qubit-os (root) | `QubitOS-Design-v0.5.0.md` | **Replaced** with redirect |
+| qubit-os (root) | `QubitOS-Design-v0.5.0.txt` | **Replaced** with redirect |
 
 ## Appendix B: TargetUnitary / Proto Field Number Cross-Reference
 

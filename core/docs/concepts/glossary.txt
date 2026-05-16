@@ -287,6 +287,6 @@ execution. Prevents invalid or dangerous configurations.
 
 ## See Also
 
-- [Architecture](architecture.md) - System architecture overview
-- [API Reference](../api/index.md) - Detailed API documentation
-- [Tutorials](../tutorials/pulse-generation.md) - Step-by-step guides
+- [Architecture](architecture.txt) - System architecture overview
+- [API Reference](../api/index.txt) - Detailed API documentation
+- [Tutorials](../tutorials/pulse-generation.txt) - Step-by-step guides

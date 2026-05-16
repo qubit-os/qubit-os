@@ -295,7 +295,7 @@ QubitOS is designed for extensibility:
 
 ## Related Documentation
 
-- [API Reference](../api/index.md) - Detailed API documentation
-- [Quickstart Guide](../guides/quickstart.md) - Getting started
-- [CLI Reference](../api/cli.md) - Command-line interface
-- [gRPC Reference](../api/grpc.md) - Protocol details
+- [API Reference](../api/index.txt) - Detailed API documentation
+- [Quickstart Guide](../guides/quickstart.txt) - Getting started
+- [CLI Reference](../api/cli.txt) - Command-line interface
+- [gRPC Reference](../api/grpc.txt) - Protocol details

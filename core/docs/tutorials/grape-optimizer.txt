@@ -4,7 +4,7 @@ This tutorial provides an in-depth understanding of the GRAPE (GRadient Ascent P
 
 ## Prerequisites
 
-- Completed [Pulse Generation Tutorial](pulse-generation.md)
+- Completed [Pulse Generation Tutorial](pulse-generation.txt)
 - Basic understanding of quantum mechanics
 - Familiarity with optimization concepts
 
@@ -504,6 +504,6 @@ plt.show()
 
 ## Next Steps
 
-- [Custom Hamiltonians](custom-hamiltonians.md) - Build your own system models
-- [API Reference](../api/pulsegen.md) - Complete API documentation
+- [Custom Hamiltonians](custom-hamiltonians.txt) - Build your own system models
+- [API Reference](../api/pulsegen.txt) - Complete API documentation
 - [Notebooks](../notebooks/02-grape-optimization.ipynb) - Interactive examples

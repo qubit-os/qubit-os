@@ -3782,7 +3782,7 @@ validate_pulse_sequence(seq)
 
 ### 9.5 Error Budget Spec Integration (GAP 2)
 
-The Error Budget spec (GAP 2, `ERROR-BUDGET-SPEC.md`) defines a
+The Error Budget spec (GAP 2, `ERROR-BUDGET-SPEC.txt`) defines a
 comprehensive `ErrorBudget` that accounts for all error sources: gate
 infidelity, readout error, leakage, crosstalk, and **decoherence**.
 

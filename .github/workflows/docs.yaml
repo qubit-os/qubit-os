@@ -1,0 +1,79 @@
+# Documentation site deploy.
+#
+# Builds the MkDocs site from core/ (config at core/mkdocs.yml) and pushes
+# it to the gh-pages branch on every push to main.
+#
+# Source docs are authored as .txt (Linux-kernel-style plain text). The
+# txt_support hook at core/docs_hooks/txt_support.py transiently renames
+# *.txt to *.md during the build and restores after, so MkDocs sees them
+# as documentation pages.
+#
+# The deployed site is served at https://qubit-os.github.io/qubit-os/.
+
+name: Docs
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'core/docs/**'
+      - 'core/docs_hooks/**'
+      - 'core/mkdocs.yml'
+      - 'core/src/**'
+      - '.github/workflows/docs.yaml'
+  workflow_dispatch:
+
+permissions:
+  contents: write   # gh-deploy pushes to gh-pages
+
+concurrency:
+  group: docs-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-and-deploy:
+    name: Build and deploy MkDocs site
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0   # mike (version provider) needs full history
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+
+      - name: Configure git for gh-deploy
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Install docs dependencies
+        run: |
+          pip install \
+            mkdocs \
+            mkdocs-material \
+            mkdocs-jupyter \
+            mkdocstrings \
+            mkdocstrings-python \
+            mike
+
+      - name: Verify hook + .txt sources resolve
+        working-directory: core
+        run: |
+          python -c "
+          import importlib.util, sys
+          spec = importlib.util.spec_from_file_location('txt_support', 'docs_hooks/txt_support.py')
+          mod = importlib.util.module_from_spec(spec)
+          spec.loader.exec_module(mod)
+          print('txt_support hook imports cleanly')
+          "
+          test -f docs/index.txt || (echo 'docs/index.txt missing'; exit 1)
+
+      - name: Build MkDocs site
+        working-directory: core
+        run: mkdocs build --strict
+
+      - name: Deploy to gh-pages
+        working-directory: core
+        run: mkdocs gh-deploy --force --remote-branch gh-pages

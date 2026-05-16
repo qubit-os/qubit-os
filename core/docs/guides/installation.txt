@@ -237,10 +237,10 @@ rustup update
 rustc --version  # Should be >= 1.83
 ```
 
-For more troubleshooting, see the [Troubleshooting Guide](troubleshooting.md).
+For more troubleshooting, see the [Troubleshooting Guide](troubleshooting.txt).
 
 ## Next Steps
 
-- [Quickstart Guide](quickstart.md) - Your first pulse in 15 minutes
-- [GRAPE Tutorial](../tutorials/grape-optimizer.md) - Deep dive into optimization
-- [API Reference](../api/index.md) - Complete API documentation
+- [Quickstart Guide](quickstart.txt) - Your first pulse in 15 minutes
+- [GRAPE Tutorial](../tutorials/grape-optimizer.txt) - Deep dive into optimization
+- [API Reference](../api/index.txt) - Complete API documentation

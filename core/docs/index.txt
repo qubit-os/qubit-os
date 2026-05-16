@@ -12,7 +12,7 @@ QubitOS is a pulse optimization and hardware abstraction layer for quantum compu
 
     Install QubitOS, start the HAL server, and execute your first quantum gate pulse.
 
-    [:octicons-arrow-right-24: Quickstart](guides/quickstart.md)
+    [:octicons-arrow-right-24: Quickstart](guides/quickstart.txt)
 
 -   :material-book-open-variant:{ .lg .middle } __Learn the Concepts__
 
@@ -20,7 +20,7 @@ QubitOS is a pulse optimization and hardware abstraction layer for quantum compu
 
     Understand the architecture, GRAPE optimization, and how pulses control quantum systems.
 
-    [:octicons-arrow-right-24: Architecture](concepts/architecture.md)
+    [:octicons-arrow-right-24: Architecture](concepts/architecture.txt)
 
 -   :material-api:{ .lg .middle } __API Reference__
 
@@ -28,7 +28,7 @@ QubitOS is a pulse optimization and hardware abstraction layer for quantum compu
 
     Complete Python, REST, and gRPC API documentation with examples.
 
-    [:octicons-arrow-right-24: API Docs](api/index.md)
+    [:octicons-arrow-right-24: API Docs](api/index.txt)
 
 -   :material-notebook:{ .lg .middle } __Interactive Notebooks__
 
@@ -149,11 +149,11 @@ QubitOS is a monorepo at [qubit-os/qubit-os](https://github.com/qubit-os/qubit-o
 
 ## Quick Links
 
-- [Installation Guide](guides/installation.md) — setup instructions
-- [Quickstart](guides/quickstart.md) — first pulse in 15 minutes
-- [CLI Reference](api/cli.md) — command-line interface
-- [Troubleshooting](guides/troubleshooting.md) — common issues
-- [Design Specifications](specs/README.md) — per-subsystem technical specs
+- [Installation Guide](guides/installation.txt) — setup instructions
+- [Quickstart](guides/quickstart.txt) — first pulse in 15 minutes
+- [CLI Reference](api/cli.txt) — command-line interface
+- [Troubleshooting](guides/troubleshooting.txt) — common issues
+- [Design Specifications](specs/README.txt) — per-subsystem technical specs
 
 ## License
 

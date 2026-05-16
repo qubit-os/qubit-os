@@ -6,7 +6,7 @@
 **Target Release:** v0.2.0
 **Author:** QubitOS Team
 **Date:** February 8, 2026
-**Related Specs:** TIME-MODEL-SPEC.md, ERROR-BUDGET-SPEC.md
+**Related Specs:** TIME-MODEL-SPEC.txt, ERROR-BUDGET-SPEC.txt
 
 ---
 
@@ -271,7 +271,7 @@ Represents the complete pulse sequence submitted for execution.
 **Hashable metadata (in addition to children):**
 - `num_pulses: int`
 - `total_duration_ns: float`
-- `temporal_constraints_hash: str` -- hash of any temporal constraints (see TIME-MODEL-SPEC.md)
+- `temporal_constraints_hash: str` -- hash of any temporal constraints (see TIME-MODEL-SPEC.txt)
 
 #### ScheduledPulseNode (leaf)
 
@@ -2863,6 +2863,6 @@ With temperature sensors, EM monitors, or vibration sensors:
 ---
 
 *This document should be reviewed alongside ARCHITECTURE-REVIEW.md (GAP 4),
-QubitOS-Design-v0.5.0.md, and the future TIME-MODEL-SPEC.md and ERROR-BUDGET-SPEC.md.
+QubitOS-Design-v0.5.0.md, and the future TIME-MODEL-SPEC.txt and ERROR-BUDGET-SPEC.txt.
 Implementation should begin with the Python module (Phase 1) as it provides immediate
 value for experiment tracking without requiring proto or Rust changes.*

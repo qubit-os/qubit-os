@@ -7,7 +7,7 @@ quantum backends.
 ## Prerequisites
 
 - QubitOS installed
-- Completed the [Quickstart Guide](../guides/quickstart.md)
+- Completed the [Quickstart Guide](../guides/quickstart.txt)
 
 ---
 
@@ -338,6 +338,6 @@ print(f"Best fidelity: {best_result.fidelity:.6f}")
 
 ## Next Steps
 
-- [GRAPE Optimizer Deep Dive](grape-optimizer.md) - Understand the optimization algorithm
-- [Custom Hamiltonians](custom-hamiltonians.md) - Build your own system models
-- [API Reference](../api/pulsegen.md) - Complete API documentation
+- [GRAPE Optimizer Deep Dive](grape-optimizer.txt) - Understand the optimization algorithm
+- [Custom Hamiltonians](custom-hamiltonians.txt) - Build your own system models
+- [API Reference](../api/pulsegen.txt) - Complete API documentation

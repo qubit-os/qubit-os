@@ -8,10 +8,10 @@ The core Python package `qubitos` provides four main modules:
 
 | Module | Description |
 |--------|-------------|
-| [`qubitos.client`](client.md) | HAL client for communicating with quantum backends |
-| [`qubitos.pulsegen`](pulsegen.md) | Pulse generation and GRAPE optimization |
-| [`qubitos.calibrator`](calibrator.md) | Calibration data loading and management |
-| [`qubitos.validation`](validation.md) | Validation utilities for quantum data |
+| [`qubitos.client`](client.txt) | HAL client for communicating with quantum backends |
+| [`qubitos.pulsegen`](pulsegen.txt) | Pulse generation and GRAPE optimization |
+| [`qubitos.calibrator`](calibrator.txt) | Calibration data loading and management |
+| [`qubitos.validation`](validation.txt) | Validation utilities for quantum data |
 
 ## Quick Import Reference
 
@@ -44,9 +44,9 @@ QubitOS exposes multiple interface layers for flexibility:
 
 | Interface | Use Case | Documentation |
 |-----------|----------|---------------|
-| **CLI** | Shell scripts, interactive use | [CLI Reference](cli.md) |
-| **REST API** | Web integration, language-agnostic | [REST API](rest.md) |
-| **gRPC API** | High-performance, low-latency | [gRPC API](grpc.md) |
+| **CLI** | Shell scripts, interactive use | [CLI Reference](cli.txt) |
+| **REST API** | Web integration, language-agnostic | [REST API](rest.txt) |
+| **gRPC API** | High-performance, low-latency | [gRPC API](grpc.txt) |
 
 ## Architecture Overview
 
