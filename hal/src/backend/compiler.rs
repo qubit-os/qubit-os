@@ -42,8 +42,11 @@ impl fmt::Display for NativeGate {
         if self.parameters.is_empty() {
             write!(f, "{}(q{})", self.name, format_qubits(&self.qubits))
         } else {
-            let params: Vec<String> =
-                self.parameters.iter().map(|p| format!("{:.4}", p)).collect();
+            let params: Vec<String> = self
+                .parameters
+                .iter()
+                .map(|p| format!("{:.4}", p))
+                .collect();
             write!(
                 f,
                 "{}({}) q{}",
@@ -83,10 +86,7 @@ impl CompiledSequence {
     /// Estimated fidelity of the full sequence.
     pub fn estimated_fidelity(&self) -> f64 {
         // Product of individual gate fidelities
-        self.gates
-            .iter()
-            .map(|g| 1.0 - g.infidelity)
-            .product()
+        self.gates.iter().map(|g| 1.0 - g.infidelity).product()
     }
 }
 
@@ -237,7 +237,7 @@ mod tests {
                     name: "rz".into(),
                     qubits: vec![0],
                     parameters: vec![1.0],
-                    duration_ns: 0.0,  // Virtual Z gate
+                    duration_ns: 0.0, // Virtual Z gate
                     infidelity: 0.0,
                 },
                 NativeGate {
@@ -263,7 +263,11 @@ mod tests {
         let identity = [1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0];
         let gates = decompose_single_qubit_zxz(&identity, 0, 20.0, 0.001).unwrap();
         // Identity should produce no gates (all angles ~0)
-        assert!(gates.is_empty(), "Identity decomposed to {} gates", gates.len());
+        assert!(
+            gates.is_empty(),
+            "Identity decomposed to {} gates",
+            gates.len()
+        );
     }
 
     #[test]

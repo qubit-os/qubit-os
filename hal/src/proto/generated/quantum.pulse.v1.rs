@@ -1079,3 +1079,112 @@ pub mod grape_service_server {
         const NAME: &'static str = SERVICE_NAME;
     }
 }
+/// Dense complex matrix in row-major form.
+///
+/// The real and imaginary arrays must each have rows * cols entries.
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct ComplexMatrix {
+    #[prost(int32, tag = "1")]
+    pub rows: i32,
+    #[prost(int32, tag = "2")]
+    pub cols: i32,
+    #[prost(double, repeated, tag = "3")]
+    pub real: ::prost::alloc::vec::Vec<f64>,
+    #[prost(double, repeated, tag = "4")]
+    pub imag: ::prost::alloc::vec::Vec<f64>,
+}
+/// Collapse operator used by Lindblad and SME solvers.
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct CollapseOperatorSpec {
+    #[prost(message, optional, tag = "1")]
+    pub matrix: ::core::option::Option<ComplexMatrix>,
+    #[prost(double, tag = "2")]
+    pub rate_hz: f64,
+    #[prost(string, tag = "3")]
+    pub label: ::prost::alloc::string::String,
+}
+/// Configuration for a stochastic master equation solve.
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct SmeConfig {
+    /// Number of integration steps on the nominal time grid.
+    #[prost(int32, tag = "1")]
+    pub num_time_steps: i32,
+    /// Total evolution time in nanoseconds.
+    #[prost(double, tag = "2")]
+    pub duration_ns: f64,
+    /// Measurement efficiency η in \[0, 1\].
+    /// η = 0 reduces to Lindblad, η = 1 is perfect detection.
+    #[prost(double, tag = "3")]
+    pub measurement_efficiency: f64,
+    /// Random seed for reproducible Wiener increments.
+    #[prost(int32, tag = "4")]
+    pub random_seed: i32,
+    /// Whether to store the full conditional state history.
+    #[prost(bool, tag = "5")]
+    pub store_trajectory: bool,
+    /// Whether to store the simulated homodyne measurement record.
+    #[prost(bool, tag = "6")]
+    pub store_measurement_record: bool,
+    /// Dissipative channels.
+    #[prost(message, repeated, tag = "7")]
+    pub collapse_ops: ::prost::alloc::vec::Vec<CollapseOperatorSpec>,
+    /// Measurement operator c. If omitted, the first collapse operator is used.
+    #[prost(message, optional, tag = "8")]
+    pub measurement_operator: ::core::option::Option<ComplexMatrix>,
+    /// If true, clamp negative eigenvalues after each step and renormalize.
+    #[prost(bool, tag = "9")]
+    pub positivity_projection: bool,
+    /// Retry threshold for adaptive timestep control.
+    #[prost(double, tag = "10")]
+    pub adaptive_tolerance: f64,
+    /// Eigenvalue threshold used when counting positivity violations.
+    #[prost(double, tag = "11")]
+    pub positivity_tolerance: f64,
+    /// Number of trajectories for an ensemble solve.
+    #[prost(int32, tag = "12")]
+    pub ensemble_size: i32,
+}
+/// Result of a single-trajectory or ensemble SME solve.
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct SmeResult {
+    /// Final conditional density matrix for a trajectory solve.
+    #[prost(message, optional, tag = "1")]
+    pub final_density_matrix: ::core::option::Option<ComplexMatrix>,
+    /// Hilbert space dimension.
+    #[prost(int32, tag = "2")]
+    pub hilbert_dim: i32,
+    /// Final fidelity Tr\[ρ_target ρ(T)\] if a target was provided.
+    #[prost(double, tag = "3")]
+    pub final_fidelity: f64,
+    /// Final purity Tr\[ρ(T)^2\].
+    #[prost(double, tag = "4")]
+    pub final_purity: f64,
+    /// Optional trajectory diagnostics.
+    #[prost(double, repeated, tag = "5")]
+    pub fidelity_trajectory: ::prost::alloc::vec::Vec<f64>,
+    #[prost(double, repeated, tag = "6")]
+    pub purity_trajectory: ::prost::alloc::vec::Vec<f64>,
+    #[prost(double, repeated, tag = "7")]
+    pub measurement_record: ::prost::alloc::vec::Vec<f64>,
+    /// Numerical diagnostics.
+    #[prost(double, tag = "8")]
+    pub max_trace_deviation: f64,
+    #[prost(int32, tag = "9")]
+    pub positivity_violations: i32,
+    #[prost(double, tag = "10")]
+    pub max_nonhermitian_residue: f64,
+    /// Ensemble outputs. For a trajectory solve these fields may be empty.
+    #[prost(message, optional, tag = "11")]
+    pub mean_density_matrix: ::core::option::Option<ComplexMatrix>,
+    #[prost(double, repeated, tag = "12")]
+    pub variance_real: ::prost::alloc::vec::Vec<f64>,
+    #[prost(double, repeated, tag = "13")]
+    pub variance_imag: ::prost::alloc::vec::Vec<f64>,
+    #[prost(double, repeated, tag = "14")]
+    pub convergence_trace_distance: ::prost::alloc::vec::Vec<f64>,
+    #[prost(int32, tag = "15")]
+    pub num_trajectories: i32,
+    /// True when the η = 0 dispatch reduced to the Lindblad path.
+    #[prost(bool, tag = "16")]
+    pub eta_zero_reduced_to_lindblad: bool,
+}

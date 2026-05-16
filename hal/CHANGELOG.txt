@@ -1,15 +1,17 @@
-# Changelog
+Changelog
+=========
 
-All notable changes to qubit-os-hardware will be documented in this file.
+All notable changes to qubit-os-hardware are documented in this file.
 
-The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
-and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+Format reference: Keep a Changelog 1.1.0.
+Versioning policy: Semantic Versioning.
 
-## [0.5.0] - 2026-02-09
+0.5.0 - 2026-02-09
+-------------------
 
-### Added
+Added
 
-#### Lindblad Master Equation Solver (v0.5.2)
+Lindblad Master Equation Solver (v0.5.2)
 - **Lindblad solver**: Full open quantum system simulation in Rust
   - `CollapseOperator` types: T1 amplitude damping (√(1/T1) σ-), Tφ dephasing (√(1/Tφ) σz)
   - `LindbladConfig`: dt, t_final, collapse operators, initial state
@@ -23,29 +25,38 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Golden validation**: 4 test cases vs QuTiP mesolve(), all < 1e-6 trace distance
 - 32 new Lindblad tests, 280 total (272 lib + 2 ignored + 5+1 golden)
 
-#### IBM Quantum Backend (v0.5.1)
+IBM Quantum Backend (v0.5.1)
 - **IbmBackend**: Qiskit Runtime REST API integration
   - Supported systems: Eagle r3, Heron, Flamingo
   - Aer simulator for local testing
   - QASM 3.0 ZXZ gate decomposition
   - Mock client for deterministic testing
 
-#### AWS Braket Backend (v0.5.1)
+AWS Braket Backend (v0.5.1)
 - **BraketBackend**: AWS Braket SDK integration
   - Supported devices: IonQ Aria, Rigetti Ankaa-3
   - Simulators: SV1 (state vector), DM1 (density matrix)
   - Mock client for deterministic testing
 
-#### Backend SDK Documentation
+Backend SDK Documentation
 - `docs/BACKEND-SDK.txt`: Step-by-step guide for third-party backend authors
 
-### Changed
+Changed
 - MSRV bumped from 1.83 to 1.85
 - Docker build updated for Rust 1.85
 
-## [Unreleased]
+Unreleased
+----------
 
-### Added
+Added
+- Rust SME solver in `src/sme/` with Euler-Maruyama trajectories,
+  Lindblad dispatch at eta = 0, and Rayon-parallel ensembles
+- PyO3 bindings for `RustSMESolver`
+- SME boundary validation for finite, Hermitian, unit-trace density-matrix
+  outputs
+- New Rust SME unit coverage for measurement invariants, zero-efficiency
+  identity, and adaptive timestep behavior
+
 - Input validation at API boundary (envelope size, qubit bounds, amplitude limits)
 - Timeout protection for Python/QuTiP execution (300s default)
 - Rate limiting configuration (enforcement at infrastructure layer)
@@ -55,24 +66,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Comprehensive validation module with DoS protection
 - Proto size limits documentation (see proto/LIMITS.txt)
 
-### Changed
+Changed
 - Default host binding changed from 0.0.0.0 to 127.0.0.1 (security)
 - CORS now restrictive by default (localhost only)
 
-### Removed
+Removed
 - Unused dependencies: anyhow, dotenvy, config, futures
 
-### Security
+Security
 - Fixed potential infinite hang in QuTiP backend (timeout added)
 - Fixed potential memory exhaustion via large envelopes (size limits)
 - Fixed potential qubit index out-of-bounds (validation)
 - Fixed error messages leaking internal paths/tracebacks
 
-## [0.1.0] - 2026-02-07
+0.1.0 - 2026-02-07
+-------------------
 
 Initial release of QubitOS Hardware Abstraction Layer.
 
-### Features
+Features
 - gRPC server (tonic) with QuantumBackend service
 - REST API facade (axum) at /api/v1/*
 - QuTiP backend via PyO3 for simulation

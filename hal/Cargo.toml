@@ -64,6 +64,10 @@ secrecy = { version = "0.10", features = ["serde"], optional = true }
 ndarray = "0.16"
 num-complex = "0.4"
 num-traits = "0.2"
+rand = "0.8"
+rand_distr = "0.4"
+rayon = "1.10"
+agentbible = "0.1.0"
 
 # CLI
 clap = { version = "4.4", features = ["derive", "env"] }

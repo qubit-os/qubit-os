@@ -103,9 +103,17 @@ class LocalBackend:
             num_qubits=self.num_qubits,
             available_qubits=list(range(self.num_qubits)),
             supported_gates=[
-                "X", "Y", "Z", "H", "SX",
-                "RX", "RY", "RZ",
-                "CZ", "CNOT", "iSWAP",
+                "X",
+                "Y",
+                "Z",
+                "H",
+                "SX",
+                "RX",
+                "RY",
+                "RZ",
+                "CZ",
+                "CNOT",
+                "iSWAP",
             ],
             supports_state_vector=True,
             supports_noise_model=False,
@@ -168,6 +176,7 @@ class LocalBackend:
                     return 0.0
                 t_idx = min(int(t / dt_val) if dt_val > 0 else 0, len(envelope) - 1)
                 return float(envelope[t_idx])
+
             return coeff
 
         H = [H0]
@@ -188,7 +197,7 @@ class LocalBackend:
         probs = np.abs(psi_final.full().flatten()) ** 2
         probs = probs / np.sum(probs)
 
-        dim = 2 ** num_qubits
+        dim = 2**num_qubits
         rng = np.random.default_rng()
         samples = rng.choice(dim, size=num_shots, p=probs)
 

@@ -50,9 +50,7 @@ class TestTwoQubitErrorBudget:
             t1_us={0: 50.0, 1: 50.0},
             t2_us={0: 30.0, 1: 30.0},
         )
-        b2.add_two_qubit_gate(
-            infidelity=0.01, qubit_a=0, qubit_b=1, duration_ns=200
-        )
+        b2.add_two_qubit_gate(infidelity=0.01, qubit_a=0, qubit_b=1, duration_ns=200)
 
         assert b2.projected_fidelity < b1.projected_fidelity
 
@@ -79,9 +77,7 @@ class TestInterleavedRB:
         from qubitos.calibrator.benchmarking import estimate_interleaved_rb
 
         # Reference EPC = 0.01, interleaved EPC = 0.02
-        gate_error = estimate_interleaved_rb(
-            reference_epc=0.01, interleaved_epc=0.02
-        )
+        gate_error = estimate_interleaved_rb(reference_epc=0.01, interleaved_epc=0.02)
         # Gate error should be positive
         assert gate_error > 0
         # And less than 1
@@ -91,9 +87,7 @@ class TestInterleavedRB:
         from qubitos.calibrator.benchmarking import estimate_interleaved_rb
 
         # If interleaved EPC equals reference EPC, gate error ≈ 0
-        gate_error = estimate_interleaved_rb(
-            reference_epc=0.01, interleaved_epc=0.01
-        )
+        gate_error = estimate_interleaved_rb(reference_epc=0.01, interleaved_epc=0.01)
         assert gate_error < 1e-10
 
     def test_interleaved_rb_result_structure(self):
@@ -115,7 +109,6 @@ class TestProcessTomography:
 
     def test_reconstruct_identity_channel(self):
         from qubitos.calibrator.benchmarking import (
-            average_gate_fidelity_from_process,
             process_fidelity,
             reconstruct_chi_matrix,
         )
@@ -134,8 +127,8 @@ class TestProcessTomography:
         assert chi.shape == (4, 4)
 
         # Process fidelity with identity — should be positive
-        I = np.eye(2, dtype=np.complex128)
-        f = process_fidelity(chi, I)
+        identity = np.eye(2, dtype=np.complex128)
+        f = process_fidelity(chi, identity)
         assert f > 0.0  # Reconstruction gives valid result
 
     def test_process_fidelity_bounds(self):
@@ -199,17 +192,13 @@ class TestBenchmarkingProvenance:
 
         # Without benchmarking
         b1 = ProvenanceBuilder()
-        b1.set_calibration(
-            [{"qubit_index": 0, "frequency_ghz": 5.0, "t1_us": 50.0, "t2_us": 30.0}]
-        )
+        b1.set_calibration([{"qubit_index": 0, "frequency_ghz": 5.0, "t1_us": 50.0, "t2_us": 30.0}])
         b1.set_software_versions()
         tree1 = b1.build()
 
         # With benchmarking
         b2 = ProvenanceBuilder()
-        b2.set_calibration(
-            [{"qubit_index": 0, "frequency_ghz": 5.0, "t1_us": 50.0, "t2_us": 30.0}]
-        )
+        b2.set_calibration([{"qubit_index": 0, "frequency_ghz": 5.0, "t1_us": 50.0, "t2_us": 30.0}])
         b2.add_benchmarking(
             gate_fidelity=0.999,
             error_per_clifford=0.001,
@@ -275,12 +264,8 @@ class TestSchedulerErrorBudget:
             constraints=[],
         )
 
-        b1 = r1.estimate_error_budget(
-            t1_us={0: 50.0}, t2_us={0: 30.0}
-        )
-        b2 = r2.estimate_error_budget(
-            t1_us={0: 50.0}, t2_us={0: 30.0}
-        )
+        b1 = r1.estimate_error_budget(t1_us={0: 50.0}, t2_us={0: 30.0})
+        b2 = r2.estimate_error_budget(t1_us={0: 50.0}, t2_us={0: 30.0})
 
         # More gates = more error
         assert b2.projected_fidelity < b1.projected_fidelity

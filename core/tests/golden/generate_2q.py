@@ -11,8 +11,6 @@ import json
 import sys
 from pathlib import Path
 
-import numpy as np
-
 from qubitos.pulsegen import GrapeConfig, generate_pulse
 
 GOLDEN_DIR = Path(__file__).parent / "two_qubit"

@@ -447,8 +447,10 @@ fn error_accumulation_1_vs_1000() {
         &result_a.final_density_matrix,
         &result_b.final_density_matrix,
     );
-    eprintln!("Error accumulation: td(A,B) = {:.2e}, td(A,exact) = {:.2e}, td(B,exact) = {:.2e}",
-        td_ab, td_a, td_b);
+    eprintln!(
+        "Error accumulation: td(A,B) = {:.2e}, td(A,exact) = {:.2e}, td(B,exact) = {:.2e}",
+        td_ab, td_a, td_b
+    );
 }
 
 /// Three-way cross-validation: Rust RK4 vs analytical vs (eventually) C solver.
@@ -497,8 +499,16 @@ fn three_way_baseline() {
     let fid = state_fidelity(rho, &expected);
 
     eprintln!("Three-way baseline:");
-    eprintln!("  Rust ρ_00 = {:.10}, analytical = {:.10}", rho[[0, 0]].re, 1.0 - decay);
-    eprintln!("  Rust ρ_11 = {:.10}, analytical = {:.10}", rho[[1, 1]].re, decay);
+    eprintln!(
+        "  Rust ρ_00 = {:.10}, analytical = {:.10}",
+        rho[[0, 0]].re,
+        1.0 - decay
+    );
+    eprintln!(
+        "  Rust ρ_11 = {:.10}, analytical = {:.10}",
+        rho[[1, 1]].re,
+        decay
+    );
     eprintln!("  Trace distance: {:.2e}", td);
     eprintln!("  Fidelity: {:.10}", fid);
 

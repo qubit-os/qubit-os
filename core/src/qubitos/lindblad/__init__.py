@@ -36,6 +36,7 @@ from __future__ import annotations
 import logging
 import warnings
 from dataclasses import dataclass
+from typing import Any
 
 import numpy as np
 from numpy.typing import NDArray
@@ -47,6 +48,11 @@ __all__ = [
     "LindbladConfig",
     "LindbladResult",
     "LindbladSolver",
+    "from_sme_ensemble",
+    "lindblad_rhs",
+    "lindblad_rk4_step",
+    "state_fidelity",
+    "trace_distance",
 ]
 
 
@@ -194,11 +200,7 @@ class LindbladSolver:
         dt: float,
     ) -> NDArray[np.complex128]:
         """Single RK4 step."""
-        k1 = self._rhs(h, rho)
-        k2 = self._rhs(h, rho + 0.5 * dt * k1)
-        k3 = self._rhs(h, rho + 0.5 * dt * k2)
-        k4 = self._rhs(h, rho + dt * k3)
-        return rho + (dt / 6.0) * (k1 + 2 * k2 + 2 * k3 + k4)
+        return lindblad_rk4_step(rho, h, self._config.collapse_ops, dt)
 
     def _rhs(
         self,
@@ -206,15 +208,7 @@ class LindbladSolver:
         rho: NDArray[np.complex128],
     ) -> NDArray[np.complex128]:
         """Lindblad RHS: -i[H, ρ] + Σ D[L](ρ)."""
-        # Unitary part: -i[H, ρ]
-        commutator = -1j * (h @ rho - rho @ h)
-
-        # Dissipator
-        diss = np.zeros_like(rho)
-        for op in self._config.collapse_ops:
-            diss += self._dissipator(op, rho)
-
-        return commutator + diss
+        return lindblad_rhs(h, self._config.collapse_ops, rho)
 
     @staticmethod
     def _dissipator(
@@ -248,3 +242,37 @@ def trace_distance(
     diff = rho - sigma
     eigenvalues = np.linalg.eigvalsh(diff)
     return 0.5 * float(np.sum(np.abs(eigenvalues)))
+
+
+def lindblad_rhs(
+    h: NDArray[np.complex128],
+    collapse_ops: list[CollapseOperator],
+    rho: NDArray[np.complex128],
+) -> NDArray[np.complex128]:
+    """Lindblad RHS: -i[H, ρ] + Σ D[L](ρ)."""
+    commutator = -1j * (h @ rho - rho @ h)
+    diss = np.zeros_like(rho)
+    for op in collapse_ops:
+        diss += LindbladSolver._dissipator(op, rho)
+    return commutator + diss
+
+
+def lindblad_rk4_step(
+    rho: NDArray[np.complex128],
+    h: NDArray[np.complex128],
+    collapse_ops: list[CollapseOperator],
+    dt: float,
+) -> NDArray[np.complex128]:
+    """Single RK4 step of the Lindblad equation."""
+    k1 = lindblad_rhs(h, collapse_ops, rho)
+    k2 = lindblad_rhs(h, collapse_ops, rho + 0.5 * dt * k1)
+    k3 = lindblad_rhs(h, collapse_ops, rho + 0.5 * dt * k2)
+    k4 = lindblad_rhs(h, collapse_ops, rho + dt * k3)
+    return rho + (dt / 6.0) * (k1 + 2 * k2 + 2 * k3 + k4)
+
+
+def from_sme_ensemble(sme_result: Any, lindblad_result: LindbladResult, tol: float = 0.01) -> bool:
+    """Check whether an SME ensemble mean agrees with a Lindblad result."""
+    mean_rho = getattr(sme_result, "mean_density_matrix", None)
+    candidate = mean_rho if mean_rho is not None else sme_result.final_density_matrix
+    return trace_distance(candidate, lindblad_result.final_density_matrix) <= tol

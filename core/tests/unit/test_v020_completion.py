@@ -95,15 +95,13 @@ class TestSparseHamiltonian:
     def test_sparse_matches_dense(self):
         from qubitos.pulsegen.hamiltonians import build_hamiltonian, build_hamiltonian_sparse
 
-        H0_dense, Hc_dense = build_hamiltonian(
-            drift="0.5*Z0", controls=["X0", "Y0"], num_qubits=1
-        )
+        H0_dense, Hc_dense = build_hamiltonian(drift="0.5*Z0", controls=["X0", "Y0"], num_qubits=1)
         H0_sparse, Hc_sparse = build_hamiltonian_sparse(
             drift="0.5*Z0", controls=["X0", "Y0"], num_qubits=1
         )
 
         np.testing.assert_allclose(H0_sparse.toarray(), H0_dense)
-        for hc_s, hc_d in zip(Hc_sparse, Hc_dense):
+        for hc_s, hc_d in zip(Hc_sparse, Hc_dense, strict=True):
             np.testing.assert_allclose(hc_s.toarray(), hc_d)
 
     def test_sparse_multi_qubit(self):

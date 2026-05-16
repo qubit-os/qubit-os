@@ -1,28 +1,52 @@
-# Changelog
+Changelog
+=========
 
-All notable changes to qubit-os-core will be documented in this file.
+All notable changes to qubit-os-core are documented in this file.
 
-The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
-and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+Format reference: Keep a Changelog 1.1.0.
+Versioning policy: Semantic Versioning.
 
-## [Unreleased]
+Unreleased
+----------
 
-## [0.5.0] - 2026-02-09
+Added
 
-### Added
+Stochastic Master Equation Solver (v0.6.0)
+- `qubitos.sme`: Python SME reference solver with single trajectories and
+  Monte Carlo ensembles
+- Euler-Maruyama integration for the Itô stochastic master equation
+- Adaptive timestep retry logic using trace-norm monitoring
+- Homodyne measurement superoperator, measurement record simulation, and
+  positivity monitoring with optional projection
+- AgentBible-backed density-matrix validation at the SME module boundary
+- 79 SME tests currently active in the core tree (77 unit + 2 fast integration)
+- QuTiP `smesolve()` cross-validation test and ensemble convergence checks
 
-#### Lindblad Simulation (v0.5.2)
+Changed
+
+- `qubitos.lindblad`: added reusable RHS / RK4 helpers and
+  `from_sme_ensemble(...)` convergence check support
+- Packaging metadata now points at `README.txt`, matching the plain-text
+  documentation policy
+
+0.5.0 - 2026-02-09
+-------------------
+
+Added
+
+Lindblad Simulation (v0.5.2)
 - **Lindblad solver** (`qubitos.lindblad`): Full Python mirror of Rust Lindblad API
   - Open quantum system simulation: ρ̇ = -i[H,ρ] + Σ D[Lk](ρ)
   - T1/T2 decoherence: amplitude damping and phase damping collapse operators
   - State fidelity, trace distance, Hellinger distance metrics
   - 22 tests including 4 cross-validation tests against QuTiP mesolve()
 
-## [0.4.0] - 2026-02-09
+0.4.0 - 2026-02-09
+-------------------
 
-### Added
+Added
 
-#### Active Calibration (0.4.1)
+Active Calibration (0.4.1)
 - **DriftMonitor**: Real-time drift detection comparing calibration fingerprints against baseline
   - Five severity levels: NONE, LOW, MODERATE, HIGH, CRITICAL
   - Per-qubit drift identification with affected parameter breakdown
@@ -43,7 +67,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - `ProvenanceBuilder.add_recalibration()`: Record recalibration actions
   - Deterministic hashing for audit trail reproducibility
 
-#### GRAPE in Rust (0.4.2) — qubit-os-hardware
+GRAPE in Rust (0.4.2) — qubit-os-hardware
 - **Rust GRAPE optimizer**: Full port from Python to Rust using `ndarray`
   - Matrix exponential via Padé(13) scaling-and-squaring (Higham 2005)
   - Forward/backward propagator chains
@@ -56,17 +80,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Flat complex array marshalling for zero-copy potential
 - **Cross-validation tests**: Python vs Rust GRAPE comparison (requires PyO3 build)
 
-## [0.3.0] - 2026-02-08
+0.3.0 - 2026-02-08
+-------------------
 
-### Added
+Added
 
-#### Multi-Qubit GRAPE Optimization (v0.3.0, Phase 3a)
+Multi-Qubit GRAPE Optimization (v0.3.0, Phase 3a)
 - Per-qubit pulse envelopes: shape `(n_qubits, n_steps)` for multi-qubit control
 - `build_drift_hamiltonian()`: rotating-frame drift with qubit detunings + ZZ coupling
 - Dimension-scaled adaptive learning rate: `(d²+d)/6` compensates gradient normalization
 - Results: 2-qubit CZ/CNOT at 95%+ fidelity (from 40% random baseline), 3-qubit Toffoli functional
 
-#### Pulse Scheduler (v0.3.0, Phase 3b)
+Pulse Scheduler (v0.3.0, Phase 3b)
 - `PulseScheduler` with ASAP scheduling via topological sort (Kahn's algorithm)
 - Constraint-based scheduling: SEQUENTIAL, SIMULTANEOUS, ALIGNED, MAX_DELAY
 - Automatic qubit-conflict avoidance (no overlap on same qubit)
@@ -75,27 +100,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - ASCII timeline visualization (`ScheduleResult.ascii_timeline()`)
 - Schedule metrics: makespan, parallelism, per-qubit utilization
 
-#### Three-Qubit Gates
+Three-Qubit Gates
 - `GATE_TOFFOLI` (CCX): Toffoli gate (8×8 unitary)
 - `GATE_FREDKIN` (CSWAP): Fredkin gate (8×8 unitary)
 - `TargetUnitary` enum: TOFFOLI, CCX, FREDKIN, CSWAP (Python-only, proto in v0.4.0)
 
-#### Parametric Two-Qubit Gates (v0.3.0, Phase 3c)
+Parametric Two-Qubit Gates (v0.3.0, Phase 3c)
 - `fsim_gate(theta, phi)`: fSim gate family (Google Sycamore style)
 - `cross_resonance_unitary(zx, ix, zi)`: Cross-resonance gate (IBM style)
 
-#### Symplectic Clifford Representation (v0.3.0, Phase 3d)
+Symplectic Clifford Representation (v0.3.0, Phase 3d)
 - `CliffordTableau`: (2n×2n) binary symplectic matrix + phase vector
 - Composition, inverse, and to_unitary() conversion
 - `sample_random_clifford()`: random n-qubit Clifford sampling
 - `generate_multiqubit_rb_sequence()`: multi-qubit RB sequence generation
 - Elementary gate tableaux: Hadamard, S, CNOT
 
-## [0.2.0] - 2026-02-08
+0.2.0 - 2026-02-08
+-------------------
 
-### Added
+Added
 
-#### Time Model & Temporal Constraints (GAP 1)
+Time Model & Temporal Constraints (GAP 1)
 - `TimePoint` type with `nominal_ns`, `precision_ns`, and `jitter_bound_ns`
 - `AWGClockConfig` for clock alignment with `sample_rate_ghz` and quantization
 - `TemporalConstraint` system: `Simultaneous`, `Sequential`, `Aligned`, `MaxDelay`, `MinGap`
@@ -104,13 +130,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - 88 temporal module tests
 - CLI integration: `--sample-rate` for AWG alignment, decoherence budget display
 
-#### Error Budget System (GAP 2)
+Error Budget System (GAP 2)
 - `ErrorBudget` dataclass with `projected_fidelity()` and `can_append()` methods
 - Configurable warning thresholds (50% warn, 90% reject by default)
 - Integration with calibration T1/T2 data for decoherence cost calculation
 - Proto roundtrip tests for error budget messages
 
-#### Hamiltonian-First API Restructure (GAP 5)
+Hamiltonian-First API Restructure (GAP 5)
 - **NEW:** `TargetUnitary` enum in `qubitos.target_unitary` as single source of truth
 - **NEW:** `TARGET_UNITARIES` dict in `hamiltonians.py` with all preset matrices
 - `SQISWAP` (√iSWAP) gate matrix added
@@ -119,7 +145,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Proto field number mapping for cross-repo consistency
 - CLI: `--target-unitary` flag (primary), `--gate` deprecated
 
-#### Experiment Provenance Merkle Tree (GAP 4)
+Experiment Provenance Merkle Tree (GAP 4)
 - `provenance` module: `ProvenanceBuilder`, `ProvenanceTree`, `ProvenanceStore`
 - Merkle tree with nodes: Calibration, QubitCalibration, CouplerCalibration,
   PulseSequence, ScheduledPulse, GRAPEConfig, SoftwareVersion
@@ -131,14 +157,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `ProvenanceStore` with LRU eviction and optional JSON persistence
 - 42 provenance tests covering hashing, tree structure, diff, serialization, store
 
-### Changed
+Changed
 - `GateType` deprecated — use `TargetUnitary` instead (removal in v0.4.0)
 - `STANDARD_GATES` is now an alias for `TARGET_UNITARIES`
 - `generate_pulse()` and `get_target_unitary()` accept `TargetUnitary` enum or string
 - CLI `--gate` flag deprecated in favor of `--target-unitary`
 - `GrapeConfig.duration_ns` type changed from `float` to `int` (matches proto `int32`)
 
-### Fixed
+Fixed
 - Replaced proto stubs with prost re-exports in Rust HAL (B1)
 - Rewrote gRPC server to implement generated trait (B2)
 - Synced Python gate enums with proto definitions — S, T, CX, SQISWAP, SWAP (B3)
@@ -148,14 +174,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Migrated `serde_yaml` to `serde_yml` in Rust HAL
 - Fixed prost/tonic version skew between proto and hardware crates
 
-### Changed
+Changed
 - Improved documentation structure and navigation
 
-## [0.1.0] - 2026-02-03
+0.1.0 - 2026-02-03
+-------------------
 
-### Added
+Added
 
-#### Core Functionality
+Core Functionality
 - **GRAPE Optimizer** (`qubitos.pulsegen.grape`)
   - `GrapeOptimizer` class with gradient ascent pulse engineering
   - `GrapeConfig` dataclass for optimizer configuration
@@ -200,7 +227,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - `qubit-os hal execute` - Execute pulse on hardware
   - Rich terminal output with tables and progress bars
 
-#### Documentation
+Documentation
 - Installation guide with all dependency options
 - Quickstart tutorial with basic examples
 - Troubleshooting guide with common issues
@@ -216,7 +243,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - 02-grape-optimization.ipynb
   - 03-custom-hamiltonians.ipynb
 
-#### Infrastructure
+Infrastructure
 - GitHub Actions CI/CD pipeline
 - pytest test suite with coverage
 - mypy type checking
@@ -225,7 +252,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - MkDocs documentation site
 - OpenAPI specification
 
-### Dependencies
+Dependencies
 - Python >= 3.11
 - numpy >= 1.26
 - scipy >= 1.12
@@ -236,9 +263,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - rich >= 13.0
 - Optional: matplotlib, jupyter, qutip
 
-## [0.0.1] - 2026-01-26
+0.0.1 - 2026-01-26
+-------------------
 
-### Added
+Added
 - Initial project structure
 - Python package scaffolding (qubitos)
 - CLI skeleton with click

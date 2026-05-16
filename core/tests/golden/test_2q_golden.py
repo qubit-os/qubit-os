@@ -41,19 +41,13 @@ class TestTwoQubitGolden:
             random_seed=golden["seed"],
         )
 
-        result = generate_pulse(
-            gate=golden["gate"], num_qubits=golden["num_qubits"], config=config
-        )
+        result = generate_pulse(gate=golden["gate"], num_qubits=golden["num_qubits"], config=config)
 
         # Exact reproducibility
         assert result.iterations == golden["iterations"]
         np.testing.assert_allclose(result.fidelity, golden["fidelity"], rtol=1e-10)
-        np.testing.assert_allclose(
-            result.i_envelope, golden["i_envelope"], rtol=1e-10, atol=1e-14
-        )
-        np.testing.assert_allclose(
-            result.q_envelope, golden["q_envelope"], rtol=1e-10, atol=1e-14
-        )
+        np.testing.assert_allclose(result.i_envelope, golden["i_envelope"], rtol=1e-10, atol=1e-14)
+        np.testing.assert_allclose(result.q_envelope, golden["q_envelope"], rtol=1e-10, atol=1e-14)
 
     def test_cnot_gate_seed42(self):
         """CNOT gate with seed=42 matches golden file."""
@@ -67,15 +61,9 @@ class TestTwoQubitGolden:
             random_seed=golden["seed"],
         )
 
-        result = generate_pulse(
-            gate=golden["gate"], num_qubits=golden["num_qubits"], config=config
-        )
+        result = generate_pulse(gate=golden["gate"], num_qubits=golden["num_qubits"], config=config)
 
         assert result.iterations == golden["iterations"]
         np.testing.assert_allclose(result.fidelity, golden["fidelity"], rtol=1e-10)
-        np.testing.assert_allclose(
-            result.i_envelope, golden["i_envelope"], rtol=1e-10, atol=1e-14
-        )
-        np.testing.assert_allclose(
-            result.q_envelope, golden["q_envelope"], rtol=1e-10, atol=1e-14
-        )
+        np.testing.assert_allclose(result.i_envelope, golden["i_envelope"], rtol=1e-10, atol=1e-14)
+        np.testing.assert_allclose(result.q_envelope, golden["q_envelope"], rtol=1e-10, atol=1e-14)
