@@ -1481,10 +1481,10 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#rust-validators-qubit-os-hardwaresrcvalidationmodrs" class="md-nav__link">
+  <a href="#rust-validators-halsrcvalidationmodrs" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Rust validators (qubit-os-hardware/src/validation/mod.rs)
+        Rust validators (hal/src/validation/mod.rs)
       
     </span>
   </a>
@@ -2312,10 +2312,10 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#rust-validators-qubit-os-hardwaresrcvalidationmodrs" class="md-nav__link">
+  <a href="#rust-validators-halsrcvalidationmodrs" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Rust validators (qubit-os-hardware/src/validation/mod.rs)
+        Rust validators (hal/src/validation/mod.rs)
       
     </span>
   </a>
@@ -2997,7 +2997,7 @@ In practice, real errors are a mix. The error budget must account for this
 </tr>
 </tbody>
 </table>
-<h3 id="rust-validators-qubit-os-hardwaresrcvalidationmodrs">Rust validators (<code>qubit-os-hardware/src/validation/mod.rs</code>)<a class="headerlink" href="#rust-validators-qubit-os-hardwaresrcvalidationmodrs" title="Permanent link">&para;</a></h3>
+<h3 id="rust-validators-halsrcvalidationmodrs">Rust validators (<code>hal/src/validation/mod.rs</code>)<a class="headerlink" href="#rust-validators-halsrcvalidationmodrs" title="Permanent link">&para;</a></h3>
 <table>
 <thead>
 <tr>
@@ -3677,7 +3677,7 @@ single operation in isolation.</p>
 </span></code></pre></div>
 <h3 id="63-rust-data-structures">6.3 Rust Data Structures<a class="headerlink" href="#63-rust-data-structures" title="Permanent link">&para;</a></h3>
 <p>The Rust implementation mirrors the Python for server-side validation:</p>
-<div class="language-rust highlight"><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="c1">// qubit-os-hardware/src/error_budget.rs</span>
+<div class="language-rust highlight"><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="c1">// hal/src/error_budget.rs</span>
 </span><span id="__span-7-2"><a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a>
 </span><span id="__span-7-3"><a id="__codelineno-7-3" name="__codelineno-7-3" href="#__codelineno-7-3"></a><span class="k">use</span><span class="w"> </span><span class="n">serde</span><span class="p">::{</span><span class="n">Deserialize</span><span class="p">,</span><span class="w"> </span><span class="n">Serialize</span><span class="p">};</span>
 </span><span id="__span-7-4"><a id="__codelineno-7-4" name="__codelineno-7-4" href="#__codelineno-7-4"></a>
@@ -3886,7 +3886,7 @@ at 50).</p>
 <hr />
 <h2 id="8-rust-hal-integration">8. Rust HAL Integration<a class="headerlink" href="#8-rust-hal-integration" title="Permanent link">&para;</a></h2>
 <h3 id="81-module-structure">8.1 Module structure<a class="headerlink" href="#81-module-structure" title="Permanent link">&para;</a></h3>
-<div class="language-text highlight"><pre><span></span><code><span id="__span-10-1"><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a>qubit-os-hardware/src/
+<div class="language-text highlight"><pre><span></span><code><span id="__span-10-1"><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a>hal/src/
 </span><span id="__span-10-2"><a id="__codelineno-10-2" name="__codelineno-10-2" href="#__codelineno-10-2"></a>├── error_budget/
 </span><span id="__span-10-3"><a id="__codelineno-10-3" name="__codelineno-10-3" href="#__codelineno-10-3"></a>│   ├── mod.rs          # Re-exports, ErrorBudget struct
 </span><span id="__span-10-4"><a id="__codelineno-10-4" name="__codelineno-10-4" href="#__codelineno-10-4"></a>│   ├── model.rs        # ErrorSource, ErrorContribution
@@ -3928,7 +3928,7 @@ at 50).</p>
 <hr />
 <h2 id="9-python-integration">9. Python Integration<a class="headerlink" href="#9-python-integration" title="Permanent link">&para;</a></h2>
 <h3 id="91-module-structure">9.1 Module structure<a class="headerlink" href="#91-module-structure" title="Permanent link">&para;</a></h3>
-<div class="language-text highlight"><pre><span></span><code><span id="__span-13-1"><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a>qubit-os-core/src/qubitos/
+<div class="language-text highlight"><pre><span></span><code><span id="__span-13-1"><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a>core/src/qubitos/
 </span><span id="__span-13-2"><a id="__codelineno-13-2" name="__codelineno-13-2" href="#__codelineno-13-2"></a>├── error_budget/
 </span><span id="__span-13-3"><a id="__codelineno-13-3" name="__codelineno-13-3" href="#__codelineno-13-3"></a>│   ├── __init__.py     # ErrorBudget, ErrorSource, ErrorContribution, etc.
 </span><span id="__span-13-4"><a id="__codelineno-13-4" name="__codelineno-13-4" href="#__codelineno-13-4"></a>│   ├── analysis.py     # SequenceAnalysis, analyze_sequence()

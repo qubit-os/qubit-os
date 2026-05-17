@@ -2183,7 +2183,8 @@
 </span></code></pre></div>
 <hr />
 <h2 id="service-definition">Service Definition<a class="headerlink" href="#service-definition" title="Permanent link">&para;</a></h2>
-<p>The gRPC service is defined in Protocol Buffer files located in the <code>qubit-os-proto</code> repository.</p>
+<p>The gRPC service is defined in Protocol Buffer files under <code>proto/quantum/</code>
+in the monorepo.</p>
 <h3 id="quantumbackendservice">QuantumBackendService<a class="headerlink" href="#quantumbackendservice" title="Permanent link">&para;</a></h3>
 <div class="language-protobuf highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="kd">service</span><span class="w"> </span><span class="n">QuantumBackendService</span><span class="w"> </span><span class="p">{</span>
 </span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a><span class="w">  </span><span class="c1">// Health check</span>
@@ -2339,7 +2340,7 @@
 </span><span id="__span-9-4"><a id="__codelineno-9-4" name="__codelineno-9-4" href="#__codelineno-9-4"></a><span class="w">    </span><span class="s">&quot;context&quot;</span>
 </span><span id="__span-9-5"><a id="__codelineno-9-5" name="__codelineno-9-5" href="#__codelineno-9-5"></a><span class="w">    </span><span class="s">&quot;log&quot;</span>
 </span><span id="__span-9-6"><a id="__codelineno-9-6" name="__codelineno-9-6" href="#__codelineno-9-6"></a>
-</span><span id="__span-9-7"><a id="__codelineno-9-7" name="__codelineno-9-7" href="#__codelineno-9-7"></a><span class="w">    </span><span class="nx">pb</span><span class="w"> </span><span class="s">&quot;github.com/qubit-os/qubit-os-proto/gen/go/quantum/backend/v1&quot;</span>
+</span><span id="__span-9-7"><a id="__codelineno-9-7" name="__codelineno-9-7" href="#__codelineno-9-7"></a><span class="w">    </span><span class="nx">pb</span><span class="w"> </span><span class="s">&quot;github.com/qubit-os/qubit-os/proto/gen/go/quantum/backend/v1&quot;</span>
 </span><span id="__span-9-8"><a id="__codelineno-9-8" name="__codelineno-9-8" href="#__codelineno-9-8"></a><span class="w">    </span><span class="s">&quot;google.golang.org/grpc&quot;</span>
 </span><span id="__span-9-9"><a id="__codelineno-9-9" name="__codelineno-9-9" href="#__codelineno-9-9"></a><span class="w">    </span><span class="s">&quot;google.golang.org/grpc/credentials/insecure&quot;</span>
 </span><span id="__span-9-10"><a id="__codelineno-9-10" name="__codelineno-9-10" href="#__codelineno-9-10"></a><span class="p">)</span>
@@ -2474,8 +2475,8 @@
 </table>
 <hr />
 <h2 id="protocol-buffers">Protocol Buffers<a class="headerlink" href="#protocol-buffers" title="Permanent link">&para;</a></h2>
-<p>Proto files are in the <code>qubit-os-proto</code> repository:</p>
-<div class="language-text highlight"><pre><span></span><code><span id="__span-14-1"><a id="__codelineno-14-1" name="__codelineno-14-1" href="#__codelineno-14-1"></a>qubit-os-proto/
+<p>Proto files live under <code>proto/</code> in the monorepo:</p>
+<div class="language-text highlight"><pre><span></span><code><span id="__span-14-1"><a id="__codelineno-14-1" name="__codelineno-14-1" href="#__codelineno-14-1"></a>proto/
 </span><span id="__span-14-2"><a id="__codelineno-14-2" name="__codelineno-14-2" href="#__codelineno-14-2"></a>├── quantum/
 </span><span id="__span-14-3"><a id="__codelineno-14-3" name="__codelineno-14-3" href="#__codelineno-14-3"></a>│   ├── common/v1/
 </span><span id="__span-14-4"><a id="__codelineno-14-4" name="__codelineno-14-4" href="#__codelineno-14-4"></a>│   │   └── common.proto
@@ -2490,12 +2491,12 @@
 </span></code></pre></div>
 <h3 id="generating-stubs">Generating Stubs<a class="headerlink" href="#generating-stubs" title="Permanent link">&para;</a></h3>
 <p>Python stubs are pre-generated. To regenerate:</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-15-1"><a id="__codelineno-15-1" name="__codelineno-15-1" href="#__codelineno-15-1"></a><span class="nb">cd</span><span class="w"> </span>qubit-os-proto
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-15-1"><a id="__codelineno-15-1" name="__codelineno-15-1" href="#__codelineno-15-1"></a><span class="nb">cd</span><span class="w"> </span>proto
 </span><span id="__span-15-2"><a id="__codelineno-15-2" name="__codelineno-15-2" href="#__codelineno-15-2"></a>pip<span class="w"> </span>install<span class="w"> </span>grpcio-tools
 </span><span id="__span-15-3"><a id="__codelineno-15-3" name="__codelineno-15-3" href="#__codelineno-15-3"></a>python<span class="w"> </span>-m<span class="w"> </span>grpc_tools.protoc<span class="w"> </span><span class="se">\</span>
 </span><span id="__span-15-4"><a id="__codelineno-15-4" name="__codelineno-15-4" href="#__codelineno-15-4"></a><span class="w">  </span>-I.<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-15-5"><a id="__codelineno-15-5" name="__codelineno-15-5" href="#__codelineno-15-5"></a><span class="w">  </span>--python_out<span class="o">=</span>../qubit-os-core/src/qubitos/proto<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-15-6"><a id="__codelineno-15-6" name="__codelineno-15-6" href="#__codelineno-15-6"></a><span class="w">  </span>--grpc_python_out<span class="o">=</span>../qubit-os-core/src/qubitos/proto<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-15-5"><a id="__codelineno-15-5" name="__codelineno-15-5" href="#__codelineno-15-5"></a><span class="w">  </span>--python_out<span class="o">=</span>../core/src/qubitos/proto<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-15-6"><a id="__codelineno-15-6" name="__codelineno-15-6" href="#__codelineno-15-6"></a><span class="w">  </span>--grpc_python_out<span class="o">=</span>../core/src/qubitos/proto<span class="w"> </span><span class="se">\</span>
 </span><span id="__span-15-7"><a id="__codelineno-15-7" name="__codelineno-15-7" href="#__codelineno-15-7"></a><span class="w">  </span>quantum/**/*.proto
 </span></code></pre></div>
 <hr />

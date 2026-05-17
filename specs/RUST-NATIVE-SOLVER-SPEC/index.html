@@ -3289,8 +3289,8 @@ Each conversion is hand-written code that can silently drop or misinterpret
 fields. The <code>CalibrationData</code> proto has 23 fields; each one must be correctly
 mapped in four places.</p>
 <p><strong>Two type systems that must agree.</strong> <code>MeasurementResult</code> exists in both Rust
-(<code>qubit-os-hardware/src/types.rs</code>) and Python (<code>qubit_os_core/types.py</code>). They
-are "synchronized" through protobuf definitions in <code>qubit-os-proto</code>, but the
+(<code>hal/src/types.rs</code>) and Python (<code>qubit_os_core/types.py</code>). They
+are "synchronized" through protobuf definitions in <code>proto/</code>, but the
 compiler cannot verify that the Python dataclass matches the Rust struct. Any
 divergence manifests as a runtime deserialization error, not a compile-time
 failure.</p>
@@ -3352,7 +3352,7 @@ algebra. Its hot loop is:</p>
 - Python interpreter overhead: ~2%</p>
 <p>The matrix exponential dominates. Everything else is basic BLAS operations.</p>
 <h3 id="22-qutipbackend-rust-python">2.2 QutipBackend (Rust → Python)<a class="headerlink" href="#22-qutipbackend-rust-python" title="Permanent link">&para;</a></h3>
-<p><code>QutipBackend</code> in <code>qubit-os-hardware/src/backends/qutip.rs</code> wraps QuTiP's
+<p><code>QutipBackend</code> in <code>hal/src/backends/qutip.rs</code> wraps QuTiP's
 <code>mesolve()</code> for full open-system simulation. The call path:</p>
 <div class="language-rust highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="k">impl</span><span class="w"> </span><span class="n">SimulationBackend</span><span class="w"> </span><span class="k">for</span><span class="w"> </span><span class="n">QutipBackend</span><span class="w"> </span><span class="p">{</span>
 </span><span id="__span-3-2"><a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a><span class="w">    </span><span class="k">fn</span><span class="w"> </span><span class="nf">simulate</span><span class="p">(</span><span class="o">&amp;</span><span class="bp">self</span><span class="p">,</span><span class="w"> </span><span class="n">config</span><span class="p">:</span><span class="w"> </span><span class="kp">&amp;</span><span class="nc">SimConfig</span><span class="p">)</span><span class="w"> </span><span class="p">-&gt;</span><span class="w"> </span><span class="nb">Result</span><span class="o">&lt;</span><span class="n">SimResult</span><span class="o">&gt;</span><span class="w"> </span><span class="p">{</span>
@@ -3378,7 +3378,7 @@ algebra. Its hot loop is:</p>
 The GIL is held for the entire <code>mesolve()</code> call, which can take seconds for
 multi-qubit systems.</p>
 <h3 id="23-hal-server-rust">2.3 HAL Server (Rust)<a class="headerlink" href="#23-hal-server-rust" title="Permanent link">&para;</a></h3>
-<p>The HAL server (<code>qubit-os-hardware/src/server.rs</code>) receives gRPC requests,
+<p>The HAL server (<code>hal/src/server.rs</code>) receives gRPC requests,
 validates them against calibration data, and dispatches to backends:</p>
 <div class="language-text highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a>PulseGenerationRequest → validate(calibration) → GrapeOptimizer.optimize() → PulseShape response
 </span><span id="__span-4-2"><a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a>SimulationRequest → validate(calibration) → QutipBackend.simulate() → SimResult response
@@ -3397,7 +3397,7 @@ goal is for this call to stay entirely in Rust.</p>
 </span><span id="__span-5-9"><a id="__codelineno-5-9" name="__codelineno-5-9" href="#__codelineno-5-9"></a>     │ GrapeConfig dataclass        │ Proto GrapeConfig          │ scipy arrays
 </span></code></pre></div>
 <p>Every arrow is a serialization/deserialization step. Every step is hand-written
-mapping code. The proto definitions in <code>qubit-os-proto</code> enforce wire
+mapping code. The proto definitions in <code>proto/</code> enforce wire
 compatibility but not semantic equivalence.</p>
 <hr />
 <h2 id="3-design-goals">3. Design Goals<a class="headerlink" href="#3-design-goals" title="Permanent link">&para;</a></h2>
@@ -3556,11 +3556,11 @@ compatibility but not semantic equivalence.</p>
 </table>
 <h3 id="52-rust-implementation">5.2 Rust Implementation<a class="headerlink" href="#52-rust-implementation" title="Permanent link">&para;</a></h3>
 <h4 id="521-crate-structure">5.2.1 Crate Structure<a class="headerlink" href="#521-crate-structure" title="Permanent link">&para;</a></h4>
-<p>The optimizer lives in <code>qubit-os-hardware</code> as a new module, not a separate
+<p>The optimizer lives in <code>hal/</code> as a new module, not a separate
 crate. Rationale: it is tightly coupled to the HAL server (same process, direct
 function calls, shared types). A separate crate adds build complexity without
 benefit at this scale.</p>
-<div class="language-text highlight"><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a>qubit-os-hardware/
+<div class="language-text highlight"><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a>hal/
 </span><span id="__span-6-2"><a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a>├── src/
 </span><span id="__span-6-3"><a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a>│   ├── optimizer/
 </span><span id="__span-6-4"><a id="__codelineno-6-4" name="__codelineno-6-4" href="#__codelineno-6-4"></a>│   │   ├── mod.rs          # Public API: GrapeOptimizer
@@ -5736,7 +5736,7 @@ and stored in version control. They are the ground truth.</p>
 </tr>
 <tr>
 <td>2026-02-08</td>
-<td>Optimizer in <code>qubit-os-hardware</code>, not separate crate</td>
+<td>Optimizer in <code>hal/</code>, not separate crate</td>
 <td>Tight coupling with HAL server, shared types</td>
 <td>Separate <code>qubit-os-optimizer</code> crate</td>
 </tr>

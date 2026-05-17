@@ -214,7 +214,7 @@ The batch request is a bag of independent pulses. The proto comment states
 they have "no temporal relationships." Execution order is implementation-
 defined.
 
-### 2.2 Python Layer (`qubit-os-core`)
+### 2.2 Python Layer (`core/`)
 
 **`GrapeConfig` dataclass (`qubitos/pulsegen/grape.py`):**
 
@@ -271,7 +271,7 @@ per-coupler data. The fingerprint is used for cache invalidation (drift
 detection), but T1/T2 values **never participate in pulse construction,
 optimization, or validation**.
 
-### 2.3 Rust Layer (`qubit-os-hardware`)
+### 2.3 Rust Layer (`hal/`)
 
 **Validation (`src/validation/mod.rs`):**
 
@@ -3120,7 +3120,7 @@ grape.proto (duration_ns type change only, no new imports)
 ### 7.1 Module Structure
 
 ```
-qubit-os-hardware/
+hal/
 └── src/
     ├── temporal/
     │   ├── mod.rs              # Module re-exports and TemporalError
@@ -3332,7 +3332,7 @@ fn handle_execute_sequence(
 ### 8.1 Module Structure
 
 ```
-qubit-os-core/
+core/
 └── src/
     └── qubitos/
         ├── temporal/
@@ -3840,7 +3840,7 @@ HAL re-validates because:
 **HAL validation contract:**
 
 ```rust
-// qubit-os-hardware/src/validation/temporal.rs
+// hal/src/validation/temporal.rs
 
 /// Validate a complete pulse sequence request.
 ///

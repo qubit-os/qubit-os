@@ -35,8 +35,8 @@ fields. The `CalibrationData` proto has 23 fields; each one must be correctly
 mapped in four places.
 
 **Two type systems that must agree.** `MeasurementResult` exists in both Rust
-(`qubit-os-hardware/src/types.rs`) and Python (`qubit_os_core/types.py`). They
-are "synchronized" through protobuf definitions in `qubit-os-proto`, but the
+(`hal/src/types.rs`) and Python (`qubit_os_core/types.py`). They
+are "synchronized" through protobuf definitions in `proto/`, but the
 compiler cannot verify that the Python dataclass matches the Rust struct. Any
 divergence manifests as a runtime deserialization error, not a compile-time
 failure.
@@ -115,7 +115,7 @@ The matrix exponential dominates. Everything else is basic BLAS operations.
 
 ### 2.2 QutipBackend (Rust → Python)
 
-`QutipBackend` in `qubit-os-hardware/src/backends/qutip.rs` wraps QuTiP's
+`QutipBackend` in `hal/src/backends/qutip.rs` wraps QuTiP's
 `mesolve()` for full open-system simulation. The call path:
 
 ```rust
@@ -146,7 +146,7 @@ multi-qubit systems.
 
 ### 2.3 HAL Server (Rust)
 
-The HAL server (`qubit-os-hardware/src/server.rs`) receives gRPC requests,
+The HAL server (`hal/src/server.rs`) receives gRPC requests,
 validates them against calibration data, and dispatches to backends:
 
 ```
@@ -172,7 +172,7 @@ goal is for this call to stay entirely in Rust.
 ```
 
 Every arrow is a serialization/deserialization step. Every step is hand-written
-mapping code. The proto definitions in `qubit-os-proto` enforce wire
+mapping code. The proto definitions in `proto/` enforce wire
 compatibility but not semantic equivalence.
 
 ---
@@ -266,13 +266,13 @@ compatibility but not semantic equivalence.
 
 #### 5.2.1 Crate Structure
 
-The optimizer lives in `qubit-os-hardware` as a new module, not a separate
+The optimizer lives in `hal/` as a new module, not a separate
 crate. Rationale: it is tightly coupled to the HAL server (same process, direct
 function calls, shared types). A separate crate adds build complexity without
 benefit at this scale.
 
 ```
-qubit-os-hardware/
+hal/
 ├── src/
 │   ├── optimizer/
 │   │   ├── mod.rs          # Public API: GrapeOptimizer
@@ -2118,7 +2118,7 @@ test_nan_propagation               NaN in input → clean error, not propagated 
 | Date | Decision | Rationale | Alternatives Considered |
 |---|---|---|---|
 | 2026-02-08 | Use `ndarray` over `nalgebra` | NumPy-like API, dynamic shapes for arbitrary d | `nalgebra` (better for fixed d, worse for general case) |
-| 2026-02-08 | Optimizer in `qubit-os-hardware`, not separate crate | Tight coupling with HAL server, shared types | Separate `qubit-os-optimizer` crate |
+| 2026-02-08 | Optimizer in `hal/`, not separate crate | Tight coupling with HAL server, shared types | Separate `qubit-os-optimizer` crate |
 | 2026-02-08 | Superoperator exponential for Lindblad (not ODE) | Exact for piecewise-constant H, matches GRAPE structure | Runge-Kutta ODE solver, Crank-Nicolson |
 | 2026-02-08 | ChaCha8 RNG for reproducibility | Deterministic across platforms, fast, cryptographic quality | `StdRng`, `Pcg64`, `Xoshiro256` |
 | 2026-02-08 | OpenBLAS static linking for releases | No system dependency, reproducible numerical results | Dynamic linking, Intel MKL |

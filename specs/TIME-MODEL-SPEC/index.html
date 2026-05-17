@@ -1508,10 +1508,10 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#22-python-layer-qubit-os-core" class="md-nav__link">
+  <a href="#22-python-layer-core" class="md-nav__link">
     <span class="md-ellipsis">
       
-        2.2 Python Layer (qubit-os-core)
+        2.2 Python Layer (core/)
       
     </span>
   </a>
@@ -1519,10 +1519,10 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#23-rust-layer-qubit-os-hardware" class="md-nav__link">
+  <a href="#23-rust-layer-hal" class="md-nav__link">
     <span class="md-ellipsis">
       
-        2.3 Rust Layer (qubit-os-hardware)
+        2.3 Rust Layer (hal/)
       
     </span>
   </a>
@@ -2937,10 +2937,10 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#22-python-layer-qubit-os-core" class="md-nav__link">
+  <a href="#22-python-layer-core" class="md-nav__link">
     <span class="md-ellipsis">
       
-        2.2 Python Layer (qubit-os-core)
+        2.2 Python Layer (core/)
       
     </span>
   </a>
@@ -2948,10 +2948,10 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#23-rust-layer-qubit-os-hardware" class="md-nav__link">
+  <a href="#23-rust-layer-hal" class="md-nav__link">
     <span class="md-ellipsis">
       
-        2.3 Rust Layer (qubit-os-hardware)
+        2.3 Rust Layer (hal/)
       
     </span>
   </a>
@@ -4266,7 +4266,7 @@ function is <code>1 - |Tr(U_target† · U_actual)| / d</code> with no Lindbladi
 <p>The batch request is a bag of independent pulses. The proto comment states
 they have "no temporal relationships." Execution order is implementation-
 defined.</p>
-<h3 id="22-python-layer-qubit-os-core">2.2 Python Layer (<code>qubit-os-core</code>)<a class="headerlink" href="#22-python-layer-qubit-os-core" title="Permanent link">&para;</a></h3>
+<h3 id="22-python-layer-core">2.2 Python Layer (<code>core/</code>)<a class="headerlink" href="#22-python-layer-core" title="Permanent link">&para;</a></h3>
 <p><strong><code>GrapeConfig</code> dataclass (<code>qubitos/pulsegen/grape.py</code>):</strong></p>
 <div class="language-python highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="nd">@dataclass</span>
 </span><span id="__span-4-2"><a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a><span class="k">class</span><span class="w"> </span><span class="nc">GrapeConfig</span><span class="p">:</span>
@@ -4338,7 +4338,7 @@ superconducting qubits where 0.1 ns is the practical minimum).</p>
 per-coupler data. The fingerprint is used for cache invalidation (drift
 detection), but T1/T2 values <strong>never participate in pulse construction,
 optimization, or validation</strong>.</p>
-<h3 id="23-rust-layer-qubit-os-hardware">2.3 Rust Layer (<code>qubit-os-hardware</code>)<a class="headerlink" href="#23-rust-layer-qubit-os-hardware" title="Permanent link">&para;</a></h3>
+<h3 id="23-rust-layer-hal">2.3 Rust Layer (<code>hal/</code>)<a class="headerlink" href="#23-rust-layer-hal" title="Permanent link">&para;</a></h3>
 <p><strong>Validation (<code>src/validation/mod.rs</code>):</strong></p>
 <div class="language-rust highlight"><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="k">pub</span><span class="w"> </span><span class="k">const</span><span class="w"> </span><span class="n">MAX_PULSE_DURATION_NS</span><span class="p">:</span><span class="w"> </span><span class="kt">u32</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">100_000</span><span class="p">;</span>
 </span><span id="__span-7-2"><a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a><span class="k">pub</span><span class="w"> </span><span class="k">const</span><span class="w"> </span><span class="n">MAX_ENVELOPE_SIZE</span><span class="p">:</span><span class="w"> </span><span class="kt">usize</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">10_000</span><span class="p">;</span>
@@ -7078,7 +7078,7 @@ v0.2.0 (pre-stable), but requires:</p>
 <hr />
 <h2 id="7-rust-implementation">7. Rust Implementation<a class="headerlink" href="#7-rust-implementation" title="Permanent link">&para;</a></h2>
 <h3 id="71-module-structure">7.1 Module Structure<a class="headerlink" href="#71-module-structure" title="Permanent link">&para;</a></h3>
-<div class="language-text highlight"><pre><span></span><code><span id="__span-31-1"><a id="__codelineno-31-1" name="__codelineno-31-1" href="#__codelineno-31-1"></a>qubit-os-hardware/
+<div class="language-text highlight"><pre><span></span><code><span id="__span-31-1"><a id="__codelineno-31-1" name="__codelineno-31-1" href="#__codelineno-31-1"></a>hal/
 </span><span id="__span-31-2"><a id="__codelineno-31-2" name="__codelineno-31-2" href="#__codelineno-31-2"></a>└── src/
 </span><span id="__span-31-3"><a id="__codelineno-31-3" name="__codelineno-31-3" href="#__codelineno-31-3"></a>    ├── temporal/
 </span><span id="__span-31-4"><a id="__codelineno-31-4" name="__codelineno-31-4" href="#__codelineno-31-4"></a>    │   ├── mod.rs              # Module re-exports and TemporalError
@@ -7271,7 +7271,7 @@ received via proto. This happens in the HAL service handler:</p>
 <hr />
 <h2 id="8-python-implementation">8. Python Implementation<a class="headerlink" href="#8-python-implementation" title="Permanent link">&para;</a></h2>
 <h3 id="81-module-structure">8.1 Module Structure<a class="headerlink" href="#81-module-structure" title="Permanent link">&para;</a></h3>
-<div class="language-text highlight"><pre><span></span><code><span id="__span-36-1"><a id="__codelineno-36-1" name="__codelineno-36-1" href="#__codelineno-36-1"></a>qubit-os-core/
+<div class="language-text highlight"><pre><span></span><code><span id="__span-36-1"><a id="__codelineno-36-1" name="__codelineno-36-1" href="#__codelineno-36-1"></a>core/
 </span><span id="__span-36-2"><a id="__codelineno-36-2" name="__codelineno-36-2" href="#__codelineno-36-2"></a>└── src/
 </span><span id="__span-36-3"><a id="__codelineno-36-3" name="__codelineno-36-3" href="#__codelineno-36-3"></a>    └── qubitos/
 </span><span id="__span-36-4"><a id="__codelineno-36-4" name="__codelineno-36-4" href="#__codelineno-36-4"></a>        ├── temporal/
@@ -7792,7 +7792,7 @@ HAL re-validates because:</p>
 <li>Trust boundary: the server does not trust the client.</li>
 </ol>
 <p><strong>HAL validation contract:</strong></p>
-<div class="language-rust highlight"><pre><span></span><code><span id="__span-49-1"><a id="__codelineno-49-1" name="__codelineno-49-1" href="#__codelineno-49-1"></a><span class="c1">// qubit-os-hardware/src/validation/temporal.rs</span>
+<div class="language-rust highlight"><pre><span></span><code><span id="__span-49-1"><a id="__codelineno-49-1" name="__codelineno-49-1" href="#__codelineno-49-1"></a><span class="c1">// hal/src/validation/temporal.rs</span>
 </span><span id="__span-49-2"><a id="__codelineno-49-2" name="__codelineno-49-2" href="#__codelineno-49-2"></a>
 </span><span id="__span-49-3"><a id="__codelineno-49-3" name="__codelineno-49-3" href="#__codelineno-49-3"></a><span class="sd">/// Validate a complete pulse sequence request.</span>
 </span><span id="__span-49-4"><a id="__codelineno-49-4" name="__codelineno-49-4" href="#__codelineno-49-4"></a><span class="sd">///</span>
