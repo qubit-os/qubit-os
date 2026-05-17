@@ -1,7 +1,7 @@
 // Copyright 2026 QubitOS Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-//! Build script for qubit-os-hardware.
+//! Build script for the QubitOS HAL crate.
 //! Compiles Protocol Buffer definitions into Rust code.
 //!
 //! Set SKIP_PROTO_BUILD=1 to skip proto compilation (useful in CI without protoc).

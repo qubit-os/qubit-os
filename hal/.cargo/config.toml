@@ -1,4 +1,4 @@
-# Cargo configuration for qubit-os-hardware local development
+# Cargo configuration for the QubitOS HAL crate (local development)
 #
 # PYO3_PYTHON tells PyO3's build script which Python interpreter to use.
 # LD_LIBRARY_PATH for libpython3.14.so is handled by .envrc (direnv) since

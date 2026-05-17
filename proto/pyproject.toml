@@ -21,7 +21,7 @@ classifiers = [
 ]
 
 [project.urls]
-Repository = "https://github.com/qubit-os/qubit-os-proto"
+Repository = "https://github.com/qubit-os/qubit-os"
 
 [tool.setuptools.packages.find]
 where = ["python"]

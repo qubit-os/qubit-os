@@ -7,10 +7,12 @@
 """Generated Protocol Buffer stubs for QubitOS HAL.
 
 This package contains auto-generated gRPC and protobuf stubs.
-Do not edit these files directly - regenerate from qubit-os-proto .proto files.
+Do not edit these files directly - regenerate from the .proto files
+under `proto/quantum/` in the monorepo.
 
 These vendored stubs are the canonical proto source for Python imports.
-The separate qubit-os-proto package is used only for Rust codegen.
+The separate `qubit-os-proto` package (under `proto/`) is used only for
+Rust codegen.
 
 Usage:
     from qubitos.proto import (

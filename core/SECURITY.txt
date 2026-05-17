@@ -15,7 +15,7 @@ QubitOS is research software and does not process sensitive data in its default 
 If you discover a security vulnerability, please report it responsibly:
 
 1. **Do not** open a public GitHub issue.
-2. Email the maintainers directly or use [GitHub's private vulnerability reporting](https://github.com/qubit-os/qubit-os-core/security/advisories/new).
+2. Email the maintainers directly or use [GitHub's private vulnerability reporting](https://github.com/qubit-os/qubit-os/security/advisories/new).
 3. Include:
    - Description of the vulnerability
    - Steps to reproduce

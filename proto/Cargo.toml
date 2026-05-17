@@ -5,7 +5,7 @@ edition = "2021"
 rust-version = "1.82"
 description = "Protocol Buffers for QubitOS quantum control kernel"
 license = "Apache-2.0"
-repository = "https://github.com/qubit-os/qubit-os-proto"
+repository = "https://github.com/qubit-os/qubit-os"
 keywords = ["quantum", "grpc", "protobuf"]
 
 [dependencies]

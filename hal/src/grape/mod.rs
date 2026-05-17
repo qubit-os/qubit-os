@@ -5,7 +5,7 @@
 //!
 //! This module provides a Rust implementation of the GRadient Ascent Pulse
 //! Engineering (GRAPE) algorithm, matching the Python implementation in
-//! `qubit-os-core` for correctness validation while delivering ≥5x speedup
+//! `core/` for correctness validation while delivering ≥5x speedup
 //! through compiled code and BLAS-accelerated linear algebra.
 //!
 //! # Architecture

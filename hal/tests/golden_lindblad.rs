@@ -7,9 +7,9 @@
 //! saved to `tests/golden_lindblad_qutip.json`. This test verifies that our
 //! RK4 Lindblad solver matches within trace distance < 0.01.
 //!
-//! To regenerate the golden file, run:
-//!   cd ../qubit-os-core && source .venv/bin/activate
-//!   python3 scripts/generate_lindblad_golden.py > ../qubit-os-hardware/tests/golden_lindblad_qutip.json
+//! To regenerate the golden file, run (from the monorepo root):
+//!   cd core && source .venv/bin/activate
+//!   python3 scripts/generate_lindblad_golden.py > ../hal/tests/golden_lindblad_qutip.json
 //!
 //! Ref: Johansson et al. (2012), Comp. Phys. Comm. 183, 1760.
 //!   DOI: 10.1016/j.cpc.2012.02.021

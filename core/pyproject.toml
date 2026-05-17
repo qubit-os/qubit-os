@@ -64,10 +64,10 @@ docs = [
 qubit-os = "qubitos.cli.main:cli"
 
 [project.urls]
-Homepage = "https://github.com/qubit-os/qubit-os-core"
-Documentation = "https://qubit-os.github.io/qubit-os-core/"
-Repository = "https://github.com/qubit-os/qubit-os-core"
-Issues = "https://github.com/qubit-os/qubit-os-core/issues"
+Homepage = "https://github.com/qubit-os/qubit-os"
+Documentation = "https://qubit-os.github.io/qubit-os/"
+Repository = "https://github.com/qubit-os/qubit-os"
+Issues = "https://github.com/qubit-os/qubit-os/issues"
 
 [tool.hatch.metadata]
 allow-direct-references = true

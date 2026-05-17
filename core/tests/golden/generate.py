@@ -10,7 +10,7 @@ Run this manually when:
 2. Intentionally updating golden files after algorithm changes
 
 Usage:
-    cd qubit-os-core
+    cd core
     python -m tests.golden.generate [--force] [--version VERSION]
     python -m tests.golden.generate --pulse-only  # Skip execution tests
     python -m tests.golden.generate --exec-only   # Skip pulse tests

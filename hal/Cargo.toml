@@ -6,7 +6,7 @@ rust-version = "1.85"
 authors = ["QubitOS Contributors"]
 description = "Hardware Abstraction Layer for QubitOS quantum control kernel"
 license = "Apache-2.0"
-repository = "https://github.com/qubit-os/qubit-os-hardware"
+repository = "https://github.com/qubit-os/qubit-os"
 keywords = ["quantum", "computing", "simulation", "pulse", "control"]
 categories = ["science", "simulation"]
 

@@ -3,7 +3,7 @@
 
 //! gRPC server implementation using tonic.
 //!
-//! Implements the QuantumBackendService gRPC service defined in qubit-os-proto.
+//! Implements the QuantumBackendService gRPC service defined under proto/.
 //! This module converts between proto types (i32, nested messages) and domain
 //! types (u32, flat structs) at the API boundary.
 //!

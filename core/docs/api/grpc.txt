@@ -24,7 +24,8 @@ export QUBITOS_HAL_GRPC_PORT=50051
 
 ## Service Definition
 
-The gRPC service is defined in Protocol Buffer files located in the `qubit-os-proto` repository.
+The gRPC service is defined in Protocol Buffer files under `proto/quantum/`
+in the monorepo.
 
 ### QuantumBackendService
 
@@ -211,7 +212,7 @@ import (
     "context"
     "log"
     
-    pb "github.com/qubit-os/qubit-os-proto/gen/go/quantum/backend/v1"
+    pb "github.com/qubit-os/qubit-os/proto/gen/go/quantum/backend/v1"
     "google.golang.org/grpc"
     "google.golang.org/grpc/credentials/insecure"
 )
@@ -326,10 +327,10 @@ except HALClientError as e:
 
 ## Protocol Buffers
 
-Proto files are in the `qubit-os-proto` repository:
+Proto files live under `proto/` in the monorepo:
 
 ```
-qubit-os-proto/
+proto/
 ├── quantum/
 │   ├── common/v1/
 │   │   └── common.proto
@@ -348,12 +349,12 @@ qubit-os-proto/
 Python stubs are pre-generated. To regenerate:
 
 ```bash
-cd qubit-os-proto
+cd proto
 pip install grpcio-tools
 python -m grpc_tools.protoc \
   -I. \
-  --python_out=../qubit-os-core/src/qubitos/proto \
-  --grpc_python_out=../qubit-os-core/src/qubitos/proto \
+  --python_out=../core/src/qubitos/proto \
+  --grpc_python_out=../core/src/qubitos/proto \
   quantum/**/*.proto
 ```
 

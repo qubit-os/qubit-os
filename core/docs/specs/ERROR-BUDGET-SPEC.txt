@@ -57,7 +57,7 @@ In practice, real errors are a mix. The error budget must account for this
 | `validate_unitary()` | `U†U = I` | Matrix property only |
 | `AgentBibleValidator` | Wraps above with optional extensions | Same per-operation scope |
 
-### Rust validators (`qubit-os-hardware/src/validation/mod.rs`)
+### Rust validators (`hal/src/validation/mod.rs`)
 
 | Validator | What it checks | Limitation |
 |-----------|---------------|------------|
@@ -682,7 +682,7 @@ def analyze_sequence(budget: ErrorBudget) -> SequenceAnalysis:
 The Rust implementation mirrors the Python for server-side validation:
 
 ```rust
-// qubit-os-hardware/src/error_budget.rs
+// hal/src/error_budget.rs
 
 use serde::{Deserialize, Serialize};
 
@@ -906,7 +906,7 @@ at 50).
 ### 8.1 Module structure
 
 ```
-qubit-os-hardware/src/
+hal/src/
 ├── error_budget/
 │   ├── mod.rs          # Re-exports, ErrorBudget struct
 │   ├── model.rs        # ErrorSource, ErrorContribution
@@ -959,7 +959,7 @@ pub fn validate_sequence_error_budget(
 ### 9.1 Module structure
 
 ```
-qubit-os-core/src/qubitos/
+core/src/qubitos/
 ├── error_budget/
 │   ├── __init__.py     # ErrorBudget, ErrorSource, ErrorContribution, etc.
 │   ├── analysis.py     # SequenceAnalysis, analyze_sequence()
