@@ -7,8 +7,10 @@ control pulses against live calibration data, schedules them with
 constraint-aware parallelism, and dispatches through a hardware
 abstraction layer.
 
-Current release: **v0.7.0** (Lyapunov feedback controller, open-loop vs
-closed-loop comparison framework, Rust feedback hot path).
+Current release: **v0.7.1** (parallel ``noise_sweep_comparison`` with
+deterministic seeds and optional per-cell checkpointing). Previous:
+**v0.7.0** (Lyapunov feedback controller, open-loop vs closed-loop
+comparison framework, Rust feedback hot path).
 Next milestone: **v0.8.0** (3-level transmon with leakage-aware
 Lyapunov control). See
 [ROADMAP.txt](https://github.com/qubit-os/qubit-os/blob/main/ROADMAP.txt).
@@ -19,6 +21,8 @@ Lyapunov control). See
   Install QubitOS, start the HAL server, and execute a quantum gate.
 - [Architecture](concepts/architecture.txt) — the kernel and its five
   planes (control, calibration, backend ABI, simulation, feedback).
+- [Feedback concepts](concepts/feedback.txt) — parallel noise sweeps and
+  reproducibility (v0.7.1).
 - [API Reference](api/index.txt) — Python, REST, and gRPC surfaces.
 - [Notebooks](notebooks/01-quickstart.ipynb) — runnable Jupyter
   examples for pulse generation, optimization, and SME trajectories.

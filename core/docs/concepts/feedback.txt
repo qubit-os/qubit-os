@@ -1,0 +1,63 @@
+Feedback control concepts
+==========================
+
+Parallel noise sweeps (v0.7.1)
+------------------------------
+
+The library function ``qubitos.feedback.analysis.noise_sweep_comparison``
+evaluates each pair of sweep method and scaled noise level in an independent
+``cell``. From v0.7.1 onward, cells run in parallel by default using a
+process pool (``concurrent.futures.ProcessPoolExecutor`` with the
+``spawn`` start method). Pass ``max_workers=1`` to force a traditional
+single-process loop.
+
+Reproducibility is defined by a base integer ``seed`` and a deterministic
+per-cell seed: NumPy's ``SeedSequence(seed).spawn(n_methods * n_noise)``
+produces one child sequence per cell; the flat index is
+``k = method_idx * n_noise + noise_idx``, and the SME runtime receives the
+32-bit integer collapsed from that child. The same cell therefore sees the
+same random streams whether you use one worker or many, or whether you
+resume from per-cell checkpoint files.
+
+Example::
+
+    from pathlib import Path
+    from qubitos.feedback.analysis import noise_sweep_comparison
+
+    result = noise_sweep_comparison(
+        noise_range=[0.5, 1.0, 2.0],
+        methods=("gaussian", "lyapunov_feedback"),
+        num_trajectories=64,
+        seed=12345,
+        max_workers=8,
+        checkpoint_dir=Path("./sweep_ckpt"),
+    )
+
+With ``checkpoint_dir`` set, each completed cell writes a compressed
+``.npz`` file; a later call with the same arguments skips cells that
+already have files and prints how many checkpoints were found.
+
+Structured logging
+------------------
+
+For long sweeps, silent failure is the worst kind of failure. The
+``log_path`` keyword takes a path to a JSONL file that the sweep appends
+one record to per ``resume``, ``start``, ``done``, and ``error`` event.
+Each record carries a UTC timestamp (``ts``), the cell coordinates
+(``noise_idx``, ``method_idx``, ``method``, ``noise_level``), the wall
+time spent on the cell (``wall_s``), and for completions the cell's
+``mean_fidelity``. Failures additionally record an ``error`` string with
+the exception type and message. The same events are emitted at ``INFO``
+to the ``qubitos.feedback.analysis.sweep`` logger, which is silent by
+default (no handlers attached); callers that prefer the stdlib
+``logging`` route can attach their own handler instead of writing to
+disk::
+
+    import logging
+    logging.getLogger("qubitos.feedback.analysis.sweep").addHandler(
+        logging.StreamHandler()
+    )
+
+Disk-based logging is intended for long jobs where ``tail -f`` of the
+JSONL stream gives live progress and post-mortem evidence of where a
+run stalled or failed.

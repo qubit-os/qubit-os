@@ -9,6 +9,40 @@ Versioning policy: Semantic Versioning.
 Unreleased
 ----------
 
+0.7.1 - 2026-05-21
+-------------------
+
+Added
+
+- ``noise_sweep_comparison(..., max_workers=..., checkpoint_dir=...)``:
+  optional process-pool parallelism over independent ``(method, noise)``
+  cells (default uses ``min(os.cpu_count(), n_noise * n_methods)`` workers
+  with a ``spawn`` multiprocessing context for fork-safety) and optional
+  per-cell ``.npz`` checkpoints for resumable long sweeps.
+- ``noise_sweep_comparison(..., log_path=...)``: optional structured JSONL
+  log with one record per cell ``start`` / ``done`` / ``error`` event and
+  a ``resume`` record when prior checkpoints are picked up. Each record
+  carries a UTC timestamp, the ``(noise_idx, method_idx, method)``
+  coordinates, ``wall_s``, and (on ``done``) ``mean_fidelity``. Events
+  are also emitted at ``INFO`` to the
+  ``qubitos.feedback.analysis.sweep`` logger for callers that prefer the
+  stdlib ``logging`` route. This makes long sweeps observable in real
+  time without changing the default (silent) behavior.
+
+Changed
+
+- Per-cell RNG seeds now derive from ``numpy.random.SeedSequence(seed)``
+  with flat index ``k = method_idx * n_noise + noise_idx`` (replacing the
+  v0.7.0 ad-hoc integer offset). Parallel and serial paths are bit-identical
+  for the same inputs and base seed; rerun v0.7.0 regression artifacts if
+  you require numeric continuity with the old formula.
+
+Fixed
+
+- Long single-core noise sweeps can use multiple cores without changing
+  reproducibility semantics (explicit ``max_workers=1`` keeps the
+  in-process loop and avoids worker startup).
+
 0.7.0 - 2026-05-16
 -------------------
 

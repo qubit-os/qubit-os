@@ -9,11 +9,13 @@ configurable subset of baseline methods (GRAPE, DRAG, Gaussian) plus the
 Lyapunov feedback closed loop. The function returns a structured result
 that downstream plotting helpers (:mod:`qubitos.feedback.viz`) consume.
 
-This is the library API behind the v0.7.0 open-loop vs closed-loop
-comparison. The repo ships only the library and a smoke-scale test;
-larger sweeps (e.g. 50 noise points x 1000 trajectories) are produced
-by reproducible scripts that import this function out of tree and
-write their own raw data and figures.
+This is the library API behind the v0.7.x open-loop vs closed-loop
+comparison. From v0.7.1, :func:`noise_sweep_comparison` runs cells in
+parallel by default with deterministic :class:`numpy.random.SeedSequence`
+seeds and optional per-cell checkpoint files. The repo ships only the
+library and smoke-scale tests; larger sweeps (e.g. 50 noise points x 1000
+trajectories) are produced by reproducible scripts that import this
+function out of tree and write their own raw data and figures.
 
 References:
     - Wiseman and Milburn (2009), Quantum Measurement and Control,
@@ -24,8 +26,18 @@ References:
 
 from __future__ import annotations
 
+import hashlib
+import json
+import logging
+import multiprocessing as mp
+import os
+import time
 from collections.abc import Sequence
-from dataclasses import dataclass, field
+from concurrent.futures import ProcessPoolExecutor, as_completed
+from dataclasses import astuple, dataclass, field
+from datetime import UTC, datetime
+from pathlib import Path
+from typing import IO, Any
 
 import numpy as np
 from numpy.typing import NDArray
@@ -47,6 +59,121 @@ __all__ = [
 
 
 _METHODS = ("grape", "drag", "gaussian", "lyapunov_feedback")
+
+_SWEEP_LOGGER = logging.getLogger("qubitos.feedback.analysis.sweep")
+
+
+def _emit_sweep_event(
+    log_fh: IO[str] | None,
+    record: dict[str, Any],
+) -> None:
+    """Write one structured sweep event to JSONL and the stdlib logger.
+
+    The logger is silent by default (no handlers attached). Callers that want
+    runtime visibility either set ``log_path`` (writes JSONL to disk with
+    one record per line) or attach a handler to
+    ``logging.getLogger("qubitos.feedback.analysis.sweep")``.
+    """
+    record = {"ts": datetime.now(UTC).isoformat(), **record}
+    if log_fh is not None:
+        log_fh.write(json.dumps(record, sort_keys=True))
+        log_fh.write("\n")
+        log_fh.flush()
+    if _SWEEP_LOGGER.isEnabledFor(logging.INFO):
+        _SWEEP_LOGGER.info("sweep_event %s", record)
+
+
+def _spawn_cell_seeds(seed: int, n_noise: int, n_methods: int) -> NDArray[np.int64]:
+    """Derive one 32-bit integer seed per (method, noise) cell from ``seed``.
+
+    Uses :class:`numpy.random.SeedSequence` with flat index
+    ``k = method_idx * n_noise + noise_idx``. Each child sequence is
+    collapsed to a single ``uint32`` that becomes ``SMEConfig.random_seed``
+    for that cell (the SME ensemble then spawns per-trajectory seeds from
+    it). This ordering matches the v0.7.1 specification and is independent
+    of parallel vs serial execution order.
+
+    Example:
+        For ``seed=0``, ``n_noise=2``, ``n_methods=3`` the cell
+        ``(method_idx=1, noise_idx=0)`` uses child ``k = 1*2+0 = 2``.
+    """
+    if n_noise <= 0 or n_methods <= 0:
+        raise ValueError("n_noise and n_methods must be positive")
+    children = np.random.SeedSequence(seed).spawn(n_methods * n_noise)
+    out = np.empty((n_methods, n_noise), dtype=np.int64)
+    for m_idx in range(n_methods):
+        for j in range(n_noise):
+            k = m_idx * n_noise + j
+            out[m_idx, j] = int(children[k].generate_state(1, dtype=np.uint32)[0])
+    return out
+
+
+def _stable_checkpoint_tag(
+    *,
+    seed: int,
+    noise_arr: NDArray[np.float64],
+    methods_tuple: tuple[str, ...],
+    num_trajectories: int,
+    hardware_params: HardwareParams,
+    initial_rho: NDArray[np.complex128],
+    target_rho: NDArray[np.complex128],
+    feedback_config: FeedbackConfig,
+    target_unitary_key: str,
+    baselines: dict[str, list[NDArray[np.complex128]]] | None,
+) -> str:
+    """Short hex tag embedding the sweep inputs (for checkpoint filenames)."""
+    h = hashlib.sha256()
+    h.update(np.ascontiguousarray(noise_arr.astype(np.float64)).tobytes())
+    h.update(str(methods_tuple).encode())
+    h.update(str(seed).encode())
+    h.update(str(num_trajectories).encode())
+    h.update(str(astuple(hardware_params)).encode())
+    h.update(np.ascontiguousarray(initial_rho).tobytes())
+    h.update(np.ascontiguousarray(target_rho).tobytes())
+    h.update(str(astuple(feedback_config)).encode())
+    h.update(target_unitary_key.encode())
+    if baselines:
+        for name in sorted(baselines.keys()):
+            h.update(name.encode())
+            hs = baselines[name]
+            if hs:
+                h.update(np.ascontiguousarray(hs[0]).tobytes())
+    return h.hexdigest()[:16]
+
+
+def _noise_sweep_compare_one_cell(
+    method: str,
+    noise_idx: int,
+    method_idx: int,
+    gamma: float,
+    *,
+    baseline_hamiltonians: list[NDArray[np.complex128]],
+    initial_rho: NDArray[np.complex128],
+    target_rho: NDArray[np.complex128],
+    base_collapse_ops: list[CollapseOperator],
+    feedback_config: FeedbackConfig,
+    hardware_params: HardwareParams,
+    num_trajectories: int,
+    run_seed: int,
+) -> tuple[str, int, int, float, float, float]:
+    """Evaluate one sweep cell in a worker process.
+
+    Returns:
+        ``(method, noise_idx, method_idx, mean_fidelity, std_fidelity, feedback_energy)``.
+    """
+    scaled_ops = _scale_collapse_ops(base_collapse_ops, float(gamma))
+    mean_f, std_f, fb_energy = _run_method(
+        method,
+        baseline_hamiltonians=baseline_hamiltonians,
+        initial_rho=initial_rho,
+        target_rho=target_rho,
+        collapse_ops=scaled_ops,
+        feedback_config=feedback_config,
+        hardware_params=hardware_params,
+        num_trajectories=num_trajectories,
+        seed=run_seed,
+    )
+    return (method, noise_idx, method_idx, mean_f, std_f, fb_energy)
 
 
 @dataclass(frozen=True)
@@ -94,7 +221,8 @@ class NoiseSweepResult:
             feedback energy cost averaged across trajectories at each
             noise level. Empty for non-feedback methods.
         hardware_params: HardwareParams snapshot used.
-        seed: Base RNG seed; per-trajectory seeds are ``seed + i``.
+        seed: Base RNG seed passed to :func:`_spawn_cell_seeds`; the SME
+            runtime derives per-trajectory streams from each cell seed.
         num_trajectories: Trajectories per ensemble per noise level.
     """
 
@@ -154,6 +282,10 @@ def noise_sweep_comparison(
     feedback_config: FeedbackConfig | None = None,
     seed: int = 0,
     baselines: dict[str, list[NDArray[np.complex128]]] | None = None,
+    *,
+    max_workers: int | None = None,
+    checkpoint_dir: Path | str | None = None,
+    log_path: Path | str | None = None,
 ) -> NoiseSweepResult:
     """Sweep ``gamma / gamma_0`` and compare mean fidelity per method.
 
@@ -163,6 +295,33 @@ def noise_sweep_comparison(
     the collapse-operator rates by ``gamma``. This mirrors the experimental
     protocol in SME-FEEDBACK-SPEC section 7.1 ("Optimize pulse at nominal
     noise gamma_0. Execute at actual noise gamma.").
+
+    **Parallelism (v0.7.1):** By default, independent ``(method, noise)``
+    cells run in parallel via :class:`concurrent.futures.ProcessPoolExecutor`.
+    Pass ``max_workers=1`` to force a single-process loop (no worker
+    processes). Results are deterministic: for base integer ``seed``,
+    cell ``(method_idx, noise_idx)`` uses the child
+    ``numpy.random.SeedSequence(seed).spawn(n_methods * n_noise)[k]``
+    with ``k = method_idx * n_noise + noise_idx``, reduced to a 32-bit
+    integer that feeds :class:`qubitos.sme.SMEConfig`. The same cell
+    receives the same seed whether cells run serially or across any
+    ``max_workers`` value.
+
+    **Checkpointing:** When ``checkpoint_dir`` is set, each completed cell
+    writes ``<tag>_cell_<noise_idx>_<method_idx>.npz`` under that directory.
+    The tag hashes sweep inputs so unrelated runs do not collide. An
+    existing file for a cell causes that cell to be skipped on a later
+    call (resume). Per-cell files are not deleted after a successful run.
+
+    **Structured logging (v0.7.1):** When ``log_path`` is set, the sweep
+    appends one JSON record per line to that file for ``resume``, ``start``,
+    ``done``, and ``error`` events; each record carries a UTC ``ts``,
+    ``noise_idx``, ``method_idx``, ``method``, and ``noise_level``, plus
+    ``wall_s`` and ``mean_fidelity`` for completion and ``error`` text on
+    failure. Independent of ``log_path``, the same records are emitted at
+    ``INFO`` to the ``qubitos.feedback.analysis.sweep`` logger (silent
+    unless a handler is attached), so library callers can route progress to
+    their own observability stack without touching disk.
 
     Args:
         target_unitary: Either a string in
@@ -179,13 +338,22 @@ def noise_sweep_comparison(
         feedback_config: Configuration for the Lyapunov controller used by
             ``"lyapunov_feedback"``. Defaults to a sensible single-axis
             preset.
-        seed: Base RNG seed; the per-trajectory seed for trajectory ``i``
-            at noise level ``j`` and method ``m`` is
-            ``seed + j * num_trajectories + i + hash(m)``-derived offset.
+        seed: Base RNG seed for :class:`numpy.random.SeedSequence` (see
+            per-cell derivation above).
         baselines: Optional pre-built Hamiltonian schedules keyed by
             method. When provided, skips the corresponding call to
             :func:`build_baseline_hamiltonians`; useful for callers that
             cache GRAPE results across runs.
+        max_workers: Maximum worker processes. ``None`` selects
+            ``min(os.cpu_count(), n_noise * n_methods)``. ``1`` selects the
+            in-process loop (no process pool).
+        checkpoint_dir: Optional directory for per-cell ``.npz``
+            checkpoints and resume.
+        log_path: Optional path to a JSONL file. When set, the sweep
+            appends one record per ``resume``, ``start``, ``done``, and
+            ``error`` event for observability on long runs. The parent
+            directory is created if missing; records are flushed after
+            every write.
 
     Returns:
         :class:`NoiseSweepResult` populated with mean / std fidelity per
@@ -208,6 +376,11 @@ def noise_sweep_comparison(
     if initial_rho is None:
         initial_rho = np.array([[1.0, 0.0], [0.0, 0.0]], dtype=np.complex128)
 
+    if isinstance(target_unitary, str):
+        target_unitary_key = target_unitary
+    else:
+        target_unitary_key = np.ascontiguousarray(target_unitary).tobytes().hex()
+
     target_rho = _resolve_target_density_matrix(target_unitary, initial_rho)
     feedback_cfg = feedback_config or _default_feedback_config(hardware_params, target_rho)
 
@@ -221,6 +394,10 @@ def noise_sweep_comparison(
         if method not in baseline_cache:
             baseline_cache[method] = build_baseline_hamiltonians(method, hardware_params)
 
+    n_noise = int(noise_arr.size)
+    n_methods = len(methods_tuple)
+    cell_seeds = _spawn_cell_seeds(seed, n_noise, n_methods)
+
     mean_fidelity: dict[str, NDArray[np.float64]] = {
         m: np.zeros(noise_arr.shape, dtype=np.float64) for m in methods_tuple
     }
@@ -229,27 +406,227 @@ def noise_sweep_comparison(
     }
     feedback_energy: dict[str, NDArray[np.float64]] = {}
 
-    for j, gamma in enumerate(noise_arr):
-        scaled_ops = _scale_collapse_ops(base_collapse_ops, float(gamma))
-        for m_idx, method in enumerate(methods_tuple):
-            run_seed = seed + j * len(methods_tuple) * num_trajectories + m_idx * 7919
-            mean_f, std_f, fb_energy = _run_method(
-                method,
-                baseline_hamiltonians=baseline_cache[method],
-                initial_rho=initial_rho,
-                target_rho=target_rho,
-                collapse_ops=scaled_ops,
-                feedback_config=feedback_cfg,
-                hardware_params=hardware_params,
-                num_trajectories=num_trajectories,
-                seed=run_seed,
+    cp_path: Path | None = Path(checkpoint_dir) if checkpoint_dir is not None else None
+    checkpoint_tag: str | None = None
+    if cp_path is not None:
+        checkpoint_tag = _stable_checkpoint_tag(
+            seed=seed,
+            noise_arr=noise_arr,
+            methods_tuple=methods_tuple,
+            num_trajectories=num_trajectories,
+            hardware_params=hardware_params,
+            initial_rho=initial_rho,
+            target_rho=target_rho,
+            feedback_config=feedback_cfg,
+            target_unitary_key=target_unitary_key,
+            baselines=baselines,
+        )
+        cp_path.mkdir(parents=True, exist_ok=True)
+
+    log_fh: IO[str] | None = None
+    if log_path is not None:
+        log_path_obj = Path(log_path)
+        if log_path_obj.parent and not log_path_obj.parent.exists():
+            log_path_obj.parent.mkdir(parents=True, exist_ok=True)
+        log_fh = log_path_obj.open("a", encoding="utf-8")
+
+    try:
+        done: set[tuple[int, int]] = set()
+        if cp_path is not None and checkpoint_tag is not None:
+            pattern = f"{checkpoint_tag}_cell_*.npz"
+            for fpath in cp_path.glob(pattern):
+                with np.load(fpath, allow_pickle=False) as data:
+                    j = int(data["noise_idx"])
+                    m_idx = int(data["method_idx"])
+                    method_stored = str(data["method"].item())
+                    if not (0 <= j < n_noise and 0 <= m_idx < n_methods):
+                        continue
+                    if methods_tuple[m_idx] != method_stored:
+                        continue
+                    mean_fidelity[method_stored][j] = float(data["mean_fidelity"])
+                    std_fidelity[method_stored][j] = float(data["std_fidelity"])
+                    fe = float(data["feedback_energy"])
+                    if method_stored == "lyapunov_feedback":
+                        feedback_energy.setdefault(
+                            method_stored, np.zeros(noise_arr.shape, dtype=np.float64)
+                        )[j] = fe
+                done.add((j, m_idx))
+            if done:
+                print(f"resuming from {len(done)} existing checkpoints", flush=True)
+                _emit_sweep_event(log_fh, {"event": "resume", "found": len(done)})
+
+        n_cells = n_noise * n_methods
+        if max_workers is None:
+            eff_workers = min(os.cpu_count() or 1, n_cells)
+        else:
+            if max_workers <= 0:
+                raise ValueError("max_workers must be positive or None")
+            eff_workers = min(max_workers, n_cells)
+
+        pending: list[tuple[int, int, str, float]] = []
+        for j in range(n_noise):
+            gamma = float(noise_arr[j])
+            for m_idx, method in enumerate(methods_tuple):
+                if (j, m_idx) in done:
+                    continue
+                pending.append((j, m_idx, method, gamma))
+
+        def _write_checkpoint(
+            j: int,
+            m_idx: int,
+            method: str,
+            mean_f: float,
+            std_f: float,
+            fb_e: float,
+        ) -> None:
+            if cp_path is None or checkpoint_tag is None:
+                return
+            fname = f"{checkpoint_tag}_cell_{j:05d}_{m_idx:02d}.npz"
+            out = cp_path / fname
+            np.savez_compressed(
+                out,
+                noise_idx=j,
+                method_idx=m_idx,
+                method=np.array(method),
+                noise_level=np.float64(noise_arr[j]),
+                mean_fidelity=np.float64(mean_f),
+                std_fidelity=np.float64(std_f),
+                feedback_energy=np.float64(fb_e),
             )
+
+        def _apply_cell(
+            j: int,
+            m_idx: int,
+            method: str,
+            mean_f: float,
+            std_f: float,
+            fb_e: float,
+        ) -> None:
             mean_fidelity[method][j] = mean_f
             std_fidelity[method][j] = std_f
             if method == "lyapunov_feedback":
                 feedback_energy.setdefault(method, np.zeros(noise_arr.shape, dtype=np.float64))[
                     j
-                ] = fb_energy
+                ] = fb_e
+            _write_checkpoint(j, m_idx, method, mean_f, std_f, fb_e)
+
+        def _start_record(j: int, m_idx: int, method: str) -> dict[str, Any]:
+            return {
+                "event": "start",
+                "noise_idx": j,
+                "method_idx": m_idx,
+                "method": method,
+                "noise_level": float(noise_arr[j]),
+            }
+
+        def _done_record(
+            j: int,
+            m_idx: int,
+            method: str,
+            mean_f: float,
+            wall_s: float,
+        ) -> dict[str, Any]:
+            return {
+                "event": "done",
+                "noise_idx": j,
+                "method_idx": m_idx,
+                "method": method,
+                "noise_level": float(noise_arr[j]),
+                "mean_fidelity": float(mean_f),
+                "wall_s": float(wall_s),
+            }
+
+        if not pending:
+            pass
+        elif eff_workers == 1:
+            for j, m_idx, method, gamma in pending:
+                run_seed = int(cell_seeds[m_idx, j])
+                _emit_sweep_event(log_fh, _start_record(j, m_idx, method))
+                t0 = time.perf_counter()
+                try:
+                    _m, _j, _mi, mean_f, std_f, fb_e = _noise_sweep_compare_one_cell(
+                        method,
+                        j,
+                        m_idx,
+                        gamma,
+                        baseline_hamiltonians=baseline_cache[method],
+                        initial_rho=initial_rho,
+                        target_rho=target_rho,
+                        base_collapse_ops=base_collapse_ops,
+                        feedback_config=feedback_cfg,
+                        hardware_params=hardware_params,
+                        num_trajectories=num_trajectories,
+                        run_seed=run_seed,
+                    )
+                except BaseException as exc:
+                    _emit_sweep_event(
+                        log_fh,
+                        {
+                            "event": "error",
+                            "noise_idx": j,
+                            "method_idx": m_idx,
+                            "method": method,
+                            "noise_level": float(noise_arr[j]),
+                            "wall_s": float(time.perf_counter() - t0),
+                            "error": f"{type(exc).__name__}: {exc}",
+                        },
+                    )
+                    raise
+                wall_s = time.perf_counter() - t0
+                _apply_cell(j, m_idx, method, mean_f, std_f, fb_e)
+                _emit_sweep_event(log_fh, _done_record(j, m_idx, method, mean_f, wall_s))
+        else:
+            with ProcessPoolExecutor(
+                max_workers=eff_workers,
+                mp_context=mp.get_context("spawn"),
+            ) as executor:
+                future_map = {}
+                submit_times: dict[Any, float] = {}
+                for j, m_idx, method, gamma in pending:
+                    run_seed = int(cell_seeds[m_idx, j])
+                    _emit_sweep_event(log_fh, _start_record(j, m_idx, method))
+                    fut = executor.submit(
+                        _noise_sweep_compare_one_cell,
+                        method,
+                        j,
+                        m_idx,
+                        gamma,
+                        baseline_hamiltonians=baseline_cache[method],
+                        initial_rho=initial_rho,
+                        target_rho=target_rho,
+                        base_collapse_ops=base_collapse_ops,
+                        feedback_config=feedback_cfg,
+                        hardware_params=hardware_params,
+                        num_trajectories=num_trajectories,
+                        run_seed=run_seed,
+                    )
+                    future_map[fut] = (j, m_idx, method)
+                    submit_times[fut] = time.perf_counter()
+                for fut in as_completed(future_map):
+                    j, m_idx, method = future_map[fut]
+                    t0 = submit_times[fut]
+                    try:
+                        _method, _j, _mi, mean_f, std_f, fb_e = fut.result()
+                    except BaseException as exc:
+                        _emit_sweep_event(
+                            log_fh,
+                            {
+                                "event": "error",
+                                "noise_idx": j,
+                                "method_idx": m_idx,
+                                "method": method,
+                                "noise_level": float(noise_arr[j]),
+                                "wall_s": float(time.perf_counter() - t0),
+                                "error": f"{type(exc).__name__}: {exc}",
+                            },
+                        )
+                        raise
+                    wall_s = time.perf_counter() - t0
+                    _apply_cell(j, m_idx, method, mean_f, std_f, fb_e)
+                    _emit_sweep_event(log_fh, _done_record(j, m_idx, method, mean_f, wall_s))
+    finally:
+        if log_fh is not None:
+            log_fh.close()
 
     return NoiseSweepResult(
         noise_levels=noise_arr,
