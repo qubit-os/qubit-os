@@ -135,4 +135,11 @@ pub mod python {
             self.config.control_axes.len()
         }
     }
+
+    pub fn register_feedback_module(parent: &Bound<'_, PyModule>) -> PyResult<()> {
+        let m = PyModule::new(parent.py(), "feedback")?;
+        m.add_class::<PyRustLyapunovController>()?;
+        parent.add_submodule(&m)?;
+        Ok(())
+    }
 }

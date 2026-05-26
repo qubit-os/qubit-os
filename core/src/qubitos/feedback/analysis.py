@@ -155,12 +155,23 @@ def _noise_sweep_compare_one_cell(
     hardware_params: HardwareParams,
     num_trajectories: int,
     run_seed: int,
+    backend: str = "batched",
 ) -> tuple[str, int, int, float, float, float]:
     """Evaluate one sweep cell in a worker process.
+
+    Binds BLAS to one thread per worker to avoid oversubscription when
+    the cell uses batched NumPy and the executor spawns multiple cells
+    in parallel. The batched backend's BLAS-level parallelism is already
+    captured by the ensemble tensor shape; cell-level parallelism comes
+    from the process pool, not per-process threads.
 
     Returns:
         ``(method, noise_idx, method_idx, mean_fidelity, std_fidelity, feedback_energy)``.
     """
+    os.environ["OMP_NUM_THREADS"] = "1"
+    os.environ["MKL_NUM_THREADS"] = "1"
+    os.environ["OPENBLAS_NUM_THREADS"] = "1"
+    os.environ["NUMEXPR_NUM_THREADS"] = "1"
     scaled_ops = _scale_collapse_ops(base_collapse_ops, float(gamma))
     mean_f, std_f, fb_energy = _run_method(
         method,
@@ -172,6 +183,7 @@ def _noise_sweep_compare_one_cell(
         hardware_params=hardware_params,
         num_trajectories=num_trajectories,
         seed=run_seed,
+        backend=backend,
     )
     return (method, noise_idx, method_idx, mean_f, std_f, fb_energy)
 
@@ -286,6 +298,7 @@ def noise_sweep_comparison(
     max_workers: int | None = None,
     checkpoint_dir: Path | str | None = None,
     log_path: Path | str | None = None,
+    backend: str = "batched",
 ) -> NoiseSweepResult:
     """Sweep ``gamma / gamma_0`` and compare mean fidelity per method.
 
@@ -557,6 +570,7 @@ def noise_sweep_comparison(
                         hardware_params=hardware_params,
                         num_trajectories=num_trajectories,
                         run_seed=run_seed,
+                        backend=backend,
                     )
                 except BaseException as exc:
                     _emit_sweep_event(
@@ -599,6 +613,7 @@ def noise_sweep_comparison(
                         hardware_params=hardware_params,
                         num_trajectories=num_trajectories,
                         run_seed=run_seed,
+                        backend=backend,
                     )
                     future_map[fut] = (j, m_idx, method)
                     submit_times[fut] = time.perf_counter()
@@ -826,6 +841,7 @@ def _run_method(
     hardware_params: HardwareParams,
     num_trajectories: int,
     seed: int,
+    backend: str = "batched",
 ) -> tuple[float, float, float]:
     """Run one (method, gamma) cell and return (mean_F, std_F, mean_feedback_energy)."""
     sme_config = SMEConfig(
@@ -869,6 +885,7 @@ def _run_method(
         baseline_hamiltonians,
         target_rho=target_rho,
         num_trajectories=num_trajectories,
+        backend=backend,
     )
     mean_f = ensemble.mean_fidelity if ensemble.mean_fidelity is not None else 0.0
     std_f = ensemble.std_fidelity if ensemble.std_fidelity is not None else 0.0

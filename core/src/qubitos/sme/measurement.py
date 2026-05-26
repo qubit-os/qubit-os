@@ -23,6 +23,52 @@ try:
 except ImportError:  # pragma: no cover - exercised by dependency-free installs
     _AGENTBIBLE_AVAILABLE = False
 
+_DEBUG_VALIDATION = False
+
+
+def set_debug_validation(enabled: bool) -> None:
+    """Enable or disable thorough agentbible-based per-substep validation.
+
+    When False (default), density-matrix surface checks use lightweight
+    numpy finiteness + Hermiticity residue + trace deviation. When True,
+    agentbible's check_density_matrix is used, which additionally validates
+    physical-constant invariants at higher computational cost.
+
+    The non-debug path is safe because the trajectory loop already
+    symmetrizes and renormalizes every substep. Debug mode is useful for
+    diagnosing integrator bugs during development.
+    """
+    global _DEBUG_VALIDATION
+    _DEBUG_VALIDATION = enabled
+
+
+def eigenvalue_bounds_2x2(rho: NDArray[np.complex128]) -> tuple[float, float]:
+    """Closed-form 2x2 Hermitian eigenvalues (no eigendecomposition).
+
+    For a 2x2 Hermitian density matrix written in Bloch form,
+    eigenvalues are (trace/2) +/- sqrt((tr_diff/2)^2 + |b|^2).
+
+    Returns (lambda_min, lambda_max). Matches the formula used by the
+    Rust HAL backend in hal/src/sme/measurement.rs:eigenvalue_bounds_2x2.
+    """
+    a = rho[0, 0].real
+    d = rho[1, 1].real
+    b = complex(rho[0, 1])
+    half_sum = 0.5 * (a + d)
+    half_diff = 0.5 * (a - d)
+    disc = np.sqrt(half_diff * half_diff + b.real * b.real + b.imag * b.imag)
+    return float(half_sum - disc), float(half_sum + disc)
+
+
+def nuclear_deviation_2x2(rho: NDArray[np.complex128]) -> float:
+    """|nuclear norm - 1| for a 2x2 Hermitian density matrix.
+
+    Nuclear norm = sum of absolute eigenvalues = |lambda_min| + |lambda_max|.
+    Avoids the full SVD that numpy.linalg.norm(ord='nuc') would compute.
+    """
+    lam_min, lam_max = eigenvalue_bounds_2x2(symmetrize_density_matrix(rho))
+    return abs(abs(lam_min) + abs(lam_max) - 1.0)
+
 
 def effective_measurement_operator(
     collapse_ops: list[CollapseOperator],
@@ -86,11 +132,37 @@ def renormalize_density_matrix(rho: NDArray[np.complex128]) -> NDArray[np.comple
 
 
 def project_positive_cone(rho: NDArray[np.complex128]) -> NDArray[np.complex128]:
-    """Clamp negative eigenvalues to zero and renormalize."""
-    eigenvalues, eigenvectors = np.linalg.eigh(symmetrize_density_matrix(rho))
-    clipped = np.clip(eigenvalues.real, 0.0, None)
-    projected = eigenvectors @ np.diag(clipped.astype(np.complex128)) @ eigenvectors.conj().T
-    return renormalize_density_matrix(symmetrize_density_matrix(projected))
+    """Clamp 2x2 Bloch vector onto the unit ball and rebuild rho.
+
+    Matches the Rust HAL backend logic in
+    hal/src/sme/measurement.rs:project_positive_cone.
+    Avoids an eigendecomposition for the common 2x2 case.
+    """
+    sym = symmetrize_density_matrix(rho)
+    normalized = renormalize_density_matrix(sym)
+    if normalized.shape[0] != 2:
+        eigenvalues, eigenvectors = np.linalg.eigh(sym)
+        clipped = np.clip(eigenvalues.real, 0.0, None)
+        projected = eigenvectors @ np.diag(clipped.astype(np.complex128)) @ eigenvectors.conj().T
+        return renormalize_density_matrix(symmetrize_density_matrix(projected))
+    a = normalized[0, 0].real
+    d = normalized[1, 1].real
+    b = normalized[0, 1]
+    x = 2.0 * b.real
+    y = -2.0 * b.imag
+    z = a - d
+    norm = np.sqrt(x * x + y * y + z * z)
+    if norm <= 1.0:
+        return normalized
+    x /= norm
+    y /= norm
+    z /= norm
+    projected = np.zeros_like(normalized)
+    projected[0, 0] = 0.5 * (1.0 + z)
+    projected[1, 1] = 0.5 * (1.0 - z)
+    projected[0, 1] = 0.5 * (x - 1.0j * y)
+    projected[1, 0] = 0.5 * (x + 1.0j * y)
+    return projected
 
 
 def trace_deviation(rho: NDArray[np.complex128]) -> float:
@@ -99,7 +171,14 @@ def trace_deviation(rho: NDArray[np.complex128]) -> float:
 
 
 def trace_norm_deviation(rho: NDArray[np.complex128]) -> float:
-    """Absolute deviation from unit trace norm."""
+    """Absolute deviation from unit trace norm.
+
+    For 2x2 matrices uses the closed-form nuclear norm, ported from
+    hal/src/sme/measurement.rs:trace_norm_deviation which uses
+    eigenvalue_bounds_2x2. Falls back to full SVD for larger matrices.
+    """
+    if rho.shape[0] == 2:
+        return nuclear_deviation_2x2(rho)
     return float(abs(np.linalg.norm(rho, ord="nuc") - 1.0))
 
 
@@ -111,9 +190,22 @@ def nonhermitian_residue(rho: NDArray[np.complex128]) -> float:
 def has_positivity_violation(
     rho: NDArray[np.complex128],
     atol: float,
+    min_eigenvalue: float | None = None,
 ) -> tuple[bool, float]:
-    """Return whether rho has an eigenvalue smaller than -atol."""
-    min_eigenvalue = float(np.min(np.linalg.eigvalsh(symmetrize_density_matrix(rho)).real))
+    """Return whether rho has an eigenvalue smaller than -atol.
+
+    If min_eigenvalue is provided, skips the eigendecomposition and uses it
+    directly. This avoids redundant eigenvalue computation when the integrator
+    already computed them for the retry decision.
+    """
+    if min_eigenvalue is None:
+        if rho.shape[0] == 2:
+            _, (lam_min, _) = True, eigenvalue_bounds_2x2(symmetrize_density_matrix(rho))
+            min_eigenvalue = lam_min
+        else:
+            min_eigenvalue = float(
+                np.min(np.linalg.eigvalsh(symmetrize_density_matrix(rho)).real)
+            )
     return min_eigenvalue < -atol, min_eigenvalue
 
 
@@ -133,9 +225,24 @@ def validate_measurement_innovation(
 def validate_trajectory_density_matrix(
     rho: NDArray[np.complex128],
     atol: float = 1e-6,
+    min_eigenvalue: float | None = None,
 ) -> NDArray[np.complex128]:
-    """Validate a stochastic per-trajectory density matrix surface."""
-    check_density_matrix_surface(rho, name="trajectory_density_matrix", atol=atol)
+    """Validate a stochastic per-trajectory density matrix surface.
+
+    When min_eigenvalue is provided, reuses it for the positivity check
+    rather than recomputing an eigendecomposition. The Eigenvalue is
+    expected to come from the integrator step that produced rho (see
+    euler_maruyama_step SMEStepResult.min_eigenvalue).
+
+    Per-step validation uses lightweight checks by default. Use
+    set_debug_validation(True) to enable agentbible for trajectory
+    validation during development.
+    """
+    check_density_matrix_surface(
+        rho, name="trajectory_density_matrix", atol=atol,
+        min_eigenvalue=min_eigenvalue,
+        use_agentbible=_DEBUG_VALIDATION,
+    )
     return rho
 
 
@@ -143,14 +250,20 @@ def validate_ensemble_density_matrix(
     rho: NDArray[np.complex128],
     atol: float = 1e-10,
 ) -> NDArray[np.complex128]:
-    """Validate an ensemble-averaged density matrix surface."""
-    check_density_matrix_surface(rho, name="ensemble_density_matrix", atol=atol)
+    """Validate an ensemble-averaged density matrix surface.
+
+    Always uses the most thorough check available (including agentbible
+    when installed) since this runs once at the end, not per-substep.
+    """
+    check_density_matrix_surface(
+        rho, name="ensemble_density_matrix", atol=atol, use_agentbible=True,
+    )
     return rho
 
 
 def check_finite_surface(values: NDArray[np.complex128] | NDArray[np.float64], name: str) -> None:
-    """Validate finiteness using agentbible when available."""
-    if _AGENTBIBLE_AVAILABLE:
+    """Validate finiteness. Uses agentbible only when debug validation is on."""
+    if _DEBUG_VALIDATION and _AGENTBIBLE_AVAILABLE:
         _ab_check_finite(np.asarray(values), name=name, strict=True)
         return
     if not np.all(np.isfinite(values)):
@@ -162,8 +275,8 @@ def check_hermitian_surface(
     name: str,
     atol: float,
 ) -> None:
-    """Validate Hermiticity using agentbible when available."""
-    if _AGENTBIBLE_AVAILABLE:
+    """Validate Hermiticity. Uses agentbible only when debug validation is on."""
+    if _DEBUG_VALIDATION and _AGENTBIBLE_AVAILABLE:
         _ab_check_hermitian(np.asarray(matrix), name=name, atol=atol, strict=True)
         return
     if nonhermitian_residue(matrix) > atol:
@@ -174,15 +287,29 @@ def check_density_matrix_surface(
     matrix: NDArray[np.complex128],
     name: str,
     atol: float,
+    min_eigenvalue: float | None = None,
+    use_agentbible: bool = True,
 ) -> None:
-    """Validate a density matrix using agentbible when available."""
-    if _AGENTBIBLE_AVAILABLE:
+    """Validate a density matrix surface.
+
+    When use_agentbible is True and agentbible is available, delegates
+    to agentbible for thorough invariant checking including physical-
+    constant validation. When False, uses lightweight numpy checks
+    (isfinite + Hermiticity residue + trace deviation + eigenvalue
+    check with pre-computed eigenvalues when available).
+
+    Per-substep trajectory validation passes use_agentbible=False for
+    performance; ensemble validation (once at end) uses True.
+    """
+    if use_agentbible and _AGENTBIBLE_AVAILABLE:
         _ab_check_density_matrix(np.asarray(matrix), name=name, atol=atol, strict=True)
         return
     check_finite_surface(matrix, name=name)
     check_hermitian_surface(matrix, name=name, atol=atol)
     if trace_deviation(matrix) > atol:
         raise ValueError(f"{name} must have unit trace within atol={atol}")
-    violation, min_eigenvalue = has_positivity_violation(matrix, atol)
+    violation, min_eig = has_positivity_violation(
+        matrix, atol, min_eigenvalue=min_eigenvalue,
+    )
     if violation:
-        raise ValueError(f"{name} has min eigenvalue {min_eigenvalue:.2e}")
+        raise ValueError(f"{name} has min eigenvalue {min_eig:.2e}")

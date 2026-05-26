@@ -2,6 +2,9 @@
 // SPDX-License-Identifier: Apache-2.0
 
 //! PyO3 bindings for the Rust SME solver.
+//!
+//! Expanded surface (v0.7.3): configurable tolerances, collapse_ops from
+//! rates/matrices, target_rho for fidelity, measurement_operator override.
 
 #[cfg(feature = "python")]
 pub mod python {
@@ -33,6 +36,12 @@ pub mod python {
         pub positivity_violations: usize,
         #[pyo3(get)]
         pub num_trajectories: Option<usize>,
+        #[pyo3(get)]
+        pub final_fidelity: Option<f64>,
+        #[pyo3(get)]
+        pub mean_fidelity: Option<f64>,
+        #[pyo3(get)]
+        pub std_fidelity: Option<f64>,
     }
 
     #[pymethods]
@@ -47,7 +56,10 @@ pub mod python {
             random_seed=0,
             store_trajectory=false,
             store_measurement_record=false,
-            positivity_projection=false
+            positivity_projection=false,
+            adaptive_tolerance=1e-6_f64,
+            positivity_tolerance=1e-8_f64,
+            ensemble_size=1000_usize,
         ))]
         #[allow(clippy::too_many_arguments)]
         fn new(
@@ -60,6 +72,9 @@ pub mod python {
             store_trajectory: bool,
             store_measurement_record: bool,
             positivity_projection: bool,
+            adaptive_tolerance: f64,
+            positivity_tolerance: f64,
+            ensemble_size: usize,
         ) -> PyResult<Self> {
             let collapse_ops =
                 CollapseOperator::from_t1_t2(t1_us, t2_us, "q0").map_err(PyValueError::new_err)?;
@@ -72,55 +87,81 @@ pub mod python {
                 store_trajectory,
                 store_measurement_record,
                 positivity_projection,
-                adaptive_tolerance: 1e-6,
-                positivity_tolerance: 1e-8,
-                ensemble_size: 1000,
+                adaptive_tolerance,
+                positivity_tolerance,
+                ensemble_size,
             };
             config.validate().map_err(PyValueError::new_err)?;
             Ok(Self { config })
         }
 
-        #[pyo3(signature = (initial_rho, hamiltonians, dim))]
+        #[pyo3(signature = (
+            initial_rho, hamiltonians, dim,
+            target_rho=None, measurement_operator=None
+        ))]
         fn solve_trajectory(
             &self,
             initial_rho: Vec<f64>,
             hamiltonians: Vec<Vec<f64>>,
             dim: usize,
+            target_rho: Option<Vec<f64>>,
+            measurement_operator: Option<Vec<f64>>,
         ) -> PyResult<PySMEResult> {
             let rho = flat_to_complex_matrix(&initial_rho, dim).map_err(PyValueError::new_err)?;
             let h_mats: Result<Vec<_>, _> = hamiltonians
                 .iter()
                 .map(|values| flat_to_complex_matrix(values, dim))
                 .collect();
+            let t_rho = target_rho
+                .map(|v| flat_to_complex_matrix(&v, dim))
+                .transpose()
+                .map_err(PyValueError::new_err)?;
+            let m_op = measurement_operator
+                .map(|v| flat_to_complex_matrix(&v, dim))
+                .transpose()
+                .map_err(PyValueError::new_err)?;
             let result = solve_sme_trajectory(
                 &rho,
                 &h_mats.map_err(PyValueError::new_err)?,
-                None,
-                None,
+                m_op.as_ref(),
+                t_rho.as_ref(),
                 &self.config,
             )
             .map_err(PyValueError::new_err)?;
             Ok(convert_result(&result))
         }
 
-        #[pyo3(signature = (initial_rho, hamiltonians, dim, num_trajectories=None))]
+        #[pyo3(signature = (
+            initial_rho, hamiltonians, dim,
+            num_trajectories=None, target_rho=None, measurement_operator=None
+        ))]
         fn solve_ensemble(
             &self,
             initial_rho: Vec<f64>,
             hamiltonians: Vec<Vec<f64>>,
             dim: usize,
             num_trajectories: Option<usize>,
+            target_rho: Option<Vec<f64>>,
+            measurement_operator: Option<Vec<f64>>,
         ) -> PyResult<PySMEResult> {
             let rho = flat_to_complex_matrix(&initial_rho, dim).map_err(PyValueError::new_err)?;
             let h_mats: Result<Vec<_>, _> = hamiltonians
                 .iter()
                 .map(|values| flat_to_complex_matrix(values, dim))
                 .collect();
+            let t_rho = target_rho
+                .map(|v| flat_to_complex_matrix(&v, dim))
+                .transpose()
+                .map_err(PyValueError::new_err)?;
+            let m_op = measurement_operator
+                .map(|v| flat_to_complex_matrix(&v, dim))
+                .transpose()
+                .map_err(PyValueError::new_err)?;
             let result = solve_sme_ensemble(
                 &rho,
                 &h_mats.map_err(PyValueError::new_err)?,
-                None,
-                None,
+                m_op.as_ref(),
+                t_rho.as_ref(),
                 &self.config,
                 num_trajectories,
             )
@@ -137,6 +178,9 @@ pub mod python {
             steps: result.steps,
             positivity_violations: result.positivity_violations,
             num_trajectories: result.num_trajectories,
+            final_fidelity: result.final_fidelity,
+            mean_fidelity: result.mean_fidelity,
+            std_fidelity: result.std_fidelity,
         }
     }
 

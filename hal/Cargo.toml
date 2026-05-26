@@ -90,6 +90,7 @@ path = "src/main.rs"
 [lib]
 name = "qubit_os_hardware"
 path = "src/lib.rs"
+crate-type = ["cdylib", "rlib"]
 
 [profile.release]
 lto = true

@@ -50,3 +50,24 @@ pub mod test_utils;
 
 /// Library version
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
+
+#[cfg(feature = "python")]
+mod pyo3_root {
+    use pyo3::prelude::*;
+
+    #[pymodule]
+    #[pyo3(name = "qubit_os_hardware")]
+    pub fn qubit_os_hardware(m: &Bound<'_, PyModule>) -> PyResult<()> {
+        use crate::grape::pyo3_bindings::python::register_grape_module;
+        use crate::lindblad::pyo3_bindings::python::register_lindblad_module;
+        use crate::sme::pyo3_bindings::python::register_sme_module;
+        use crate::feedback::pyo3_bindings::python::register_feedback_module;
+
+        register_grape_module(m)?;
+        register_feedback_module(m)?;
+        register_lindblad_module(m)?;
+        register_sme_module(m)?;
+
+        Ok(())
+    }
+}

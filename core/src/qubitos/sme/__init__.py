@@ -150,8 +150,45 @@ class SMESolver:
         target_rho: NDArray[np.complex128] | None = None,
         num_trajectories: int | None = None,
         max_workers: int | None = None,
+        backend: str = "python",
     ) -> SMEResult:
-        """Simulate a Monte Carlo ensemble of conditional trajectories."""
+        """Simulate a Monte Carlo ensemble of conditional trajectories.
+
+        Args:
+            backend: ``"python"`` for the per-trajectory oracle (default,
+                     most trusted), ``"batched"`` for lockstep-adaptive
+                     NumPy ensemble, ``"gpu"`` for CuPy GPU backend.
+        """
+        if backend == "batched":
+            from .ensemble_batched import solve_ensemble_batched
+
+            return solve_ensemble_batched(
+                initial_rho=initial_rho,
+                hamiltonians=hamiltonians,
+                collapse_ops=self._collapse_ops,
+                config=self._config,
+                measurement_operator=self._measurement_operator,
+                target_rho=target_rho,
+                num_trajectories=num_trajectories,
+            )
+
+        if backend == "gpu":
+            from .ensemble_gpu import gpu_available, solve_ensemble_gpu
+
+            if not gpu_available():
+                raise RuntimeError(
+                    "GPU backend requested but CuPy is not available or no GPU detected"
+                )
+            return solve_ensemble_gpu(
+                initial_rho=initial_rho,
+                hamiltonians=hamiltonians,
+                collapse_ops=self._collapse_ops,
+                config=self._config,
+                measurement_operator=self._measurement_operator,
+                target_rho=target_rho,
+                num_trajectories=num_trajectories,
+            )
+
         from .ensemble import solve_ensemble
 
         return solve_ensemble(

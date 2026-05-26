@@ -1,0 +1,17 @@
+[build-system]
+requires = ["maturin>=1.0"]
+build-backend = "maturin"
+
+[project]
+name = "qubit-os-hardware"
+version = "0.7.0"
+description = "Hardware Abstraction Layer for QubitOS quantum control kernel"
+license = "Apache-2.0"
+requires-python = ">=3.10"
+
+[tool.maturin]
+features = ["python"]
+bindings = "pyo3"
+python-source = "python"
+module-name = "qubit_os_hardware"
+manifest-path = "Cargo.toml"

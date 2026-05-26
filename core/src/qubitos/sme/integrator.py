@@ -13,6 +13,7 @@ from numpy.typing import NDArray
 from qubitos.lindblad import CollapseOperator, lindblad_rhs, lindblad_rk4_step
 
 from .measurement import (
+    eigenvalue_bounds_2x2,
     has_positivity_violation,
     measurement_signal,
     measurement_superoperator,
@@ -35,6 +36,9 @@ class SMEStepResult:
     stability_metric: float
     nonhermitian_residue: float
     positivity_violation: bool
+    min_eigenvalue: float
+    """Smallest eigenvalue of the accepted rho; reused by the post-step
+    validator to avoid a redundant eigendecomposition."""
 
 
 def euler_maruyama_step(
@@ -56,6 +60,7 @@ def euler_maruyama_step(
     if eta == 0.0:
         rho_new = lindblad_rk4_step(rho, hamiltonian, collapse_ops, dt)
         rho_new = renormalize_density_matrix(symmetrize_density_matrix(rho_new))
+        _, lam_min = eigenvalue_bounds_2x2(rho_new)
         return SMEStepResult(
             density_matrix=rho_new,
             measurement_signal=0.0,
@@ -63,6 +68,7 @@ def euler_maruyama_step(
             stability_metric=0.0,
             nonhermitian_residue=0.0,
             positivity_violation=False,
+            min_eigenvalue=lam_min,
         )
 
     d_w = float(rng.normal(0.0, np.sqrt(dt)))
@@ -73,9 +79,10 @@ def euler_maruyama_step(
     stability = trace_norm_deviation(raw_rho)
     hermitian_err = nonhermitian_residue(raw_rho)
     rho_new = renormalize_density_matrix(symmetrize_density_matrix(raw_rho))
-    positivity_violation, _ = has_positivity_violation(rho_new, positivity_tolerance)
+    positivity_violation, min_eig = has_positivity_violation(rho_new, positivity_tolerance)
     if positivity_projection and positivity_violation:
         rho_new = project_positive_cone(rho_new)
+        _, min_eig = has_positivity_violation(rho_new, positivity_tolerance)
     signal = measurement_signal(measurement_operator, rho, eta, d_w, dt)
     return SMEStepResult(
         density_matrix=rho_new,
@@ -84,4 +91,5 @@ def euler_maruyama_step(
         stability_metric=stability,
         nonhermitian_residue=hermitian_err,
         positivity_violation=positivity_violation,
+        min_eigenvalue=min_eig,
     )

@@ -14,7 +14,6 @@ import pytest
 
 from qubitos.pulsegen.grape import GrapeConfig, GrapeOptimizer
 from qubitos.pulsegen.hamiltonians import TARGET_UNITARIES
-from qubitos.target_unitary import TargetUnitary
 
 # Try to import Rust GRAPE; skip if not available
 try:
@@ -45,7 +44,7 @@ class TestCrossValidation:
 
     def test_x_gate_both_converge(self):
         """Both Python and Rust should converge on X gate."""
-        target = TARGET_UNITARIES[TargetUnitary.GATE_X]
+        target = TARGET_UNITARIES["X"]
         sigma_x = np.array([[0, 1], [1, 0]], dtype=np.complex128)
         sigma_y = np.array([[0, -1j], [1j, 0]], dtype=np.complex128)
 
@@ -83,7 +82,7 @@ class TestCrossValidation:
 
     def test_hadamard_both_converge(self):
         """Both should handle Hadamard gate."""
-        target = TARGET_UNITARIES[TargetUnitary.GATE_H]
+        target = TARGET_UNITARIES["H"]
         sigma_x = np.array([[0, 1], [1, 0]], dtype=np.complex128)
         sigma_y = np.array([[0, -1j], [1j, 0]], dtype=np.complex128)
 
@@ -130,7 +129,7 @@ class TestRustGrapeBenchmark:
     @pytest.mark.slow
     def test_speedup_single_qubit(self):
         """Rust should be ≥5x faster than Python for single-qubit gates."""
-        target = TARGET_UNITARIES[TargetUnitary.GATE_X]
+        target = TARGET_UNITARIES["X"]
         sigma_x = np.array([[0, 1], [1, 0]], dtype=np.complex128)
         sigma_y = np.array([[0, -1j], [1j, 0]], dtype=np.complex128)
         drift = np.zeros((2, 2), dtype=np.complex128)
