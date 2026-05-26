@@ -234,9 +234,22 @@ class HALClient:
 
             logger.info("Connected to HAL server")
 
-        except Exception as e:
+        except grpc.RpcError as e:
+            # Preserve the specific gRPC status (UNAVAILABLE, DEADLINE_EXCEEDED,
+            # etc.) instead of flattening every transport failure into one code.
             logger.error(f"Failed to connect to HAL server: {e}")
-            raise HALClientError(f"Connection failed: {e}", code="CONNECTION_ERROR") from e
+            raise HALClientError(
+                f"Connection failed: {e.details()}",
+                code=e.code().name,
+            ) from e
+        except Exception as e:
+            # Channel / credential construction errors (bad address, TLS setup).
+            # Name the concrete exception type so the root cause is not lost.
+            logger.error(f"Failed to connect to HAL server: {e}")
+            raise HALClientError(
+                f"Connection failed ({type(e).__name__}): {e}",
+                code="CONNECTION_ERROR",
+            ) from e
 
     async def close(self) -> None:
         """Close the connection to the HAL server."""

@@ -16,7 +16,24 @@
 
 use std::fmt;
 
+use super::r#trait::ExecutePulseRequest;
 use crate::error::BackendError;
+
+/// Net single-rotation ``(phase, angle)`` of a pulse from its I/Q envelope.
+///
+/// Both the IBM and Braket QASM emitters approximate a pulse by one rotation:
+/// the angle is the magnitude of the integrated (I, Q) area scaled to radians,
+/// and the phase is its argument. The QASM each backend emits from these
+/// differs by native gate set, but this rotation math is identical, so it
+/// lives here instead of being copy-pasted into each backend.
+pub fn pulse_rotation(request: &ExecutePulseRequest) -> (f64, f64) {
+    let dt_ns = request.duration_ns as f64 / request.num_time_steps as f64;
+    let i_area: f64 = request.i_envelope.iter().map(|a| a * dt_ns).sum();
+    let q_area: f64 = request.q_envelope.iter().map(|a| a * dt_ns).sum();
+    let angle = (i_area * i_area + q_area * q_area).sqrt() * 2.0 * std::f64::consts::PI * 1e-3;
+    let phase = q_area.atan2(i_area);
+    (phase, angle)
+}
 
 /// A native gate that a backend can physically execute.
 #[derive(Debug, Clone, PartialEq)]

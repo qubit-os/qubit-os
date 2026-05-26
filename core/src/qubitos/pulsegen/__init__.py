@@ -28,8 +28,6 @@ Example:
     >>> result = generate_pulse("CZ", num_qubits=2, duration_ns=80)
 """
 
-from qubitos.target_unitary import TargetUnitary
-
 from .grape import (
     GrapeConfig,
     GrapeOptimizer,
@@ -75,8 +73,6 @@ from .shapes import (
 )
 
 __all__ = [
-    # Target unitaries (v0.2.0 — replaces GateType)
-    "TargetUnitary",
     # GRAPE
     "GrapeConfig",
     "GrapeOptimizer",
@@ -125,11 +121,13 @@ def __getattr__(name: str):  # type: ignore[misc]
     if name == "GateType":
         import warnings
 
+        from qubitos.target_unitary import TargetUnitary
+
         warnings.warn(
             "GateType is deprecated and will be removed in v0.8.0. "
             "Use TargetUnitary instead.\n"
             "  Migration: replace 'from qubitos.pulsegen import GateType' "
-            "with 'from qubitos.pulsegen import TargetUnitary'",
+            "with 'from qubitos.target_unitary import TargetUnitary'",
             DeprecationWarning,
             stacklevel=2,
         )

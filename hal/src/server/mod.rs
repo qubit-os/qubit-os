@@ -37,7 +37,6 @@
 
 pub mod grpc;
 pub mod rest;
-pub mod temporal;
 
 pub use grpc::GrpcServer;
 pub use rest::RestServer;

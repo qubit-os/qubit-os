@@ -17,8 +17,10 @@ pub mod budget;
 pub mod constraints;
 pub mod sequence;
 pub mod types;
+pub mod validate;
 
 pub use budget::DecoherenceBudget;
 pub use constraints::{ConstraintKind, TemporalConstraint};
 pub use sequence::{PulseSequence, ScheduledPulse};
 pub use types::{AWGClockConfig, TimePoint};
+pub use validate::{validate_temporal_constraints, TemporalValidationError};
