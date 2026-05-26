@@ -38,6 +38,23 @@ pub enum HealthStatus {
     Unavailable,
 }
 
+/// Map a remote backend's success/failure health probe to a [`HealthStatus`],
+/// logging the failure. Shared by the HTTP-client backends whose probe is a
+/// simple ``Result<(), _>`` (IBM, Braket); backends with a richer signal
+/// (e.g. IQM's degraded state) keep their own logic.
+pub(crate) fn remote_health_status<E: std::fmt::Display>(
+    result: Result<(), E>,
+    backend_name: &str,
+) -> HealthStatus {
+    match result {
+        Ok(()) => HealthStatus::Healthy,
+        Err(e) => {
+            tracing::warn!(backend = backend_name, error = %e, "remote health check failed");
+            HealthStatus::Unavailable
+        }
+    }
+}
+
 /// Measurement result from a pulse execution.
 #[derive(Debug, Clone)]
 pub struct MeasurementResult {

@@ -24,7 +24,7 @@ use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::time::Duration;
-use tracing::{debug, info, warn};
+use tracing::{debug, info};
 
 use super::{BackendType, QuantumBackend};
 use crate::config::ResourceLimits;
@@ -321,13 +321,10 @@ impl<C: BraketHttpClient> QuantumBackend for BraketBackend<C> {
     }
 
     async fn health_check(&self) -> Result<HealthStatus, BackendError> {
-        match self.client.check_health().await {
-            Ok(()) => Ok(HealthStatus::Healthy),
-            Err(e) => {
-                warn!(error = %e, "Braket health check failed");
-                Ok(HealthStatus::Unavailable)
-            }
-        }
+        Ok(super::r#trait::remote_health_status(
+            self.client.check_health().await,
+            self.name(),
+        ))
     }
 
     fn resource_limits(&self) -> &ResourceLimits {
