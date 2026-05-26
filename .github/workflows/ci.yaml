@@ -103,13 +103,31 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
 
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: hal
+
       - name: Install dependencies
         working-directory: core
-        run: pip install -e ".[dev]"
+        run: |
+          pip install -e ".[dev]"
+          pip install maturin
+
+      - name: Build and install Rust extension (qubit_os_hardware)
+        working-directory: hal
+        run: |
+          maturin build --release --features python --out dist
+          pip install dist/*.whl
 
       - name: Run tests
         working-directory: core
         run: pytest tests/unit/ --cov=qubitos --cov-report=xml
+
+      - name: Cross-validation gate (Rust backends vs Python oracle)
+        working-directory: core
+        run: pytest tests/unit/ -m crossval
 
       - name: Upload coverage
         uses: codecov/codecov-action@v6

@@ -16,6 +16,8 @@ import pytest
 from qubitos.lindblad import CollapseOperator
 from qubitos.sme import SMEConfig, SMESolver
 
+pytestmark = pytest.mark.crossval
+
 
 def _ground_state() -> np.ndarray:
     return np.array([[1.0, 0.0], [0.0, 0.0]], dtype=np.complex128)

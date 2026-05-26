@@ -188,6 +188,7 @@ class TestLindbladSolver:
 # -- Cross-validation with Rust golden data --
 
 
+@pytest.mark.crossval
 class TestCrossValidation:
     """Cross-validate Python solver against Rust Lindblad golden data.
 
