@@ -3,8 +3,8 @@
 
 """Validation module for QubitOS.
 
-This module provides validation utilities for quantum-specific data types,
-integrating with AgentBible validators for scientific rigor.
+This module provides validation utilities for quantum-specific data types:
+Hermiticity, unitarity, fidelity, pulse envelopes, and T1/T2 calibration.
 
 The validation system operates in two modes:
 - STRICT (default): Validation failures raise exceptions
@@ -289,194 +289,6 @@ def validate_calibration_t1_t2(t1_us: float, t2_us: float) -> ValidationResult:
     return ValidationResult(len(errors) == 0, errors, warnings)
 
 
-# =============================================================================
-# AgentBible Integration
-# =============================================================================
-
-_agentbible_available = False
-_agentbible_import_error: str | None = None
-
-try:
-    # Try to import AgentBible
-    # Note: The actual import path depends on how AgentBible is structured
-    # This is a placeholder - adjust based on actual AgentBible API
-    import agentbible  # noqa: F401
-
-    _agentbible_available = True
-except ImportError as e:
-    _agentbible_import_error = str(e)
-
-
-def is_agentbible_available() -> bool:
-    """Check if AgentBible is installed and available."""
-    return _agentbible_available
-
-
-def get_agentbible_import_error() -> str | None:
-    """Get the import error if AgentBible is not available."""
-    return _agentbible_import_error
-
-
-class AgentBibleValidator:
-    """Wrapper for AgentBible validation functionality.
-
-    This class provides a consistent interface to AgentBible validators,
-    with graceful fallback when AgentBible is not installed.
-
-    Usage:
-        validator = AgentBibleValidator()
-
-        # Validate Hamiltonian
-        result = validator.validate_hamiltonian(hamiltonian_matrix)
-        if not result.valid:
-            print(f"Errors: {result.errors}")
-
-        # Validate with provenance tracking
-        with validator.provenance_context(seed=42) as ctx:
-            pulse = optimize_pulse(...)
-            ctx.attach_metadata({"fidelity": pulse.fidelity})
-    """
-
-    def __init__(self) -> None:
-        self._ab_available = is_agentbible_available()
-        if not self._ab_available:
-            logger.warning(
-                f"AgentBible not available: {_agentbible_import_error}. Using fallback validators."
-            )
-
-    @property
-    def available(self) -> bool:
-        """Whether AgentBible is available."""
-        return self._ab_available
-
-    def validate_hamiltonian(
-        self, matrix: np.ndarray, tolerance: float = 1e-10
-    ) -> ValidationResult:
-        """Validate a Hamiltonian matrix.
-
-        Checks:
-        - Hermiticity
-        - Dimension consistency
-        - Spectrum bounds (if AgentBible available)
-        """
-        # Always run our basic validation
-        result = validate_hermitian(matrix, tolerance, name="Hamiltonian")
-
-        if self._ab_available:
-            # TODO: Call AgentBible's quantum domain validator
-            # This would look something like:
-            # from agentbible.domains.quantum import HamiltonianValidator
-            # ab_result = HamiltonianValidator().validate(matrix)
-            # result.warnings.extend(ab_result.warnings)
-            pass
-
-        return result
-
-    def validate_pulse(
-        self,
-        i_envelope: np.ndarray,
-        q_envelope: np.ndarray,
-        max_amplitude: float,
-        num_time_steps: int,
-    ) -> ValidationResult:
-        """Validate pulse envelopes.
-
-        Checks:
-        - Length consistency
-        - Amplitude bounds
-        - NaN/Inf detection
-        - Smoothness (if AgentBible available)
-        """
-        errors = []
-        warnings = []
-
-        # Validate I envelope
-        i_result = validate_pulse_envelope(i_envelope, max_amplitude, num_time_steps, "I envelope")
-        errors.extend(i_result.errors)
-        warnings.extend(i_result.warnings)
-
-        # Validate Q envelope
-        q_result = validate_pulse_envelope(q_envelope, max_amplitude, num_time_steps, "Q envelope")
-        errors.extend(q_result.errors)
-        warnings.extend(q_result.warnings)
-
-        if self._ab_available:
-            # TODO: Call AgentBible's pulse validator for smoothness checks
-            pass
-
-        return ValidationResult(len(errors) == 0, errors, warnings)
-
-    def validate_calibration(
-        self,
-        t1_us: float,
-        t2_us: float,
-        readout_fidelity: float | None = None,
-        gate_fidelity: float | None = None,
-    ) -> ValidationResult:
-        """Validate calibration data.
-
-        Checks:
-        - T1/T2 physics constraints
-        - Fidelity ranges
-        - Consistency (if AgentBible available)
-        """
-        errors = []
-        warnings = []
-
-        # T1/T2 validation
-        t_result = validate_calibration_t1_t2(t1_us, t2_us)
-        errors.extend(t_result.errors)
-        warnings.extend(t_result.warnings)
-
-        # Fidelity validation
-        if readout_fidelity is not None:
-            f_result = validate_fidelity(readout_fidelity, "readout_fidelity")
-            errors.extend(f_result.errors)
-            warnings.extend(f_result.warnings)
-
-        if gate_fidelity is not None:
-            f_result = validate_fidelity(gate_fidelity, "gate_fidelity")
-            errors.extend(f_result.errors)
-            warnings.extend(f_result.warnings)
-
-        if self._ab_available:
-            # TODO: Call AgentBible's calibration validator
-            pass
-
-        return ValidationResult(len(errors) == 0, errors, warnings)
-
-
-# Create a default validator instance
-default_validator = AgentBibleValidator()
-
-
-# =============================================================================
-# Convenience Functions
-# =============================================================================
-
-
-def validate_hamiltonian(matrix: np.ndarray, tolerance: float = 1e-10) -> ValidationResult:
-    """Validate a Hamiltonian matrix using the default validator."""
-    return default_validator.validate_hamiltonian(matrix, tolerance)
-
-
-def validate_pulse(
-    i_envelope: np.ndarray, q_envelope: np.ndarray, max_amplitude: float, num_time_steps: int
-) -> ValidationResult:
-    """Validate pulse envelopes using the default validator."""
-    return default_validator.validate_pulse(i_envelope, q_envelope, max_amplitude, num_time_steps)
-
-
-def validate_calibration(
-    t1_us: float,
-    t2_us: float,
-    readout_fidelity: float | None = None,
-    gate_fidelity: float | None = None,
-) -> ValidationResult:
-    """Validate calibration data using the default validator."""
-    return default_validator.validate_calibration(t1_us, t2_us, readout_fidelity, gate_fidelity)
-
-
 def validate_pulse_physics(
     duration_ns: float,
     drive_amplitude_mhz: float,
@@ -575,15 +387,7 @@ __all__ = [
     "validate_fidelity",
     "validate_pulse_envelope",
     "validate_calibration_t1_t2",
-    # AgentBible integration
-    "is_agentbible_available",
-    "get_agentbible_import_error",
-    "AgentBibleValidator",
-    "default_validator",
     # Convenience functions
-    "validate_hamiltonian",
-    "validate_pulse",
-    "validate_calibration",
     "validate_pulse_physics",
     # Hellinger distance
     "hellinger_distance",

@@ -6,8 +6,7 @@
 .. deprecated:: 0.6.0
     This pure-Python solver is maintained as a reference implementation only.
     For production use, prefer the Rust solver (via PyO3 bindings in
-    ``qubit_os_hardware.lindblad``) or the upcoming C fast-path solver
-    (LANL QCSS 2026, see ROADMAP.md §0.6.1–0.6.4).
+    ``qubit_os_hardware.lindblad``).
 
     The Rust solver is validated to match this implementation to trace
     distance < 1e-6 (see ``hal/tests/golden_lindblad.rs``).
@@ -146,7 +145,7 @@ class LindbladSolver:
     def __init__(self, config: LindbladConfig) -> None:
         warnings.warn(
             "Python LindbladSolver is deprecated. Use the Rust solver "
-            "(qubit_os_hardware.lindblad) or the upcoming C fast-path. "
+            "(qubit_os_hardware.lindblad). "
             "This implementation is retained as a reference only.",
             DeprecationWarning,
             stacklevel=2,

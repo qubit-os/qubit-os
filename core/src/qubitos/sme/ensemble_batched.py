@@ -11,19 +11,15 @@ oracle.
 
 from __future__ import annotations
 
-import time
 from typing import TYPE_CHECKING
 
 import numpy as np
 from numpy.typing import NDArray
 
-from qubitos.lindblad import CollapseOperator, state_fidelity
+from qubitos.lindblad import CollapseOperator
 from qubitos.sme.measurement import (
-    eigenvalue_bounds_2x2,
-    nonhermitian_residue,
     renormalize_density_matrix,
     symmetrize_density_matrix,
-    trace_deviation,
     validate_ensemble_density_matrix,
 )
 

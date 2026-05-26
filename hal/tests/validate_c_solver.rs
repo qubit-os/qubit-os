@@ -8,7 +8,7 @@
 //! cross-validation in `golden_lindblad.rs` with much tighter tolerances.
 //!
 //! The tests are gated behind `#[cfg(feature = "c-solver")]` since the
-//! C library won't be available until LANL QCSS Summer 2026.
+//! external C library is not yet available in the build.
 //!
 //! Invariants checked on EVERY test:
 //! - Trace preservation: |Tr(ρ) - 1| < 1e-14
@@ -519,7 +519,7 @@ fn three_way_baseline() {
         TRACE_DISTANCE_TOL
     );
 
-    // TODO(LANL): Add C solver comparison here
+    // TODO: Add C solver comparison here once the C fast path is linked.
     // let c_result = solve_lindblad_c(&rho0, &hamiltonians, &config).unwrap();
     // let td_c_analytical = trace_distance(&c_result.final_density_matrix, &expected);
     // let td_c_rust = trace_distance(&c_result.final_density_matrix, rho);

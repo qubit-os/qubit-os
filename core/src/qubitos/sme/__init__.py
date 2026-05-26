@@ -5,7 +5,10 @@
 
 Implements the Itô stochastic master equation in Wiseman and Milburn (2009),
 "Quantum Measurement and Control", Chapter 4. The Python implementation is
-the reference oracle for the v0.6.0 Rust performance port.
+the reference oracle that the production backends are cross-validated against:
+a batched NumPy vectorization (``ensemble_batched``), a Rust port
+(``qubit_os_hardware.sme``), and an optional CuPy GPU backend
+(``ensemble_gpu``).
 """
 
 from __future__ import annotations

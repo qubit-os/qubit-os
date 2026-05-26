@@ -90,31 +90,6 @@ impl CompiledSequence {
     }
 }
 
-/// Trait for compiling optimized pulses to backend-native gate sequences.
-///
-/// Each backend implements this trait to define:
-/// 1. What gates it can physically execute (native basis)
-/// 2. How to decompose arbitrary unitaries into that basis
-pub trait NativeGateCompiler: Send + Sync {
-    /// Return the native gate set for this backend.
-    ///
-    /// These are the gates the hardware can physically execute.
-    fn native_basis(&self) -> Vec<String>;
-
-    /// Compile a target unitary into native gates.
-    ///
-    /// # Arguments
-    /// * `unitary` - Flat row-major complex128 array of the target unitary
-    /// * `dim` - Dimension of the unitary (2^num_qubits)
-    /// * `qubit_indices` - Physical qubit indices for the gate
-    fn compile_unitary(
-        &self,
-        unitary: &[f64],
-        dim: usize,
-        qubit_indices: &[u32],
-    ) -> Result<CompiledSequence, BackendError>;
-}
-
 /// Default single-qubit decomposition into Rz-Rx-Rz (Euler angles).
 ///
 /// Any single-qubit unitary can be written as:

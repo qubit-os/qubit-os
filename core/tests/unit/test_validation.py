@@ -3,25 +3,20 @@
 
 """Tests for qubitos.validation module.
 
-These tests verify both the fallback validators and AgentBible integration.
+These tests verify the validation utilities: Hermitian, unitary, fidelity,
+pulse envelope, and T1/T2 calibration checks.
 """
 
 import numpy as np
-import pytest
 
 from qubitos.validation import (
-    AgentBibleValidator,
     Strictness,
     ValidationResult,
     get_strictness,
-    is_agentbible_available,
     set_strictness,
-    validate_calibration,
     validate_calibration_t1_t2,
     validate_fidelity,
-    validate_hamiltonian,
     validate_hermitian,
-    validate_pulse,
     validate_pulse_envelope,
     validate_unitary,
 )
@@ -227,78 +222,3 @@ class TestCalibrationT1T2Validation:
     def test_invalid_negative_t2(self):
         result = validate_calibration_t1_t2(t1_us=50, t2_us=-5)
         assert not result.valid
-
-
-class TestAgentBibleValidator:
-    """Tests for AgentBible integration."""
-
-    def test_availability_check(self):
-        # Should not crash regardless of availability
-        available = is_agentbible_available()
-        assert isinstance(available, bool)
-
-    def test_validator_creation(self):
-        validator = AgentBibleValidator()
-        assert hasattr(validator, "available")
-
-    def test_validate_hamiltonian(self):
-        validator = AgentBibleValidator()
-        matrix = np.array([[1, 0], [0, -1]], dtype=complex)
-        result = validator.validate_hamiltonian(matrix)
-        assert result.valid
-
-    def test_validate_pulse(self):
-        validator = AgentBibleValidator()
-        i_env = np.sin(np.linspace(0, np.pi, 100)) * 50
-        q_env = np.cos(np.linspace(0, np.pi, 100)) * 50
-        result = validator.validate_pulse(i_env, q_env, max_amplitude=100, num_time_steps=100)
-        assert result.valid
-
-    def test_validate_calibration(self):
-        validator = AgentBibleValidator()
-        result = validator.validate_calibration(
-            t1_us=50, t2_us=30, readout_fidelity=0.98, gate_fidelity=0.999
-        )
-        assert result.valid
-
-
-class TestConvenienceFunctions:
-    """Tests for module-level convenience functions."""
-
-    def test_validate_hamiltonian_function(self):
-        matrix = np.array([[0, 1], [1, 0]], dtype=complex)  # Pauli X
-        result = validate_hamiltonian(matrix)
-        assert result.valid
-
-    def test_validate_pulse_function(self):
-        i_env = np.zeros(50)
-        q_env = np.zeros(50)
-        result = validate_pulse(i_env, q_env, max_amplitude=100, num_time_steps=50)
-        assert result.valid
-
-    def test_validate_calibration_function(self):
-        result = validate_calibration(t1_us=45, t2_us=32)
-        assert result.valid
-
-
-@pytest.mark.skipif(not is_agentbible_available(), reason="AgentBible not installed")
-class TestAgentBibleFeatures:
-    """Tests that require AgentBible to be installed."""
-
-    def test_agentbible_hamiltonian_validator(self):
-        """Test AgentBible's Hamiltonian validator if available."""
-        validator = AgentBibleValidator()
-        matrix = np.array([[1, 0], [0, -1]], dtype=complex)
-        result = validator.validate_hamiltonian(matrix)
-        # AgentBible may add additional checks
-        assert result.valid
-
-    def test_agentbible_spectrum_check(self):
-        """Test that AgentBible checks spectrum bounds."""
-        # This test would verify AgentBible-specific functionality
-        pass
-
-    def test_agentbible_provenance(self):
-        """Test AgentBible provenance tracking if available."""
-        # This test would verify provenance context
-        pass

@@ -88,7 +88,7 @@
     },
     {
       "label": "d3_qutrit_t1_decay",
-      "description": "T1 decay of |2⟩ in a 3-level (qutrit) system. Tests d=3 which is the primary LANL target. Collapse operators: L_10 = sqrt(γ_10)|1⟩⟨2|, L_01 = sqrt(γ_01)|0⟩⟨1|.",
+      "description": "T1 decay of |2⟩ in a 3-level (qutrit) system. Tests d=3, the primary qutrit target. Collapse operators: L_10 = sqrt(γ_10)|1⟩⟨2|, L_01 = sqrt(γ_01)|0⟩⟨1|.",
       "dim": 3,
       "gamma_21_mhz": 0.02,
       "gamma_10_mhz": 0.02,
@@ -104,7 +104,7 @@
         0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
         0.0, 0.0, 0.0, 0.0, 0.0, 0.0
       ],
-      "note": "Reference data should be generated from QuTiP mesolve with 3-level collapse operators. This is a placeholder structure for the LANL summer — populate with QuTiP reference before writing C code.",
+      "note": "Reference data should be generated from QuTiP mesolve with 3-level collapse operators. This is a placeholder structure; populate with QuTiP reference before writing C code.",
       "expected_rho_flat": null
     }
   ],

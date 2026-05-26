@@ -126,7 +126,7 @@ def __getattr__(name: str):  # type: ignore[misc]
         import warnings
 
         warnings.warn(
-            "GateType is deprecated and will be removed in v0.4.0. "
+            "GateType is deprecated and will be removed in v0.8.0. "
             "Use TargetUnitary instead.\n"
             "  Migration: replace 'from qubitos.pulsegen import GateType' "
             "with 'from qubitos.pulsegen import TargetUnitary'",
