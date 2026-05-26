@@ -271,7 +271,11 @@ def lindblad_rk4_step(
 
 
 def from_sme_ensemble(sme_result: Any, lindblad_result: LindbladResult, tol: float = 0.01) -> bool:
-    """Check whether an SME ensemble mean agrees with a Lindblad result."""
-    mean_rho = getattr(sme_result, "mean_density_matrix", None)
-    candidate = mean_rho if mean_rho is not None else sme_result.final_density_matrix
-    return trace_distance(candidate, lindblad_result.final_density_matrix) <= tol
+    """Check whether an SME ensemble mean agrees with a Lindblad result.
+
+    Backward-compatible forwarder. The implementation now lives in
+    :func:`qubitos.validation.convergence.converges_to_lindblad`.
+    """
+    from qubitos.validation.convergence import converges_to_lindblad
+
+    return converges_to_lindblad(sme_result, lindblad_result, tol)

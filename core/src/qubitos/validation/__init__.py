@@ -29,6 +29,7 @@ from typing import Any
 
 import numpy as np
 
+from .convergence import converges_to_lindblad
 from .crosscheck import (
     CrosscheckConfig,
     CrosscheckResult,
@@ -392,6 +393,8 @@ __all__ = [
     # Hellinger distance
     "hellinger_distance",
     "hellinger_distance_batch",
+    # Convergence
+    "converges_to_lindblad",
     # Crosscheck
     "CrosscheckConfig",
     "CrosscheckResult",

@@ -506,32 +506,21 @@ class ErrorBudget:
         )
         return (1.0 - projected) >= self.target_fidelity
 
+    @property
+    def qubit_time_ns(self) -> dict[int, float]:
+        """Accumulated active time per qubit in nanoseconds (read-only copy)."""
+        return dict(self._qubit_time_ns)
+
     def summary(self) -> dict[str, Any]:
         """Return a summary of the error budget state.
 
         Returns:
-            Dictionary suitable for JSON serialization or CLI display.
+            Dictionary suitable for JSON serialization or CLI display. The
+            rendering lives in :func:`error_budget.render.budget_summary`.
         """
-        return {
-            "target_fidelity": self.target_fidelity,
-            "projected_fidelity": round(self.projected_fidelity, 6),
-            "projected_infidelity": round(self.projected_infidelity, 6),
-            "remaining_budget": round(self.remaining_budget, 6),
-            "is_within_budget": self.is_within_budget,
-            "num_operations": len(self.contributions),
-            "dominant_source": (
-                self.dominant_error_source.value if self.dominant_error_source else None
-            ),
-            "breakdown": {
-                "gate_infidelity": round(self.total_gate_infidelity, 8),
-                "coherent_correction": round(self.coherent_correction, 8),
-                "decoherence": round(self.decoherence_error, 8),
-                "readout": round(self.readout_error, 8),
-                "crosstalk": round(self.crosstalk_error, 8),
-                "leakage": round(self.leakage_error, 8),
-            },
-            "per_qubit_time_ns": dict(self._qubit_time_ns),
-        }
+        from .render import budget_summary
+
+        return budget_summary(self)
 
     def reset(self) -> None:
         """Clear all accumulated errors. Keeps configuration."""

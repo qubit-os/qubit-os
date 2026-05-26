@@ -15,9 +15,13 @@ from __future__ import annotations
 import json
 import sys
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 import click
 import yaml
+
+if TYPE_CHECKING:
+    from ..temporal import PulseSequence
 
 
 class _QubitOSGroup(click.Group):
@@ -179,6 +183,27 @@ def _display_error_budget(
     click.echo(f"  Decoherence:        {bd['decoherence']:.2e}")
     if bd["leakage"] > 0:
         click.echo(f"  Leakage:            {bd['leakage']:.2e}")
+
+
+def _display_validation_summary(seq: PulseSequence) -> None:
+    """Render the shared sequence-validation header and decoherence budget.
+
+    Used by both ``sequence validate`` and ``sequence execute`` so the two
+    commands print an identical summary block.
+    """
+    click.echo("Sequence validation:")
+    click.echo(
+        f"  Pulses: {len(seq.pulses)} | "
+        f"Constraints: {len(seq.constraints)} | "
+        f"Duration: {seq.total_duration_ns:.1f} ns"
+    )
+
+    if seq.decoherence_budget is not None:
+        click.echo("  Decoherence budget:")
+        for q in sorted(seq.involved_qubits):
+            t2_frac = seq.decoherence_budget.t2_fraction(q)
+            status = "OK" if t2_frac < 0.3 else ("WARN" if t2_frac < 0.8 else "BLOCK")
+            click.echo(f"    Qubit {q}: T2 consumed {t2_frac:.1%} | {status}")
 
 
 def _load_sequence_yaml(sequence_file: str) -> dict:
@@ -889,20 +914,7 @@ def sequence_validate(sequence_file: str, output_format: str) -> None:
         return
 
     # Text output matching spec §15.1 format
-    click.echo("Sequence validation:")
-    click.echo(
-        f"  Pulses: {len(seq.pulses)} | "
-        f"Constraints: {len(seq.constraints)} | "
-        f"Duration: {seq.total_duration_ns:.1f} ns"
-    )
-
-    # Decoherence budget summary
-    if seq.decoherence_budget is not None:
-        click.echo("  Decoherence budget:")
-        for q in sorted(seq.involved_qubits):
-            t2_frac = seq.decoherence_budget.t2_fraction(q)
-            status = "OK" if t2_frac < 0.3 else ("WARN" if t2_frac < 0.8 else "BLOCK")
-            click.echo(f"    Qubit {q}: T2 consumed {t2_frac:.1%} | {status}")
+    _display_validation_summary(seq)
 
     # Constraint check
     constraint_issues = [i for i in issues if i.startswith("CONSTRAINT")]
@@ -974,19 +986,7 @@ def sequence_execute(
     # Validate before execution
     issues = seq.validate()
 
-    click.echo("Sequence validation:")
-    click.echo(
-        f"  Pulses: {len(seq.pulses)} | "
-        f"Constraints: {len(seq.constraints)} | "
-        f"Duration: {seq.total_duration_ns:.1f} ns"
-    )
-
-    if seq.decoherence_budget is not None:
-        click.echo("  Decoherence budget:")
-        for q in sorted(seq.involved_qubits):
-            t2_frac = seq.decoherence_budget.t2_fraction(q)
-            status = "OK" if t2_frac < 0.3 else ("WARN" if t2_frac < 0.8 else "BLOCK")
-            click.echo(f"    Qubit {q}: T2 consumed {t2_frac:.1%} | {status}")
+    _display_validation_summary(seq)
 
     if not issues:
         click.echo(f"  Constraint check: all {len(seq.constraints)} satisfied")
