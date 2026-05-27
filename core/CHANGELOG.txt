@@ -9,6 +9,9 @@ Versioning policy: Semantic Versioning.
 Unreleased
 ----------
 
+0.7.2 - 2026-05-27
+------------------
+
 Changed
 
 - ``__version__`` is now ``0.7.2``.
