@@ -9,7 +9,6 @@ The validation system provides:
 - **Quantum-specific validators**: Hermiticity, unitarity, fidelity ranges
 - **Physics constraints**: T1/T2 coherence time relationships
 - **Strictness modes**: STRICT (raises exceptions) or LENIENT (logs warnings)
-- **AgentBible integration**: Extended validation when available
 
 ## Quick Start
 
@@ -17,7 +16,6 @@ The validation system provides:
 from qubitos.validation import (
     validate_unitary,
     validate_fidelity,
-    validate_hamiltonian,
 )
 import numpy as np
 
@@ -164,15 +162,14 @@ print(f"Warnings: {result.warnings}")
 
 ### Validate Both I and Q
 
-```python
-from qubitos.validation import validate_pulse
+Validate each quadrature envelope independently:
 
-result = validate_pulse(
-    i_envelope=i_pulse,
-    q_envelope=q_pulse,
-    max_amplitude=100.0,
-    num_time_steps=100,
-)
+```python
+from qubitos.validation import validate_pulse_envelope
+
+i_result = validate_pulse_envelope(i_pulse, 100.0, 100, name="I envelope")
+q_result = validate_pulse_envelope(q_pulse, 100.0, 100, name="Q envelope")
+valid = i_result.valid and q_result.valid
 ```
 
 ---
@@ -201,56 +198,31 @@ print(f"Errors: {result.errors}")
 
 ### Full Calibration Validation
 
-```python
-from qubitos.validation import validate_calibration
+Compose the T1/T2 and fidelity validators to check a full qubit record:
 
-result = validate_calibration(
-    t1_us=100,
-    t2_us=80,
-    readout_fidelity=0.99,
-    gate_fidelity=0.999,
-)
+```python
+from qubitos.validation import validate_calibration_t1_t2, validate_fidelity
+
+t_result = validate_calibration_t1_t2(t1_us=100, t2_us=80)
+ro_result = validate_fidelity(0.99, name="readout_fidelity")
+gate_result = validate_fidelity(0.999, name="gate_fidelity")
+valid = t_result.valid and ro_result.valid and gate_result.valid
 ```
 
 ---
 
 ## Hamiltonian Validation
 
-Convenience function combining Hermiticity check with optional AgentBible validators:
+A Hamiltonian must be Hermitian. Use `validate_hermitian` with a descriptive
+name for clearer error messages:
 
 ```python
-from qubitos.validation import validate_hamiltonian
+from qubitos.validation import validate_hermitian
 import numpy as np
 
 H = np.array([[1, 0], [0, -1]], dtype=complex)
-result = validate_hamiltonian(H)
+result = validate_hermitian(H, name="Hamiltonian")
 print(f"Valid Hamiltonian: {result.valid}")
-```
-
----
-
-## AgentBible Integration
-
-When AgentBible is installed, additional validation is available:
-
-```python
-from qubitos.validation import (
-    is_agentbible_available,
-    AgentBibleValidator,
-)
-
-print(f"AgentBible available: {is_agentbible_available()}")
-
-validator = AgentBibleValidator()
-
-# Hamiltonian validation (with AgentBible extras if available)
-result = validator.validate_hamiltonian(H)
-
-# Pulse validation
-result = validator.validate_pulse(i_envelope, q_envelope, max_amp, n_steps)
-
-# Calibration validation
-result = validator.validate_calibration(t1_us=100, t2_us=80)
 ```
 
 ---
@@ -332,30 +304,6 @@ print(result.warnings)
 
 ### Convenience Functions
 
-::: qubitos.validation.validate_hamiltonian
+::: qubitos.validation.validate_pulse_physics
     options:
       show_root_heading: true
-
-::: qubitos.validation.validate_pulse
-    options:
-      show_root_heading: true
-
-::: qubitos.validation.validate_calibration
-    options:
-      show_root_heading: true
-
-### AgentBible Integration
-
-::: qubitos.validation.is_agentbible_available
-    options:
-      show_root_heading: true
-
-::: qubitos.validation.AgentBibleValidator
-    options:
-      show_root_heading: true
-      members:
-        - __init__
-        - available
-        - validate_hamiltonian
-        - validate_pulse
-        - validate_calibration

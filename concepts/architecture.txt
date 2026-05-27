@@ -61,7 +61,7 @@ The previous split repositories (`qubit-os-core`, `qubit-os-hardware`,
 |  server/       tonic gRPC + axum REST                         |
 |  grape/        Rust-native GRAPE (Pade [13/13]), ~10x Python  |
 |  lindblad/     Rust-native Lindblad solver; FFI bridge for    |
-|                the C fast path (LANL summer stretch)          |
+|                the C fast path (stretch goal)                 |
 |  sme/          Rust-native SME (Itô SDE), Rayon-parallel      |
 |                ensemble                                        |
 |  feedback/     Rust Lyapunov feedback law hot path (v0.7.0),  |
@@ -105,7 +105,7 @@ not a maintenance commitment for arbitrary cloud backends.
 
 A serious execution path, not notebook glue. Rust-native solvers as
 production tier; QuTiP retained as validation oracle only. The C
-bare-metal fast path (v0.6.0 stretch, LANL summer 2026) and the FPGA
+bare-metal fast path (v0.6.0 stretch goal) and the FPGA
 fast path (future work) extend the same propagator algorithm
 through additional tiers. See `hal/grape/`, `hal/lindblad/`, `hal/sme/`.
 

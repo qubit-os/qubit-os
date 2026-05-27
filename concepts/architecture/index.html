@@ -2193,7 +2193,7 @@ during gates, crosstalk, leakage, and feedback latency.</p>
 </span><span id="__span-0-31"><a id="__codelineno-0-31" name="__codelineno-0-31" href="#__codelineno-0-31"></a>|  server/       tonic gRPC + axum REST                         |
 </span><span id="__span-0-32"><a id="__codelineno-0-32" name="__codelineno-0-32" href="#__codelineno-0-32"></a>|  grape/        Rust-native GRAPE (Pade [13/13]), ~10x Python  |
 </span><span id="__span-0-33"><a id="__codelineno-0-33" name="__codelineno-0-33" href="#__codelineno-0-33"></a>|  lindblad/     Rust-native Lindblad solver; FFI bridge for    |
-</span><span id="__span-0-34"><a id="__codelineno-0-34" name="__codelineno-0-34" href="#__codelineno-0-34"></a>|                the C fast path (LANL summer stretch)          |
+</span><span id="__span-0-34"><a id="__codelineno-0-34" name="__codelineno-0-34" href="#__codelineno-0-34"></a>|                the C fast path (stretch goal)                 |
 </span><span id="__span-0-35"><a id="__codelineno-0-35" name="__codelineno-0-35" href="#__codelineno-0-35"></a>|  sme/          Rust-native SME (Itô SDE), Rayon-parallel      |
 </span><span id="__span-0-36"><a id="__codelineno-0-36" name="__codelineno-0-36" href="#__codelineno-0-36"></a>|                ensemble                                        |
 </span><span id="__span-0-37"><a id="__codelineno-0-37" name="__codelineno-0-37" href="#__codelineno-0-37"></a>|  feedback/     Rust Lyapunov feedback law hot path (v0.7.0),  |
@@ -2227,7 +2227,7 @@ not a maintenance commitment for arbitrary cloud backends.</p>
 <h3 id="4-simulation-performance-plane">4. Simulation / performance plane<a class="headerlink" href="#4-simulation-performance-plane" title="Permanent link">&para;</a></h3>
 <p>A serious execution path, not notebook glue. Rust-native solvers as
 production tier; QuTiP retained as validation oracle only. The C
-bare-metal fast path (v0.6.0 stretch, LANL summer 2026) and the FPGA
+bare-metal fast path (v0.6.0 stretch goal) and the FPGA
 fast path (future work) extend the same propagator algorithm
 through additional tiers. See <code>hal/grape/</code>, <code>hal/lindblad/</code>, <code>hal/sme/</code>.</p>
 <h3 id="5-feedback-plane">5. Feedback plane<a class="headerlink" href="#5-feedback-plane" title="Permanent link">&para;</a></h3>
