@@ -630,7 +630,7 @@ def __getattr__(name: str):
             "GateType is deprecated and will be removed in v0.4.0. "
             "Use TargetUnitary instead.\n"
             "  Migration: replace 'from qubitos.pulsegen import GateType' "
-            "with 'from qubitos.pulsegen import TargetUnitary'",
+            "with 'from qubitos.target_unitary import TargetUnitary'",
             DeprecationWarning,
             stacklevel=2,
         )
@@ -1671,7 +1671,7 @@ def __getattr__(name: str):
             "GateType is deprecated and will be removed in v0.4.0. "
             "Use TargetUnitary instead.\n"
             "  Migration: replace 'from qubitos.pulsegen import GateType' "
-            "with 'from qubitos.pulsegen import TargetUnitary'",
+            "with 'from qubitos.target_unitary import TargetUnitary'",
             DeprecationWarning,
             stacklevel=2,
         )
@@ -2134,7 +2134,7 @@ For most codebases, a find-and-replace handles the migration:
 | Find | Replace With |
 |------|-------------|
 | `from qubitos.pulsegen.grape import GateType` | `from qubitos.target_unitary import TargetUnitary` |
-| `from qubitos.pulsegen import GateType` | `from qubitos.pulsegen import TargetUnitary` |
+| `from qubitos.pulsegen import GateType` | `from qubitos.target_unitary import TargetUnitary` |
 | `GateType.X` | `TargetUnitary.X` |
 | `GateType.Y` | `TargetUnitary.Y` |
 | `GateType.Z` | `TargetUnitary.Z` |
