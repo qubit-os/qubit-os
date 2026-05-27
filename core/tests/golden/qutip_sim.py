@@ -160,7 +160,7 @@ def simulate_pulse(
     psi0 = qutip.basis([2] * num_qubits, [0] * num_qubits)
 
     # Run simulation
-    result = qutip.mesolve(H, psi0, times, [], [])
+    result = qutip.mesolve(H, psi0, times, [], e_ops=[])
     psi_final = result.states[-1]
 
     # Extract deterministic outputs
