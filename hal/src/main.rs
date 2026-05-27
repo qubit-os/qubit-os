@@ -37,6 +37,9 @@ use qubit_os_hardware::backend::qutip::QutipBackend;
 #[cfg(feature = "iqm")]
 use qubit_os_hardware::backend::iqm::IqmBackend;
 
+#[cfg(feature = "ibm")]
+use qubit_os_hardware::backend::ibm::IbmBackend;
+
 /// QubitOS Hardware Abstraction Layer Server
 #[derive(Parser)]
 #[command(name = "qubit-os-hal")]
@@ -270,6 +273,21 @@ fn initialize_backends(config: &Config) -> Result<BackendRegistry> {
             Err(e) => {
                 error!(error = %e, "Failed to initialize IQM backend");
                 // Don't fail startup if IQM isn't configured
+            }
+        }
+    }
+
+    // Initialize IBM backend if enabled (only when ibm feature is enabled)
+    #[cfg(feature = "ibm")]
+    if config.backends.ibm.enabled {
+        match IbmBackend::from_config(&config.backends.ibm) {
+            Ok(backend) => {
+                info!("IBM backend initialized");
+                registry.register(Arc::new(backend));
+            }
+            Err(e) => {
+                error!(error = %e, "Failed to initialize IBM backend");
+                // Don't fail startup if IBM isn't configured
             }
         }
     }

@@ -295,6 +295,10 @@ pub struct BackendsConfig {
     /// IQM Garnet backend
     #[serde(default)]
     pub iqm_garnet: IqmConfig,
+
+    /// IBM Quantum backend (registered only when the `ibm` feature is built)
+    #[serde(default)]
+    pub ibm: crate::backend::ibm::IbmConfig,
 }
 
 /// QuTiP backend configuration.

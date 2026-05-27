@@ -41,7 +41,7 @@ use super::r#trait::{
 use client::{IbmHttpClient, ReqwestIbmClient};
 
 /// IBM supported backends.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum IbmSystem {
     /// IBM Eagle r3 (127 qubits)
     EagleR3,
@@ -125,7 +125,11 @@ pub struct IbmCircuitResult {
 }
 
 /// Configuration for the IBM backend.
-#[derive(Debug, Clone)]
+///
+/// `#[serde(default)]` lets a partial or absent `[backends.ibm]` config
+/// section fall back to [`IbmConfig::default`] (disabled, Aer simulator).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(default)]
 pub struct IbmConfig {
     /// Whether the backend is enabled.
     pub enabled: bool,
