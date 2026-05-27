@@ -543,7 +543,7 @@ def generate(
         import warnings
 
         warnings.warn(
-            "--gate is deprecated and will be removed in v0.4.0. Use --target-unitary instead.",
+            "--gate is deprecated and will be removed in v0.8.0. Use --target-unitary instead.",
             DeprecationWarning,
             stacklevel=1,
         )
