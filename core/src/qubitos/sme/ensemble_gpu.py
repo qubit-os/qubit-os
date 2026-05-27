@@ -79,15 +79,17 @@ def solve_ensemble_gpu(
     if n_traj <= 0:
         raise ValueError("num_trajectories must be > 0")
     if len(hamiltonians) != config.num_time_steps:
-        raise ValueError(
-            f"Expected {config.num_time_steps} Hamiltonians, got {len(hamiltonians)}"
-        )
+        raise ValueError(f"Expected {config.num_time_steps} Hamiltonians, got {len(hamiltonians)}")
     if config.measurement_efficiency == 0.0:
         from .trajectory import solve_trajectory
 
         tr = solve_trajectory(
-            initial_rho, hamiltonians, collapse_ops, config,
-            measurement_operator, target_rho,
+            initial_rho,
+            hamiltonians,
+            collapse_ops,
+            config,
+            measurement_operator,
+            target_rho,
         )
         f = tr.final_fidelity
         return SMEResult(
@@ -126,19 +128,23 @@ def solve_ensemble_gpu(
     c, c_dag, m_sym = _build_measurement_matrices(meas_op)
     drift_parts = _build_drift_parts(collapse_ops)
 
-    H_gpu = [cp.asarray(H, dtype=cp.complex64 if dtype == "float32" else cp.complex128)
-             for H in hamiltonians]
+    H_gpu = [
+        cp.asarray(H, dtype=cp.complex64 if dtype == "float32" else cp.complex128)
+        for H in hamiltonians
+    ]
     c_gpu = cp.asarray(c, dtype=cp.complex64 if dtype == "float32" else cp.complex128)
     cdag_gpu = cp.asarray(c_dag, dtype=cp.complex64 if dtype == "float32" else cp.complex128)
     msym_gpu = cp.asarray(m_sym, dtype=cp.complex64 if dtype == "float32" else cp.complex128)
     drift_gpu: list = []
     for rate, L, Ld, LdL in drift_parts:
-        drift_gpu.append((
-            fp(rate),
-            cp.asarray(L, dtype=cp.complex64 if dtype == "float32" else cp.complex128),
-            cp.asarray(Ld, dtype=cp.complex64 if dtype == "float32" else cp.complex128),
-            cp.asarray(LdL, dtype=cp.complex64 if dtype == "float32" else cp.complex128),
-        ))
+        drift_gpu.append(
+            (
+                fp(rate),
+                cp.asarray(L, dtype=cp.complex64 if dtype == "float32" else cp.complex128),
+                cp.asarray(Ld, dtype=cp.complex64 if dtype == "float32" else cp.complex128),
+                cp.asarray(LdL, dtype=cp.complex64 if dtype == "float32" else cp.complex128),
+            )
+        )
     initial_arr = np.broadcast_to(initial_rho, (n_traj, 2, 2)).copy().astype(np.complex128)
     rho = cp.asarray(initial_arr, dtype=cp.complex64 if dtype == "float32" else cp.complex128)
     rho = _gpu_symmetrize_renormalize(rho)
@@ -158,9 +164,11 @@ def solve_ensemble_gpu(
             new = _gpu_symmetrize_renormalize(raw)
             viol_mask = _gpu_positivity_violation(new, fp(positivity_tol))
 
-            if (float(cp.asnumpy(cp.max(stability_vec))) > stability_tol
-                    or bool(cp.asnumpy(cp.any(viol_mask)))
-                    and dt_step > dt_min):
+            if (
+                float(cp.asnumpy(cp.max(stability_vec))) > stability_tol
+                or bool(cp.asnumpy(cp.any(viol_mask)))
+                and dt_step > dt_min
+            ):
                 current_dt = max(dt_min, dt_step * 0.5)
                 continue
 
@@ -176,9 +184,7 @@ def solve_ensemble_gpu(
 
     rho_cpu = cp.asnumpy(rho).astype(np.complex128)
     mean_rho = validate_ensemble_density_matrix(
-        renormalize_density_matrix(
-            symmetrize_density_matrix(np.mean(rho_cpu, axis=0))
-        )
+        renormalize_density_matrix(symmetrize_density_matrix(np.mean(rho_cpu, axis=0)))
     )
     variance_real = np.var(rho_cpu.real, axis=0)
     variance_imag = np.var(rho_cpu.imag, axis=0)
@@ -224,9 +230,7 @@ def _build_measurement_matrices(
 
 def _build_drift_parts(
     collapse_ops: list[CollapseOperator],
-) -> list[
-    tuple[float, NDArray[np.complex128], NDArray[np.complex128], NDArray[np.complex128]]
-]:
+) -> list[tuple[float, NDArray[np.complex128], NDArray[np.complex128], NDArray[np.complex128]]]:
     parts: list = []
     for op in collapse_ops:
         if op.rate == 0.0:
@@ -242,11 +246,11 @@ def _build_drift_parts(
 
 
 def _gpu_lindblad_rhs(
-    H, rho, drift_parts,
+    H,
+    rho,
+    drift_parts,
 ):
-    comm = -1j * (
-        _cp.einsum("ij,njk->nik", H, rho) - _cp.einsum("nij,jk->nik", rho, H)
-    )
+    comm = -1j * (_cp.einsum("ij,njk->nik", H, rho) - _cp.einsum("nij,jk->nik", rho, H))
     diss = _cp.zeros_like(rho)
     for rate, L, Ld, LdL in drift_parts:
         diss += rate * (

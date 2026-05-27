@@ -55,11 +55,19 @@ def test_gpu_mean_fidelity_matches_python_oracle(n_traj: int) -> None:
     solver = SMESolver(config, collapse_ops=ops)
 
     oracle = solver.solve_ensemble(
-        initial, hams, target_rho=target, num_trajectories=n_traj,
-        max_workers=1, backend="python",
+        initial,
+        hams,
+        target_rho=target,
+        num_trajectories=n_traj,
+        max_workers=1,
+        backend="python",
     )
     gpu = solver.solve_ensemble(
-        initial, hams, target_rho=target, num_trajectories=n_traj, backend="gpu",
+        initial,
+        hams,
+        target_rho=target,
+        num_trajectories=n_traj,
+        backend="gpu",
     )
 
     assert oracle.mean_fidelity is not None
@@ -85,7 +93,10 @@ def test_gpu_ensemble_returns_valid_density_matrix() -> None:
         adaptive_tolerance=1e-2,
     )
     result = SMESolver(config, collapse_ops=ops).solve_ensemble(
-        _plus_state(), hams, num_trajectories=128, backend="gpu",
+        _plus_state(),
+        hams,
+        num_trajectories=128,
+        backend="gpu",
     )
     rho = result.mean_density_matrix
     assert rho is not None

@@ -51,9 +51,7 @@ def solve_ensemble_batched(
     if n_traj <= 0:
         raise ValueError("num_trajectories must be > 0")
     if len(hamiltonians) != config.num_time_steps:
-        raise ValueError(
-            f"Expected {config.num_time_steps} Hamiltonians, got {len(hamiltonians)}"
-        )
+        raise ValueError(f"Expected {config.num_time_steps} Hamiltonians, got {len(hamiltonians)}")
     if config.measurement_efficiency == 0.0:
         return _solve_batched_zero_efficiency(
             initial_rho, hamiltonians, collapse_ops, config, target_rho, n_traj
@@ -92,8 +90,7 @@ def solve_ensemble_batched(
 
             viol_mask = _batched_positivity_violation(new, positivity_tol)
 
-            if ((stability_vec.max() > stability_tol or viol_mask.any())
-                    and dt_step > dt_min):
+            if (stability_vec.max() > stability_tol or viol_mask.any()) and dt_step > dt_min:
                 current_dt = max(dt_min, dt_step * 0.5)
                 continue
 
@@ -226,9 +223,7 @@ def _batched_lindblad_rhs(
     ],
 ) -> NDArray[np.complex128]:
     """Lindblad drift for the full (N,2,2) ensemble."""
-    comm = -1j * (
-        np.einsum("ij,njk->nik", H, rho) - np.einsum("nij,jk->nik", rho, H)
-    )
+    comm = -1j * (np.einsum("ij,njk->nik", H, rho) - np.einsum("nij,jk->nik", rho, H))
     diss = np.zeros_like(rho)
     for rate, L, Ld, LdL in drift_parts:
         diss += rate * (

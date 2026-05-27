@@ -42,8 +42,15 @@ pub fn euler_maruyama_step<R: Rng + ?Sized>(
     positivity_tolerance: f64,
 ) -> Result<SMEStepResult, String> {
     debug_assert_eq!(rho.nrows(), rho.ncols(), "density matrix must be square");
-    debug_assert_eq!(hamiltonian.dim(), rho.dim(), "Hamiltonian dimensions must match rho");
-    debug_assert!((0.0..=1.0).contains(&eta), "measurement efficiency eta must be in [0, 1]");
+    debug_assert_eq!(
+        hamiltonian.dim(),
+        rho.dim(),
+        "Hamiltonian dimensions must match rho"
+    );
+    debug_assert!(
+        (0.0..=1.0).contains(&eta),
+        "measurement efficiency eta must be in [0, 1]"
+    );
     debug_assert!(dt > 0.0, "time step dt must be positive");
 
     if eta == 0.0 {

@@ -203,9 +203,7 @@ def has_positivity_violation(
             _, (lam_min, _) = True, eigenvalue_bounds_2x2(symmetrize_density_matrix(rho))
             min_eigenvalue = lam_min
         else:
-            min_eigenvalue = float(
-                np.min(np.linalg.eigvalsh(symmetrize_density_matrix(rho)).real)
-            )
+            min_eigenvalue = float(np.min(np.linalg.eigvalsh(symmetrize_density_matrix(rho)).real))
     return min_eigenvalue < -atol, min_eigenvalue
 
 
@@ -239,7 +237,9 @@ def validate_trajectory_density_matrix(
     validation during development.
     """
     check_density_matrix_surface(
-        rho, name="trajectory_density_matrix", atol=atol,
+        rho,
+        name="trajectory_density_matrix",
+        atol=atol,
         min_eigenvalue=min_eigenvalue,
         use_agentbible=_DEBUG_VALIDATION,
     )
@@ -256,7 +256,10 @@ def validate_ensemble_density_matrix(
     when installed) since this runs once at the end, not per-substep.
     """
     check_density_matrix_surface(
-        rho, name="ensemble_density_matrix", atol=atol, use_agentbible=True,
+        rho,
+        name="ensemble_density_matrix",
+        atol=atol,
+        use_agentbible=True,
     )
     return rho
 
@@ -309,7 +312,9 @@ def check_density_matrix_surface(
     if trace_deviation(matrix) > atol:
         raise ValueError(f"{name} must have unit trace within atol={atol}")
     violation, min_eig = has_positivity_violation(
-        matrix, atol, min_eigenvalue=min_eigenvalue,
+        matrix,
+        atol,
+        min_eigenvalue=min_eigenvalue,
     )
     if violation:
         raise ValueError(f"{name} has min eigenvalue {min_eig:.2e}")

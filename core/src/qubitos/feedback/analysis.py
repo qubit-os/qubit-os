@@ -533,7 +533,9 @@ def _run_serial_loop(
             raise
         wall_s = time.perf_counter() - t0
         ctx.apply_cell(j, m_idx, method, mean_f, std_f, fb_e)
-        _emit_sweep_event(log_fh, _cell_done_record(j, m_idx, method, ctx.noise_arr, mean_f, wall_s))
+        _emit_sweep_event(
+            log_fh, _cell_done_record(j, m_idx, method, ctx.noise_arr, mean_f, wall_s)
+        )
 
 
 def _run_parallel_loop(

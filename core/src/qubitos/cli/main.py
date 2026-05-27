@@ -370,7 +370,6 @@ def health(server: str, local: bool, backend: str | None, output_format: str) ->
             sys.exit(1)
 
 
-
 @hal.command()
 @click.option("--server", "-s", default="localhost:50051", help="HAL server address")
 @click.option("--local", "-l", is_flag=True, default=False, help="Use local QuTiP (no HAL server)")
@@ -400,7 +399,6 @@ def info(server: str, local: bool, backend: str | None, output_format: str) -> N
             "version": hw_info.software_version,
         }
         _output(data, output_format)
-
 
 
 # =============================================================================
@@ -696,7 +694,6 @@ def generate(
     click.echo(f"\nPulse saved to: {output}")
 
 
-
 @pulse.command()
 @click.argument("pulse_file", type=click.Path(exists=True))
 @click.option("--server", "-s", default="localhost:50051", help="HAL server address")
@@ -790,7 +787,6 @@ def execute(
                 )
 
 
-
 @pulse.command("validate")
 @click.argument("pulse_file", type=click.Path(exists=True))
 def pulse_validate(pulse_file: str) -> None:
@@ -826,7 +822,6 @@ def pulse_validate(pulse_file: str) -> None:
         for e in i_result.errors + q_result.errors:
             click.echo(f"  Error: {e}", err=True)
         sys.exit(1)
-
 
 
 # =============================================================================
@@ -930,8 +925,7 @@ def sequence_validate(sequence_file: str, output_format: str) -> None:
     # AWG alignment
     if seq.awg_config is not None:
         click.echo(
-            f"  AWG alignment: all durations aligned to "
-            f"{seq.awg_config.sample_period_ns} ns grid"
+            f"  AWG alignment: all durations aligned to {seq.awg_config.sample_period_ns} ns grid"
         )
 
     # Show overlap issues
@@ -949,7 +943,6 @@ def sequence_validate(sequence_file: str, output_format: str) -> None:
         sys.exit(1)
     else:
         click.echo("\n  All checks passed.")
-
 
 
 @sequence.command("execute")
@@ -1030,13 +1023,10 @@ def sequence_execute(
 
             if output_format == "text":
                 click.echo(
-                    f"  Pulse '{p.pulse_id}': "
-                    f"{result.successful_shots}/"
-                    f"{result.total_shots} shots"
+                    f"  Pulse '{p.pulse_id}': {result.successful_shots}/{result.total_shots} shots"
                 )
             else:
                 _output(result_data, output_format)
-
 
 
 # =============================================================================
@@ -1097,7 +1087,6 @@ def calibration_show(calibration_file: str, output_format: str) -> None:
     _output(data, output_format)
 
 
-
 @calibration.command("validate")
 @click.argument("calibration_file", type=click.Path(exists=True))
 def calibration_validate(calibration_file: str) -> None:
@@ -1108,7 +1097,6 @@ def calibration_validate(calibration_file: str) -> None:
     loader.load(calibration_file)
 
     click.echo("Calibration file is valid.")
-
 
 
 @calibration.command("drift")
@@ -1152,7 +1140,6 @@ def calibration_drift(
 
     if drift.needs_recalibration:
         sys.exit(1)
-
 
 
 # =============================================================================
@@ -1242,7 +1229,6 @@ def experiment_provenance(
         _output(tree.to_dict(), output_format)
 
 
-
 @experiment.command("diff")
 @click.argument("hash_a")
 @click.argument("hash_b")
@@ -1292,7 +1278,6 @@ def experiment_diff(
         click.echo(diff_result.summary())
     else:
         _output(diff_result.to_dict(), output_format)
-
 
 
 def _default_provenance_path() -> Path:

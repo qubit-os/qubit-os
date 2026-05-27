@@ -104,8 +104,13 @@ def test_rust_output_invariants() -> None:
         positivity_projection=True,
         adaptive_tolerance=1e-2,
     )
-    result = rust.solve_ensemble(_encode(_plus_state()), [_encode(h) for h in hams], 2,
-                                 num_trajectories=128, target_rho=_encode(_plus_state()))
+    result = rust.solve_ensemble(
+        _encode(_plus_state()),
+        [_encode(h) for h in hams],
+        2,
+        num_trajectories=128,
+        target_rho=_encode(_plus_state()),
+    )
     rho = _decode(result.final_rho_flat)
     assert abs(result.final_trace - 1.0) < 1e-12
     np.testing.assert_allclose(rho, rho.conj().T, atol=1e-12)  # Hermitian
@@ -134,8 +139,11 @@ def test_rust_ensemble_mean_fidelity_matches_oracle(n_traj: int) -> None:
         adaptive_tolerance=1e-2,
     )
     rust_result = rust.solve_ensemble(
-        _encode(initial), [_encode(h) for h in hams], 2,
-        num_trajectories=n_traj, target_rho=_encode(target),
+        _encode(initial),
+        [_encode(h) for h in hams],
+        2,
+        num_trajectories=n_traj,
+        target_rho=_encode(target),
     )
 
     config = SMEConfig(
@@ -148,8 +156,12 @@ def test_rust_ensemble_mean_fidelity_matches_oracle(n_traj: int) -> None:
         adaptive_tolerance=1e-2,
     )
     python_result = SMESolver(config, collapse_ops=ops).solve_ensemble(
-        initial, hams, target_rho=target, num_trajectories=n_traj,
-        max_workers=1, backend="python",
+        initial,
+        hams,
+        target_rho=target,
+        num_trajectories=n_traj,
+        max_workers=1,
+        backend="python",
     )
 
     assert rust_result.mean_fidelity is not None
