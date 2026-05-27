@@ -9,6 +9,30 @@ Versioning policy: Semantic Versioning.
 Unreleased
 ----------
 
+Changed
+
+- ``__version__`` is now ``0.7.2``.
+- CLI error reporting is centralized in a single group-level handler, so
+  every command reports an uncaught error in the same
+  ``Error (<Type>): <message>`` format. ``calibration validate`` failures
+  previously used a ``Validation error:`` prefix.
+- ``HALClient.connect`` now surfaces the specific gRPC status code
+  (e.g. ``UNAVAILABLE``) for transport failures instead of a generic
+  ``CONNECTION_ERROR``.
+- The ``GateType`` deprecation now targets removal in ``v0.8.0`` and points
+  callers to ``from qubitos.target_unitary import TargetUnitary``.
+
+Removed
+
+- ``qubitos.validation``: the ``AgentBibleValidator`` facade,
+  ``is_agentbible_available``, ``get_agentbible_import_error``,
+  ``default_validator``, and the ``validate_hamiltonian`` /
+  ``validate_pulse`` / ``validate_calibration`` convenience passthroughs.
+  Use the direct validators (``validate_hermitian``,
+  ``validate_pulse_envelope``, ``validate_calibration_t1_t2``).
+- The ``TargetUnitary`` re-export from ``qubitos.pulsegen``; import it from
+  ``qubitos.target_unitary`` instead.
+
 0.7.1 - 2026-05-21
 -------------------
 

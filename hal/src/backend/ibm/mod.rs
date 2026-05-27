@@ -28,7 +28,7 @@ use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::time::Duration;
-use tracing::{debug, info, warn};
+use tracing::{debug, info};
 
 use super::{BackendType, QuantumBackend};
 use crate::config::ResourceLimits;
@@ -41,7 +41,7 @@ use super::r#trait::{
 use client::{IbmHttpClient, ReqwestIbmClient};
 
 /// IBM supported backends.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum IbmSystem {
     /// IBM Eagle r3 (127 qubits)
     EagleR3,
@@ -125,7 +125,11 @@ pub struct IbmCircuitResult {
 }
 
 /// Configuration for the IBM backend.
-#[derive(Debug, Clone)]
+///
+/// `#[serde(default)]` lets a partial or absent `[backends.ibm]` config
+/// section fall back to [`IbmConfig::default`] (disabled, Aer simulator).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(default)]
 pub struct IbmConfig {
     /// Whether the backend is enabled.
     pub enabled: bool,
@@ -219,14 +223,8 @@ impl<C: IbmHttpClient> IbmBackend<C> {
         qasm.push_str(&format!("qubit[{num_qubits}] q;\n"));
         qasm.push_str(&format!("bit[{num_qubits}] c;\n\n"));
 
-        // Compute rotation angle from pulse area (integral of amplitude)
-        let dt_ns = request.duration_ns as f64 / request.num_time_steps as f64;
-        let i_area: f64 = request.i_envelope.iter().map(|a| a * dt_ns).sum();
-        let q_area: f64 = request.q_envelope.iter().map(|a| a * dt_ns).sum();
-        let total_area = (i_area * i_area + q_area * q_area).sqrt();
-        let angle = total_area * 2.0 * std::f64::consts::PI * 1e-3; // Convert to radians
-
-        let phase = q_area.atan2(i_area);
+        // Compute rotation angle/phase from pulse area (shared with Braket).
+        let (phase, angle) = super::compiler::pulse_rotation(request);
 
         // ZXZ decomposition: Rz(phase) · Rx(angle) · Rz(-phase)
         // Rx(θ) = Rz(-π/2) · √X · Rz(θ-π) · √X · Rz(π/2)
@@ -372,13 +370,10 @@ impl<C: IbmHttpClient> QuantumBackend for IbmBackend<C> {
     }
 
     async fn health_check(&self) -> Result<HealthStatus, BackendError> {
-        match self.client.check_health().await {
-            Ok(()) => Ok(HealthStatus::Healthy),
-            Err(e) => {
-                warn!(error = %e, "IBM health check failed");
-                Ok(HealthStatus::Unavailable)
-            }
-        }
+        Ok(super::r#trait::remote_health_status(
+            self.client.check_health().await,
+            self.name(),
+        ))
     }
 
     fn resource_limits(&self) -> &ResourceLimits {

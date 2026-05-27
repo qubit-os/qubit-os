@@ -366,7 +366,7 @@ Design spec: core/docs/specs/SME-FEEDBACK-SPEC.txt
 
 Release-gating path: the v0.6.0 release ships on the Rust solver with
 Rayon-parallel ensemble. The bare-metal C fast path (0.6.4) is a stretch
-track tied to the LANL QCSS summer 2026 deliverable; it is bonus
+track tied to an external C library deliverable; it is bonus
 performance for v0.8.0's compute budget, not a dependency for cutting
 v0.6.0.
 
@@ -421,15 +421,15 @@ deliverable in each sub-phase.
   [ ] Benchmark: >= 5x speedup over Python SME
 
 
-0.6.4 Bare-metal Lindblad fast path (stretch; LANL summer 2026)
+0.6.4 Bare-metal Lindblad fast path (stretch goal)
 
 Status: stretch track, not release-gating for v0.6.0. The Rust solver with
 Rayon-parallel ensemble is the v0.6.0 release path. This subsection lands
-when the LANL summer deliverable lands; if it slips past v0.6.0, it ships
+when the external C library deliverable lands; if it slips past v0.6.0, it ships
 in a later patch release or rolls into v0.8.0's compute campaign without
 blocking v0.7.0.
 
-Context: the LANL QCSS summer project produces a standalone C library
+Context: an external collaboration produces a standalone C library
 (lindblad/) for SIMD-optimized Lindblad propagation. This subsection
 integrates it into QubitOS as a high-performance backend for the existing
 solver stack.
@@ -837,7 +837,7 @@ v0.6.0:
   * Rust + Rayon parallel ensemble is the release-default solver path.
   * SME numerical surfaces decorated for Hermiticity, PSD, and trace
     preservation at module boundary.
-  * (Stretch, LANL summer) Bare-metal C fast path integrated via FFI
+  * (Stretch) Bare-metal C fast path integrated via FFI
     (auto-dispatch for d <= 27), >= 50x speedup over Rust solver for d=3
     robustness landscapes, batch sweep API functional.
 
@@ -911,7 +911,7 @@ trajectory:
     v0.5.0              Rust ndarray solver Rust      Production (GRAPE, Lindblad)
     v0.6.0              Rust + Rayon SME ensemble  Rust  Production
     v0.7.0              Rust feedback hot path  Rust  Production (~150x Python)
-    v0.6.x stretch      C bare-metal fast path  C     In progress; LANL Summer 2026
+    v0.6.x stretch      C bare-metal fast path  C     In progress (external C library)
     Future              FPGA fast path      Verilog   Planned
 
 Why this matters:

@@ -5,7 +5,10 @@
 
 Implements the Itô stochastic master equation in Wiseman and Milburn (2009),
 "Quantum Measurement and Control", Chapter 4. The Python implementation is
-the reference oracle for the v0.6.0 Rust performance port.
+the reference oracle that the production backends are cross-validated against:
+a batched NumPy vectorization (``ensemble_batched``), a Rust port
+(``qubit_os_hardware.sme``), and an optional CuPy GPU backend
+(``ensemble_gpu``).
 """
 
 from __future__ import annotations
@@ -15,7 +18,7 @@ from dataclasses import dataclass, field
 import numpy as np
 from numpy.typing import NDArray
 
-from qubitos.lindblad import CollapseOperator, LindbladResult, trace_distance
+from qubitos.lindblad import CollapseOperator, LindbladResult
 
 __all__ = [
     "SMEConfig",
@@ -93,11 +96,14 @@ class SMEResult:
     trajectory_results: list[SMEResult] | None = None
 
     def converges_to_lindblad(self, lindblad_result: LindbladResult, tol: float = 0.01) -> bool:
-        """Return whether the ensemble mean agrees with a Lindblad solution."""
-        candidate = self.mean_density_matrix
-        if candidate is None:
-            candidate = self.final_density_matrix
-        return trace_distance(candidate, lindblad_result.final_density_matrix) <= tol
+        """Return whether the ensemble mean agrees with a Lindblad solution.
+
+        Backward-compatible forwarder. The implementation now lives in
+        :func:`qubitos.validation.convergence.converges_to_lindblad`.
+        """
+        from qubitos.validation.convergence import converges_to_lindblad
+
+        return converges_to_lindblad(self, lindblad_result, tol)
 
 
 class SMESolver:
@@ -123,6 +129,31 @@ class SMESolver:
             measurement_operator
             if measurement_operator is not None
             else config.measurement_operator
+        )
+
+    def sub_config(self, seed_offset: int = 0) -> SMEConfig:
+        """Return an ``SMEConfig`` copy with the seed shifted by ``seed_offset``.
+
+        The returned config carries the solver's resolved collapse operators
+        and measurement operator, so callers can spawn independent
+        sub-trajectories (or read the effective configuration) without
+        reaching into private attributes. With the default ``seed_offset=0``
+        it reproduces this solver's configuration.
+        """
+        cfg = self._config
+        return SMEConfig(
+            num_time_steps=cfg.num_time_steps,
+            duration_ns=cfg.duration_ns,
+            measurement_efficiency=cfg.measurement_efficiency,
+            random_seed=cfg.random_seed + seed_offset,
+            store_trajectory=cfg.store_trajectory,
+            store_measurement_record=cfg.store_measurement_record,
+            collapse_ops=list(self._collapse_ops),
+            measurement_operator=self._measurement_operator,
+            positivity_projection=cfg.positivity_projection,
+            adaptive_tolerance=cfg.adaptive_tolerance,
+            positivity_tolerance=cfg.positivity_tolerance,
+            ensemble_size=cfg.ensemble_size,
         )
 
     def solve_trajectory(

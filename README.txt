@@ -70,9 +70,8 @@ Calibration Management. Fingerprinting, drift detection, decoherence
 budgets. Treats calibration as a continuous process, not a static snapshot.
 
 Lindblad Simulation. Open quantum system solver written in Rust (RK4). A
-bare-metal C fast path for d <= 27 is on a stretch track tied to the
-LANL summer 2026 deliverable. Three-tier dispatch: Rust general-purpose,
-C SIMD-optimized, FPGA (future).
+bare-metal C fast path for d <= 27 is a stretch goal (future work).
+Three-tier dispatch: Rust general-purpose, C SIMD-optimized, FPGA (future).
 
 Stochastic Master Equation (v0.6.0). Conditional density-matrix evolution
 with milstein-step integration, adaptive sub-stepping, and Rayon-parallel

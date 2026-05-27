@@ -27,10 +27,8 @@
 //! - 3: NaN/Inf detected in output
 //! - 4: Null pointer argument
 //!
-//! # LANL QCSS Summer 2026
-//!
-//! The C library implementing these functions will be developed at LANL.
-//! See ROADMAP.md §0.6.1–0.6.4 for the integration plan.
+//! These are FFI declarations for an external C solver library that is
+//! linked in separately; it is not yet bundled with the build.
 
 /// Maximum Hilbert space dimension supported by the C fast path.
 /// d=27 corresponds to 3^3 (three qutrits) or covers up to ~4 qubits

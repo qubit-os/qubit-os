@@ -26,7 +26,7 @@ Example:
     ...     result = await client.execute_pulse(pulse, num_shots=1000)
 """
 
-__version__ = "0.4.0"
+__version__ = "0.7.2"
 __author__ = "QubitOS Contributors"
 __license__ = "Apache-2.0"
 

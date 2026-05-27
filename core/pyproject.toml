@@ -81,6 +81,7 @@ asyncio_mode = "auto"
 addopts = "-v --tb=short"
 markers = [
     "slow: marks tests as slow (deselect with '-m \"not slow\"')",
+    "crossval: cross-validation of a backend against a reference oracle (run with '-m crossval')",
 ]
 
 [tool.mypy]

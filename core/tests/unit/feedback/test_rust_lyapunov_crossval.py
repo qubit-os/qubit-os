@@ -35,10 +35,13 @@ try:
 except ImportError:
     HAS_RUST_FEEDBACK = False
 
-pytestmark = pytest.mark.skipif(
-    not HAS_RUST_FEEDBACK,
-    reason="Rust feedback bindings not available (build with maturin/pyo3)",
-)
+pytestmark = [
+    pytest.mark.crossval,
+    pytest.mark.skipif(
+        not HAS_RUST_FEEDBACK,
+        reason="Rust feedback bindings not available (build with maturin/pyo3)",
+    ),
+]
 
 
 def _flatten(rho: np.ndarray) -> list[float]:

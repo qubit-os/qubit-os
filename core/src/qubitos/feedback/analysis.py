@@ -284,6 +284,304 @@ def build_baseline_hamiltonians(
     raise AssertionError(f"unreachable: method={method!r}")  # pragma: no cover
 
 
+def _cell_start_record(
+    j: int, m_idx: int, method: str, noise_arr: NDArray[np.float64]
+) -> dict[str, Any]:
+    return {
+        "event": "start",
+        "noise_idx": j,
+        "method_idx": m_idx,
+        "method": method,
+        "noise_level": float(noise_arr[j]),
+    }
+
+
+def _cell_done_record(
+    j: int, m_idx: int, method: str, noise_arr: NDArray[np.float64], mean_f: float, wall_s: float
+) -> dict[str, Any]:
+    return {
+        "event": "done",
+        "noise_idx": j,
+        "method_idx": m_idx,
+        "method": method,
+        "noise_level": float(noise_arr[j]),
+        "mean_fidelity": float(mean_f),
+        "wall_s": float(wall_s),
+    }
+
+
+def _cell_error_record(
+    j: int, m_idx: int, method: str, noise_arr: NDArray[np.float64], t0: float, exc: BaseException
+) -> dict[str, Any]:
+    return {
+        "event": "error",
+        "noise_idx": j,
+        "method_idx": m_idx,
+        "method": method,
+        "noise_level": float(noise_arr[j]),
+        "wall_s": float(time.perf_counter() - t0),
+        "error": f"{type(exc).__name__}: {exc}",
+    }
+
+
+@dataclass
+class _SweepContext:
+    """Reified scope shared by the noise-sweep cell loops.
+
+    Bundles the constant per-cell inputs, the result accumulators (mutated
+    in place), and the checkpoint configuration so the serial loop, parallel
+    loop, and checkpoint loader take a small signature instead of a dozen
+    closure variables.
+    """
+
+    baseline_cache: dict[str, list[NDArray[np.complex128]]]
+    cell_seeds: NDArray[np.int64]
+    initial_rho: NDArray[np.complex128]
+    target_rho: NDArray[np.complex128]
+    base_collapse_ops: list[CollapseOperator]
+    feedback_config: FeedbackConfig
+    hardware_params: HardwareParams
+    num_trajectories: int
+    backend: str
+    noise_arr: NDArray[np.float64]
+    methods_tuple: tuple[str, ...]
+    mean_fidelity: dict[str, NDArray[np.float64]]
+    std_fidelity: dict[str, NDArray[np.float64]]
+    feedback_energy: dict[str, NDArray[np.float64]]
+    cp_path: Path | None
+    checkpoint_tag: str | None
+
+    def cell_kwargs(self, method: str) -> dict[str, Any]:
+        """Constant keyword arguments for :func:`_noise_sweep_compare_one_cell`."""
+        return {
+            "baseline_hamiltonians": self.baseline_cache[method],
+            "initial_rho": self.initial_rho,
+            "target_rho": self.target_rho,
+            "base_collapse_ops": self.base_collapse_ops,
+            "feedback_config": self.feedback_config,
+            "hardware_params": self.hardware_params,
+            "num_trajectories": self.num_trajectories,
+            "backend": self.backend,
+        }
+
+    def apply_cell(
+        self, j: int, m_idx: int, method: str, mean_f: float, std_f: float, fb_e: float
+    ) -> None:
+        """Store one cell's result in the accumulators and checkpoint it."""
+        self.mean_fidelity[method][j] = mean_f
+        self.std_fidelity[method][j] = std_f
+        if method == "lyapunov_feedback":
+            self.feedback_energy.setdefault(
+                method, np.zeros(self.noise_arr.shape, dtype=np.float64)
+            )[j] = fb_e
+        self._write_checkpoint(j, m_idx, method, mean_f, std_f, fb_e)
+
+    def _write_checkpoint(
+        self, j: int, m_idx: int, method: str, mean_f: float, std_f: float, fb_e: float
+    ) -> None:
+        if self.cp_path is None or self.checkpoint_tag is None:
+            return
+        fname = f"{self.checkpoint_tag}_cell_{j:05d}_{m_idx:02d}.npz"
+        np.savez_compressed(
+            self.cp_path / fname,
+            noise_idx=j,
+            method_idx=m_idx,
+            method=np.array(method),
+            noise_level=np.float64(self.noise_arr[j]),
+            mean_fidelity=np.float64(mean_f),
+            std_fidelity=np.float64(std_f),
+            feedback_energy=np.float64(fb_e),
+        )
+
+
+def _build_sweep_context(
+    target_unitary: NDArray[np.complex128] | str,
+    noise_range: NDArray[np.float64] | Sequence[float],
+    methods: Sequence[str],
+    num_trajectories: int,
+    hardware_params: HardwareParams | None,
+    initial_rho: NDArray[np.complex128] | None,
+    feedback_config: FeedbackConfig | None,
+    seed: int,
+    baselines: dict[str, list[NDArray[np.complex128]]] | None,
+    checkpoint_dir: Path | str | None,
+    backend: str,
+) -> _SweepContext:
+    """Validate inputs and build the shared sweep context (no cells run)."""
+    if hardware_params is None:
+        hardware_params = HardwareParams()
+    noise_arr = np.asarray(noise_range, dtype=np.float64)
+    if noise_arr.size == 0:
+        raise ValueError("noise_range must contain at least one value")
+    if any(g < 0 for g in noise_arr):
+        raise ValueError("noise_range values must be non-negative")
+    methods_tuple = tuple(m.lower() for m in methods)
+    for m in methods_tuple:
+        if m not in _METHODS:
+            raise ValueError(f"Unknown method {m!r}; expected one of {_METHODS}")
+    if num_trajectories <= 0:
+        raise ValueError(f"num_trajectories must be > 0, got {num_trajectories}")
+
+    if initial_rho is None:
+        initial_rho = np.array([[1.0, 0.0], [0.0, 0.0]], dtype=np.complex128)
+
+    if isinstance(target_unitary, str):
+        target_unitary_key = target_unitary
+    else:
+        target_unitary_key = np.ascontiguousarray(target_unitary).tobytes().hex()
+
+    target_rho = _resolve_target_density_matrix(target_unitary, initial_rho)
+    feedback_cfg = feedback_config or _default_feedback_config(hardware_params, target_rho)
+
+    base_collapse_ops = CollapseOperator.from_t1_t2(
+        t1_us=hardware_params.t1_us,
+        t2_us=hardware_params.t2_us,
+    )
+
+    baseline_cache: dict[str, list[NDArray[np.complex128]]] = dict(baselines or {})
+    for method in methods_tuple:
+        if method not in baseline_cache:
+            baseline_cache[method] = build_baseline_hamiltonians(method, hardware_params)
+
+    n_noise = int(noise_arr.size)
+    n_methods = len(methods_tuple)
+    cell_seeds = _spawn_cell_seeds(seed, n_noise, n_methods)
+
+    cp_path: Path | None = Path(checkpoint_dir) if checkpoint_dir is not None else None
+    checkpoint_tag: str | None = None
+    if cp_path is not None:
+        checkpoint_tag = _stable_checkpoint_tag(
+            seed=seed,
+            noise_arr=noise_arr,
+            methods_tuple=methods_tuple,
+            num_trajectories=num_trajectories,
+            hardware_params=hardware_params,
+            initial_rho=initial_rho,
+            target_rho=target_rho,
+            feedback_config=feedback_cfg,
+            target_unitary_key=target_unitary_key,
+            baselines=baselines,
+        )
+        cp_path.mkdir(parents=True, exist_ok=True)
+
+    return _SweepContext(
+        baseline_cache=baseline_cache,
+        cell_seeds=cell_seeds,
+        initial_rho=initial_rho,
+        target_rho=target_rho,
+        base_collapse_ops=base_collapse_ops,
+        feedback_config=feedback_cfg,
+        hardware_params=hardware_params,
+        num_trajectories=num_trajectories,
+        backend=backend,
+        noise_arr=noise_arr,
+        methods_tuple=methods_tuple,
+        mean_fidelity={m: np.zeros(noise_arr.shape, dtype=np.float64) for m in methods_tuple},
+        std_fidelity={m: np.zeros(noise_arr.shape, dtype=np.float64) for m in methods_tuple},
+        feedback_energy={},
+        cp_path=cp_path,
+        checkpoint_tag=checkpoint_tag,
+    )
+
+
+def _checkpoint_load(ctx: _SweepContext, log_fh: IO[str] | None) -> set[tuple[int, int]]:
+    """Load existing per-cell checkpoints into ``ctx``; return the done set."""
+    done: set[tuple[int, int]] = set()
+    if ctx.cp_path is None or ctx.checkpoint_tag is None:
+        return done
+    n_noise = int(ctx.noise_arr.size)
+    n_methods = len(ctx.methods_tuple)
+    for fpath in ctx.cp_path.glob(f"{ctx.checkpoint_tag}_cell_*.npz"):
+        with np.load(fpath, allow_pickle=False) as data:
+            j = int(data["noise_idx"])
+            m_idx = int(data["method_idx"])
+            method_stored = str(data["method"].item())
+            if not (0 <= j < n_noise and 0 <= m_idx < n_methods):
+                continue
+            if ctx.methods_tuple[m_idx] != method_stored:
+                continue
+            ctx.mean_fidelity[method_stored][j] = float(data["mean_fidelity"])
+            ctx.std_fidelity[method_stored][j] = float(data["std_fidelity"])
+            fe = float(data["feedback_energy"])
+            if method_stored == "lyapunov_feedback":
+                ctx.feedback_energy.setdefault(
+                    method_stored, np.zeros(ctx.noise_arr.shape, dtype=np.float64)
+                )[j] = fe
+        done.add((j, m_idx))
+    if done:
+        print(f"resuming from {len(done)} existing checkpoints", flush=True)
+        _emit_sweep_event(log_fh, {"event": "resume", "found": len(done)})
+    return done
+
+
+def _run_serial_loop(
+    ctx: _SweepContext,
+    pending: list[tuple[int, int, str, float]],
+    log_fh: IO[str] | None,
+) -> None:
+    """Run pending cells in-process (no worker pool)."""
+    for j, m_idx, method, gamma in pending:
+        run_seed = int(ctx.cell_seeds[m_idx, j])
+        _emit_sweep_event(log_fh, _cell_start_record(j, m_idx, method, ctx.noise_arr))
+        t0 = time.perf_counter()
+        try:
+            _m, _j, _mi, mean_f, std_f, fb_e = _noise_sweep_compare_one_cell(
+                method, j, m_idx, gamma, run_seed=run_seed, **ctx.cell_kwargs(method)
+            )
+        except BaseException as exc:
+            _emit_sweep_event(log_fh, _cell_error_record(j, m_idx, method, ctx.noise_arr, t0, exc))
+            raise
+        wall_s = time.perf_counter() - t0
+        ctx.apply_cell(j, m_idx, method, mean_f, std_f, fb_e)
+        _emit_sweep_event(
+            log_fh, _cell_done_record(j, m_idx, method, ctx.noise_arr, mean_f, wall_s)
+        )
+
+
+def _run_parallel_loop(
+    ctx: _SweepContext,
+    pending: list[tuple[int, int, str, float]],
+    log_fh: IO[str] | None,
+    eff_workers: int,
+) -> None:
+    """Run pending cells across a spawn-context process pool."""
+    with ProcessPoolExecutor(
+        max_workers=eff_workers,
+        mp_context=mp.get_context("spawn"),
+    ) as executor:
+        future_map = {}
+        submit_times: dict[Any, float] = {}
+        for j, m_idx, method, gamma in pending:
+            run_seed = int(ctx.cell_seeds[m_idx, j])
+            _emit_sweep_event(log_fh, _cell_start_record(j, m_idx, method, ctx.noise_arr))
+            fut = executor.submit(
+                _noise_sweep_compare_one_cell,
+                method,
+                j,
+                m_idx,
+                gamma,
+                run_seed=run_seed,
+                **ctx.cell_kwargs(method),
+            )
+            future_map[fut] = (j, m_idx, method)
+            submit_times[fut] = time.perf_counter()
+        for fut in as_completed(future_map):
+            j, m_idx, method = future_map[fut]
+            t0 = submit_times[fut]
+            try:
+                _method, _j, _mi, mean_f, std_f, fb_e = fut.result()
+            except BaseException as exc:
+                _emit_sweep_event(
+                    log_fh, _cell_error_record(j, m_idx, method, ctx.noise_arr, t0, exc)
+                )
+                raise
+            wall_s = time.perf_counter() - t0
+            ctx.apply_cell(j, m_idx, method, mean_f, std_f, fb_e)
+            _emit_sweep_event(
+                log_fh, _cell_done_record(j, m_idx, method, ctx.noise_arr, mean_f, wall_s)
+            )
+
+
 def noise_sweep_comparison(
     target_unitary: NDArray[np.complex128] | str = "X",
     noise_range: NDArray[np.float64] | Sequence[float] = (0.1, 0.5, 1.0, 2.0, 5.0),
@@ -372,69 +670,19 @@ def noise_sweep_comparison(
         :class:`NoiseSweepResult` populated with mean / std fidelity per
         method and noise level.
     """
-    if hardware_params is None:
-        hardware_params = HardwareParams()
-    noise_arr = np.asarray(noise_range, dtype=np.float64)
-    if noise_arr.size == 0:
-        raise ValueError("noise_range must contain at least one value")
-    if any(g < 0 for g in noise_arr):
-        raise ValueError("noise_range values must be non-negative")
-    methods_tuple = tuple(m.lower() for m in methods)
-    for m in methods_tuple:
-        if m not in _METHODS:
-            raise ValueError(f"Unknown method {m!r}; expected one of {_METHODS}")
-    if num_trajectories <= 0:
-        raise ValueError(f"num_trajectories must be > 0, got {num_trajectories}")
-
-    if initial_rho is None:
-        initial_rho = np.array([[1.0, 0.0], [0.0, 0.0]], dtype=np.complex128)
-
-    if isinstance(target_unitary, str):
-        target_unitary_key = target_unitary
-    else:
-        target_unitary_key = np.ascontiguousarray(target_unitary).tobytes().hex()
-
-    target_rho = _resolve_target_density_matrix(target_unitary, initial_rho)
-    feedback_cfg = feedback_config or _default_feedback_config(hardware_params, target_rho)
-
-    base_collapse_ops = CollapseOperator.from_t1_t2(
-        t1_us=hardware_params.t1_us,
-        t2_us=hardware_params.t2_us,
+    ctx = _build_sweep_context(
+        target_unitary,
+        noise_range,
+        methods,
+        num_trajectories,
+        hardware_params,
+        initial_rho,
+        feedback_config,
+        seed,
+        baselines,
+        checkpoint_dir,
+        backend,
     )
-
-    baseline_cache: dict[str, list[NDArray[np.complex128]]] = dict(baselines or {})
-    for method in methods_tuple:
-        if method not in baseline_cache:
-            baseline_cache[method] = build_baseline_hamiltonians(method, hardware_params)
-
-    n_noise = int(noise_arr.size)
-    n_methods = len(methods_tuple)
-    cell_seeds = _spawn_cell_seeds(seed, n_noise, n_methods)
-
-    mean_fidelity: dict[str, NDArray[np.float64]] = {
-        m: np.zeros(noise_arr.shape, dtype=np.float64) for m in methods_tuple
-    }
-    std_fidelity: dict[str, NDArray[np.float64]] = {
-        m: np.zeros(noise_arr.shape, dtype=np.float64) for m in methods_tuple
-    }
-    feedback_energy: dict[str, NDArray[np.float64]] = {}
-
-    cp_path: Path | None = Path(checkpoint_dir) if checkpoint_dir is not None else None
-    checkpoint_tag: str | None = None
-    if cp_path is not None:
-        checkpoint_tag = _stable_checkpoint_tag(
-            seed=seed,
-            noise_arr=noise_arr,
-            methods_tuple=methods_tuple,
-            num_trajectories=num_trajectories,
-            hardware_params=hardware_params,
-            initial_rho=initial_rho,
-            target_rho=target_rho,
-            feedback_config=feedback_cfg,
-            target_unitary_key=target_unitary_key,
-            baselines=baselines,
-        )
-        cp_path.mkdir(parents=True, exist_ok=True)
 
     log_fh: IO[str] | None = None
     if log_path is not None:
@@ -444,31 +692,9 @@ def noise_sweep_comparison(
         log_fh = log_path_obj.open("a", encoding="utf-8")
 
     try:
-        done: set[tuple[int, int]] = set()
-        if cp_path is not None and checkpoint_tag is not None:
-            pattern = f"{checkpoint_tag}_cell_*.npz"
-            for fpath in cp_path.glob(pattern):
-                with np.load(fpath, allow_pickle=False) as data:
-                    j = int(data["noise_idx"])
-                    m_idx = int(data["method_idx"])
-                    method_stored = str(data["method"].item())
-                    if not (0 <= j < n_noise and 0 <= m_idx < n_methods):
-                        continue
-                    if methods_tuple[m_idx] != method_stored:
-                        continue
-                    mean_fidelity[method_stored][j] = float(data["mean_fidelity"])
-                    std_fidelity[method_stored][j] = float(data["std_fidelity"])
-                    fe = float(data["feedback_energy"])
-                    if method_stored == "lyapunov_feedback":
-                        feedback_energy.setdefault(
-                            method_stored, np.zeros(noise_arr.shape, dtype=np.float64)
-                        )[j] = fe
-                done.add((j, m_idx))
-            if done:
-                print(f"resuming from {len(done)} existing checkpoints", flush=True)
-                _emit_sweep_event(log_fh, {"event": "resume", "found": len(done)})
+        done = _checkpoint_load(ctx, log_fh)
 
-        n_cells = n_noise * n_methods
+        n_cells = int(ctx.noise_arr.size) * len(ctx.methods_tuple)
         if max_workers is None:
             eff_workers = min(os.cpu_count() or 1, n_cells)
         else:
@@ -477,181 +703,29 @@ def noise_sweep_comparison(
             eff_workers = min(max_workers, n_cells)
 
         pending: list[tuple[int, int, str, float]] = []
-        for j in range(n_noise):
-            gamma = float(noise_arr[j])
-            for m_idx, method in enumerate(methods_tuple):
-                if (j, m_idx) in done:
-                    continue
-                pending.append((j, m_idx, method, gamma))
+        for j in range(int(ctx.noise_arr.size)):
+            gamma = float(ctx.noise_arr[j])
+            for m_idx, method in enumerate(ctx.methods_tuple):
+                if (j, m_idx) not in done:
+                    pending.append((j, m_idx, method, gamma))
 
-        def _write_checkpoint(
-            j: int,
-            m_idx: int,
-            method: str,
-            mean_f: float,
-            std_f: float,
-            fb_e: float,
-        ) -> None:
-            if cp_path is None or checkpoint_tag is None:
-                return
-            fname = f"{checkpoint_tag}_cell_{j:05d}_{m_idx:02d}.npz"
-            out = cp_path / fname
-            np.savez_compressed(
-                out,
-                noise_idx=j,
-                method_idx=m_idx,
-                method=np.array(method),
-                noise_level=np.float64(noise_arr[j]),
-                mean_fidelity=np.float64(mean_f),
-                std_fidelity=np.float64(std_f),
-                feedback_energy=np.float64(fb_e),
-            )
-
-        def _apply_cell(
-            j: int,
-            m_idx: int,
-            method: str,
-            mean_f: float,
-            std_f: float,
-            fb_e: float,
-        ) -> None:
-            mean_fidelity[method][j] = mean_f
-            std_fidelity[method][j] = std_f
-            if method == "lyapunov_feedback":
-                feedback_energy.setdefault(method, np.zeros(noise_arr.shape, dtype=np.float64))[
-                    j
-                ] = fb_e
-            _write_checkpoint(j, m_idx, method, mean_f, std_f, fb_e)
-
-        def _start_record(j: int, m_idx: int, method: str) -> dict[str, Any]:
-            return {
-                "event": "start",
-                "noise_idx": j,
-                "method_idx": m_idx,
-                "method": method,
-                "noise_level": float(noise_arr[j]),
-            }
-
-        def _done_record(
-            j: int,
-            m_idx: int,
-            method: str,
-            mean_f: float,
-            wall_s: float,
-        ) -> dict[str, Any]:
-            return {
-                "event": "done",
-                "noise_idx": j,
-                "method_idx": m_idx,
-                "method": method,
-                "noise_level": float(noise_arr[j]),
-                "mean_fidelity": float(mean_f),
-                "wall_s": float(wall_s),
-            }
-
-        if not pending:
-            pass
-        elif eff_workers == 1:
-            for j, m_idx, method, gamma in pending:
-                run_seed = int(cell_seeds[m_idx, j])
-                _emit_sweep_event(log_fh, _start_record(j, m_idx, method))
-                t0 = time.perf_counter()
-                try:
-                    _m, _j, _mi, mean_f, std_f, fb_e = _noise_sweep_compare_one_cell(
-                        method,
-                        j,
-                        m_idx,
-                        gamma,
-                        baseline_hamiltonians=baseline_cache[method],
-                        initial_rho=initial_rho,
-                        target_rho=target_rho,
-                        base_collapse_ops=base_collapse_ops,
-                        feedback_config=feedback_cfg,
-                        hardware_params=hardware_params,
-                        num_trajectories=num_trajectories,
-                        run_seed=run_seed,
-                        backend=backend,
-                    )
-                except BaseException as exc:
-                    _emit_sweep_event(
-                        log_fh,
-                        {
-                            "event": "error",
-                            "noise_idx": j,
-                            "method_idx": m_idx,
-                            "method": method,
-                            "noise_level": float(noise_arr[j]),
-                            "wall_s": float(time.perf_counter() - t0),
-                            "error": f"{type(exc).__name__}: {exc}",
-                        },
-                    )
-                    raise
-                wall_s = time.perf_counter() - t0
-                _apply_cell(j, m_idx, method, mean_f, std_f, fb_e)
-                _emit_sweep_event(log_fh, _done_record(j, m_idx, method, mean_f, wall_s))
-        else:
-            with ProcessPoolExecutor(
-                max_workers=eff_workers,
-                mp_context=mp.get_context("spawn"),
-            ) as executor:
-                future_map = {}
-                submit_times: dict[Any, float] = {}
-                for j, m_idx, method, gamma in pending:
-                    run_seed = int(cell_seeds[m_idx, j])
-                    _emit_sweep_event(log_fh, _start_record(j, m_idx, method))
-                    fut = executor.submit(
-                        _noise_sweep_compare_one_cell,
-                        method,
-                        j,
-                        m_idx,
-                        gamma,
-                        baseline_hamiltonians=baseline_cache[method],
-                        initial_rho=initial_rho,
-                        target_rho=target_rho,
-                        base_collapse_ops=base_collapse_ops,
-                        feedback_config=feedback_cfg,
-                        hardware_params=hardware_params,
-                        num_trajectories=num_trajectories,
-                        run_seed=run_seed,
-                        backend=backend,
-                    )
-                    future_map[fut] = (j, m_idx, method)
-                    submit_times[fut] = time.perf_counter()
-                for fut in as_completed(future_map):
-                    j, m_idx, method = future_map[fut]
-                    t0 = submit_times[fut]
-                    try:
-                        _method, _j, _mi, mean_f, std_f, fb_e = fut.result()
-                    except BaseException as exc:
-                        _emit_sweep_event(
-                            log_fh,
-                            {
-                                "event": "error",
-                                "noise_idx": j,
-                                "method_idx": m_idx,
-                                "method": method,
-                                "noise_level": float(noise_arr[j]),
-                                "wall_s": float(time.perf_counter() - t0),
-                                "error": f"{type(exc).__name__}: {exc}",
-                            },
-                        )
-                        raise
-                    wall_s = time.perf_counter() - t0
-                    _apply_cell(j, m_idx, method, mean_f, std_f, fb_e)
-                    _emit_sweep_event(log_fh, _done_record(j, m_idx, method, mean_f, wall_s))
+        if pending and eff_workers == 1:
+            _run_serial_loop(ctx, pending, log_fh)
+        elif pending:
+            _run_parallel_loop(ctx, pending, log_fh, eff_workers)
     finally:
         if log_fh is not None:
             log_fh.close()
 
     return NoiseSweepResult(
-        noise_levels=noise_arr,
-        methods=methods_tuple,
-        mean_fidelity=mean_fidelity,
-        std_fidelity=std_fidelity,
-        feedback_energy=feedback_energy,
-        hardware_params=hardware_params,
+        noise_levels=ctx.noise_arr,
+        methods=ctx.methods_tuple,
+        mean_fidelity=ctx.mean_fidelity,
+        std_fidelity=ctx.std_fidelity,
+        feedback_energy=ctx.feedback_energy,
+        hardware_params=ctx.hardware_params,
         seed=seed,
-        num_trajectories=num_trajectories,
+        num_trajectories=ctx.num_trajectories,
     )
 
 

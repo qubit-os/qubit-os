@@ -41,6 +41,18 @@ pub fn euler_maruyama_step<R: Rng + ?Sized>(
     positivity_projection: bool,
     positivity_tolerance: f64,
 ) -> Result<SMEStepResult, String> {
+    debug_assert_eq!(rho.nrows(), rho.ncols(), "density matrix must be square");
+    debug_assert_eq!(
+        hamiltonian.dim(),
+        rho.dim(),
+        "Hamiltonian dimensions must match rho"
+    );
+    debug_assert!(
+        (0.0..=1.0).contains(&eta),
+        "measurement efficiency eta must be in [0, 1]"
+    );
+    debug_assert!(dt > 0.0, "time step dt must be positive");
+
     if eta == 0.0 {
         let rho_new = renormalize_density_matrix(&symmetrize_density_matrix(&lindblad_rk4_step(
             rho,
@@ -90,6 +102,8 @@ fn lindblad_rk4_step(
     collapse_ops: &[CollapseOperator],
     dt: f64,
 ) -> Array2<Complex64> {
+    debug_assert_eq!(rho.nrows(), rho.ncols(), "density matrix must be square");
+    debug_assert!(dt > 0.0, "time step dt must be positive");
     let dt_c = Complex64::new(dt, 0.0);
     let half = Complex64::new(0.5, 0.0);
     let sixth = Complex64::new(1.0 / 6.0, 0.0);

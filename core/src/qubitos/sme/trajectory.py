@@ -194,7 +194,8 @@ def _integrate_nominal_slice(
             continue
         rho = step.density_matrix
         validate_trajectory_density_matrix(
-            rho, atol=max(config.positivity_tolerance, 1e-6),
+            rho,
+            atol=max(config.positivity_tolerance, 1e-6),
             min_eigenvalue=step.min_eigenvalue,
         )
         remaining = max(0.0, remaining - dt_step)

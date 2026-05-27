@@ -16,6 +16,8 @@ import pytest
 from qubitos.lindblad import CollapseOperator
 from qubitos.sme import SMEConfig, SMESolver
 
+pytestmark = pytest.mark.crossval
+
 
 def _ground_state() -> np.ndarray:
     return np.array([[1.0, 0.0], [0.0, 0.0]], dtype=np.complex128)
@@ -49,19 +51,24 @@ def test_batched_mean_matches_oracle_decay(n_traj: int) -> None:
     solver = SMESolver(config, collapse_ops=ops)
 
     oracle = solver.solve_ensemble(
-        rho0, hams, target_rho=target, num_trajectories=n_traj,
-        max_workers=1, backend="python",
+        rho0,
+        hams,
+        target_rho=target,
+        num_trajectories=n_traj,
+        max_workers=1,
+        backend="python",
     )
     batched = solver.solve_ensemble(
-        rho0, hams, target_rho=target, num_trajectories=n_traj,
+        rho0,
+        hams,
+        target_rho=target,
+        num_trajectories=n_traj,
         backend="batched",
     )
     assert oracle.mean_fidelity is not None
     assert batched.mean_fidelity is not None
     delta = abs(oracle.mean_fidelity - batched.mean_fidelity)
-    assert delta < 5e-3, (
-        f"mean fidelity delta {delta:.2e} > tolerance 5e-3 at N={n_traj}"
-    )
+    assert delta < 5e-3, f"mean fidelity delta {delta:.2e} > tolerance 5e-3 at N={n_traj}"
 
 
 @pytest.mark.parametrize("n_traj", [64, 128, 256])
@@ -83,7 +90,11 @@ def test_batched_ensemble_returns_valid_density_matrix(n_traj: int) -> None:
     )
     solver = SMESolver(config, collapse_ops=ops)
     result = solver.solve_ensemble(
-        rho0, hams, target_rho=target, num_trajectories=n_traj, backend="batched",
+        rho0,
+        hams,
+        target_rho=target,
+        num_trajectories=n_traj,
+        backend="batched",
     )
 
     np.testing.assert_allclose(np.trace(result.final_density_matrix), 1.0, atol=1e-12)
@@ -110,7 +121,10 @@ def test_batched_handles_eta_zero() -> None:
     )
     solver = SMESolver(config, collapse_ops=ops)
     result = solver.solve_ensemble(
-        rho0, _zero_hamiltonians(20), num_trajectories=64, backend="batched",
+        rho0,
+        _zero_hamiltonians(20),
+        num_trajectories=64,
+        backend="batched",
     )
     assert result.eta_zero_reduced_to_lindblad
     assert result.mean_density_matrix is not None
@@ -139,7 +153,9 @@ def test_batched_produces_reproducible_results() -> None:
     first = run(42)
     second = run(42)
     np.testing.assert_allclose(
-        first.mean_density_matrix, second.mean_density_matrix, atol=1e-15,
+        first.mean_density_matrix,
+        second.mean_density_matrix,
+        atol=1e-15,
     )
     assert first.mean_fidelity == pytest.approx(second.mean_fidelity, abs=1e-15)
 
@@ -161,11 +177,18 @@ def test_batched_vs_oracle_same_config() -> None:
     )
     solver = SMESolver(config, collapse_ops=ops)
     oracle = solver.solve_ensemble(
-        rho0, hams, target_rho=target, num_trajectories=256,
-        max_workers=1, backend="python",
+        rho0,
+        hams,
+        target_rho=target,
+        num_trajectories=256,
+        max_workers=1,
+        backend="python",
     )
     batched = solver.solve_ensemble(
-        rho0, hams, target_rho=target, num_trajectories=256,
+        rho0,
+        hams,
+        target_rho=target,
+        num_trajectories=256,
         backend="batched",
     )
     assert oracle.mean_fidelity is not None

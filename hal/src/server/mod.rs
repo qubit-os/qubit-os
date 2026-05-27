@@ -37,13 +37,11 @@
 
 pub mod grpc;
 pub mod rest;
-pub mod temporal;
 
 pub use grpc::GrpcServer;
 pub use rest::RestServer;
 
 use std::sync::Arc;
-use std::time::Duration;
 use tokio::sync::watch;
 use tracing::{error, info};
 
@@ -109,9 +107,6 @@ pub async fn run_servers(config: &ServerConfig, registry: Arc<BackendRegistry>) 
         }
     });
 
-    // Graceful shutdown timeout from config
-    let shutdown_timeout = Duration::from_secs(config.shutdown_timeout_sec);
-
     // Run servers concurrently
     if config.rest_enabled {
         tokio::select! {
@@ -137,10 +132,8 @@ pub async fn run_servers(config: &ServerConfig, registry: Arc<BackendRegistry>) 
         "Waiting for shutdown to complete"
     );
 
-    // The servers already handle graceful shutdown via the shutdown_rx channel.
-    // This timeout ensures we don't hang forever if something goes wrong.
-    // Note: The actual timeout is enforced by the individual server shutdown handlers.
-    let _ = shutdown_timeout;
+    // The servers already handle graceful shutdown via the shutdown_rx channel;
+    // the configured timeout is enforced by the individual server shutdown handlers.
 
     Ok(())
 }

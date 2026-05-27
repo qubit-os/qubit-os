@@ -23,10 +23,13 @@ try:
 except ImportError:
     HAS_RUST_GRAPE = False
 
-pytestmark = pytest.mark.skipif(
-    not HAS_RUST_GRAPE,
-    reason="Rust GRAPE bindings not available (build with maturin/pyo3)",
-)
+pytestmark = [
+    pytest.mark.crossval,
+    pytest.mark.skipif(
+        not HAS_RUST_GRAPE,
+        reason="Rust GRAPE bindings not available (build with maturin/pyo3)",
+    ),
+]
 
 
 def _complex_matrix_to_flat(m: np.ndarray) -> list[float]:
@@ -58,6 +61,7 @@ class TestCrossValidation:
         py_opt = GrapeOptimizer(config=py_config)
         py_result = py_opt.optimize(
             target_unitary=target,
+            num_qubits=1,
             drift_hamiltonian=np.zeros((2, 2), dtype=np.complex128),
             control_hamiltonians=[sigma_x, sigma_y],
         )
@@ -96,6 +100,7 @@ class TestCrossValidation:
         py_opt = GrapeOptimizer(config=py_config)
         py_result = py_opt.optimize(
             target_unitary=target,
+            num_qubits=1,
             drift_hamiltonian=np.zeros((2, 2), dtype=np.complex128),
             control_hamiltonians=[sigma_x, sigma_y],
         )
@@ -147,6 +152,7 @@ class TestRustGrapeBenchmark:
         t0 = time.perf_counter()
         py_opt.optimize(
             target_unitary=target,
+            num_qubits=1,
             drift_hamiltonian=drift,
             control_hamiltonians=[sigma_x, sigma_y],
         )

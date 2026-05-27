@@ -202,9 +202,9 @@ def solve_with_feedback(
     from qubitos.sme import SMEResult
     from qubitos.sme.integrator import euler_maruyama_step
 
-    config = solver._config  # noqa: SLF001 - the solver intentionally exposes its config
-    collapse_ops = list(solver._collapse_ops)  # noqa: SLF001
-    measurement_operator_override = solver._measurement_operator  # noqa: SLF001
+    config = solver.sub_config()
+    collapse_ops = list(config.collapse_ops)
+    measurement_operator_override = config.measurement_operator
 
     if len(hamiltonians) != config.num_time_steps:
         raise ValueError(
@@ -359,33 +359,14 @@ def solve_with_feedback_ensemble(
     individual runs for downstream analysis (Lyapunov-trajectory
     validation, crossover plots, etc.).
     """
-    from qubitos.sme import SMEConfig, SMEResult, SMESolver
+    from qubitos.sme import SMEResult, SMESolver
 
-    config = solver._config  # noqa: SLF001
-    base_seed = config.random_seed
+    config = solver.sub_config()
     n = num_trajectories or config.ensemble_size
 
     trajectories: list[FeedbackResult] = []
     for i in range(n):
-        sub_config = SMEConfig(
-            num_time_steps=config.num_time_steps,
-            duration_ns=config.duration_ns,
-            measurement_efficiency=config.measurement_efficiency,
-            random_seed=base_seed + i,
-            store_trajectory=config.store_trajectory,
-            store_measurement_record=config.store_measurement_record,
-            collapse_ops=list(solver._collapse_ops),  # noqa: SLF001
-            measurement_operator=solver._measurement_operator,  # noqa: SLF001
-            positivity_projection=config.positivity_projection,
-            adaptive_tolerance=config.adaptive_tolerance,
-            positivity_tolerance=config.positivity_tolerance,
-            ensemble_size=1,
-        )
-        sub_solver = SMESolver(
-            sub_config,
-            collapse_ops=list(solver._collapse_ops),  # noqa: SLF001
-            measurement_operator=solver._measurement_operator,  # noqa: SLF001
-        )
+        sub_solver = SMESolver(solver.sub_config(i))
         sub_controller = controller_factory()
         sub_budget = decoherence_budget_factory() if decoherence_budget_factory else None
         run = solve_with_feedback(

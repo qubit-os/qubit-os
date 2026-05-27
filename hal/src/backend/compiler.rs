@@ -16,7 +16,24 @@
 
 use std::fmt;
 
+use super::r#trait::ExecutePulseRequest;
 use crate::error::BackendError;
+
+/// Net single-rotation ``(phase, angle)`` of a pulse from its I/Q envelope.
+///
+/// Both the IBM and Braket QASM emitters approximate a pulse by one rotation:
+/// the angle is the magnitude of the integrated (I, Q) area scaled to radians,
+/// and the phase is its argument. The QASM each backend emits from these
+/// differs by native gate set, but this rotation math is identical, so it
+/// lives here instead of being copy-pasted into each backend.
+pub fn pulse_rotation(request: &ExecutePulseRequest) -> (f64, f64) {
+    let dt_ns = request.duration_ns as f64 / request.num_time_steps as f64;
+    let i_area: f64 = request.i_envelope.iter().map(|a| a * dt_ns).sum();
+    let q_area: f64 = request.q_envelope.iter().map(|a| a * dt_ns).sum();
+    let angle = (i_area * i_area + q_area * q_area).sqrt() * 2.0 * std::f64::consts::PI * 1e-3;
+    let phase = q_area.atan2(i_area);
+    (phase, angle)
+}
 
 /// A native gate that a backend can physically execute.
 #[derive(Debug, Clone, PartialEq)]
@@ -88,31 +105,6 @@ impl CompiledSequence {
         // Product of individual gate fidelities
         self.gates.iter().map(|g| 1.0 - g.infidelity).product()
     }
-}
-
-/// Trait for compiling optimized pulses to backend-native gate sequences.
-///
-/// Each backend implements this trait to define:
-/// 1. What gates it can physically execute (native basis)
-/// 2. How to decompose arbitrary unitaries into that basis
-pub trait NativeGateCompiler: Send + Sync {
-    /// Return the native gate set for this backend.
-    ///
-    /// These are the gates the hardware can physically execute.
-    fn native_basis(&self) -> Vec<String>;
-
-    /// Compile a target unitary into native gates.
-    ///
-    /// # Arguments
-    /// * `unitary` - Flat row-major complex128 array of the target unitary
-    /// * `dim` - Dimension of the unitary (2^num_qubits)
-    /// * `qubit_indices` - Physical qubit indices for the gate
-    fn compile_unitary(
-        &self,
-        unitary: &[f64],
-        dim: usize,
-        qubit_indices: &[u32],
-    ) -> Result<CompiledSequence, BackendError>;
 }
 
 /// Default single-qubit decomposition into Rz-Rx-Rz (Euler angles).

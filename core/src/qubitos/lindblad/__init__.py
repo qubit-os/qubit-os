@@ -6,8 +6,7 @@
 .. deprecated:: 0.6.0
     This pure-Python solver is maintained as a reference implementation only.
     For production use, prefer the Rust solver (via PyO3 bindings in
-    ``qubit_os_hardware.lindblad``) or the upcoming C fast-path solver
-    (LANL QCSS 2026, see ROADMAP.md §0.6.1–0.6.4).
+    ``qubit_os_hardware.lindblad``).
 
     The Rust solver is validated to match this implementation to trace
     distance < 1e-6 (see ``hal/tests/golden_lindblad.rs``).
@@ -146,7 +145,7 @@ class LindbladSolver:
     def __init__(self, config: LindbladConfig) -> None:
         warnings.warn(
             "Python LindbladSolver is deprecated. Use the Rust solver "
-            "(qubit_os_hardware.lindblad) or the upcoming C fast-path. "
+            "(qubit_os_hardware.lindblad). "
             "This implementation is retained as a reference only.",
             DeprecationWarning,
             stacklevel=2,
@@ -272,7 +271,11 @@ def lindblad_rk4_step(
 
 
 def from_sme_ensemble(sme_result: Any, lindblad_result: LindbladResult, tol: float = 0.01) -> bool:
-    """Check whether an SME ensemble mean agrees with a Lindblad result."""
-    mean_rho = getattr(sme_result, "mean_density_matrix", None)
-    candidate = mean_rho if mean_rho is not None else sme_result.final_density_matrix
-    return trace_distance(candidate, lindblad_result.final_density_matrix) <= tol
+    """Check whether an SME ensemble mean agrees with a Lindblad result.
+
+    Backward-compatible forwarder. The implementation now lives in
+    :func:`qubitos.validation.convergence.converges_to_lindblad`.
+    """
+    from qubitos.validation.convergence import converges_to_lindblad
+
+    return converges_to_lindblad(sme_result, lindblad_result, tol)

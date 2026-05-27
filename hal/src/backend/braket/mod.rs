@@ -24,7 +24,7 @@ use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::time::Duration;
-use tracing::{debug, info, warn};
+use tracing::{debug, info};
 
 use super::{BackendType, QuantumBackend};
 use crate::config::ResourceLimits;
@@ -181,12 +181,8 @@ impl<C: BraketHttpClient> BraketBackend<C> {
         qasm.push_str(&format!("qubit[{num_qubits}] q;\n"));
         qasm.push_str(&format!("bit[{num_qubits}] c;\n\n"));
 
-        // Compute rotation from pulse area
-        let dt_ns = request.duration_ns as f64 / request.num_time_steps as f64;
-        let i_area: f64 = request.i_envelope.iter().map(|a| a * dt_ns).sum();
-        let q_area: f64 = request.q_envelope.iter().map(|a| a * dt_ns).sum();
-        let angle = (i_area * i_area + q_area * q_area).sqrt() * 2.0 * std::f64::consts::PI * 1e-3;
-        let phase = q_area.atan2(i_area);
+        // Compute rotation angle/phase from pulse area (shared with IBM).
+        let (phase, angle) = super::compiler::pulse_rotation(request);
 
         // Braket native gates vary by device; use rx/ry/rz (universally supported)
         for i in 0..num_qubits {
@@ -325,13 +321,10 @@ impl<C: BraketHttpClient> QuantumBackend for BraketBackend<C> {
     }
 
     async fn health_check(&self) -> Result<HealthStatus, BackendError> {
-        match self.client.check_health().await {
-            Ok(()) => Ok(HealthStatus::Healthy),
-            Err(e) => {
-                warn!(error = %e, "Braket health check failed");
-                Ok(HealthStatus::Unavailable)
-            }
-        }
+        Ok(super::r#trait::remote_health_status(
+            self.client.check_health().await,
+            self.name(),
+        ))
     }
 
     fn resource_limits(&self) -> &ResourceLimits {

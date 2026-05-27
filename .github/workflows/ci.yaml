@@ -103,13 +103,29 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
 
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: hal
+
       - name: Install dependencies
         working-directory: core
         run: pip install -e ".[dev]"
 
+      - name: Build and install Rust extension (qubit_os_hardware)
+        # PEP 517 build via the maturin backend installs the extension into
+        # the active interpreter without the manylinux-compliance check that
+        # `maturin build` applies to distribution wheels.
+        run: pip install ./hal
+
       - name: Run tests
         working-directory: core
         run: pytest tests/unit/ --cov=qubitos --cov-report=xml
+
+      - name: Cross-validation gate (Rust backends vs Python oracle)
+        working-directory: core
+        run: pytest tests/unit/ -m crossval
 
       - name: Upload coverage
         uses: codecov/codecov-action@v6

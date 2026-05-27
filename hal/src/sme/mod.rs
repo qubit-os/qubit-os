@@ -4,6 +4,21 @@
 //! Stochastic master equation solver for continuously measured open systems.
 //!
 //! Ref: Wiseman and Milburn (2009), Quantum Measurement and Control, Ch. 4.
+//!
+//! Submodules:
+//!   - `integrate`: the Itô integration step (drift plus measurement
+//!     backaction from the Wiener increment).
+//!   - `measurement`: homodyne measurement superoperators and record
+//!     accumulation.
+//!   - `trajectory`: single-trajectory and ensemble drivers, exported as
+//!     [`solve_sme_trajectory`] and [`solve_sme_ensemble`].
+//!   - `pyo3_bindings`: the PyO3 surface exposed to Python.
+//!
+//! [`SMEConfig`] holds the run parameters (time grid, measurement
+//! efficiency, seed, collapse operators, and the measurement operator).
+//! A single run with [`solve_sme_trajectory`] is the building block;
+//! [`solve_sme_ensemble`] averages many seeded trajectories to recover
+//! the Lindblad limit.
 
 use ndarray::Array2;
 use num_complex::Complex64;

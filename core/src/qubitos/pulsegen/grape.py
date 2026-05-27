@@ -433,7 +433,6 @@ class GrapeOptimizer:
             q_2d = q_pulse
 
         n_steps = i_2d.shape[1]
-        scale = -1j * 2 * np.pi * dt * 1e6  # MHz→Hz, angular freq
 
         # Compute propagators
         propagators = []
